@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>身份验证</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <style>
+      body { display: grid; place-items: center; padding: 22px; }
+      .card { width: min(520px, 100%); }
+      .btn { width: 100%; }
+      .muted { color: var(--muted); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="surface card" role="region" aria-label="候选人身份验证">
+      <div class="section">
+        <h2 class="title">候选人身份验证</h2>
+        <p class="sub">请输入姓名与手机号完成验证。</p>
+
+        {% for m in get_flashed_messages() %}
+        <div class="flash error">{{ m }}</div>
+        {% endfor %}
+
+        {% if locked %}
+          <div class="flash error">链接已失效（已达到最大验证次数）。</div>
+        {% else %}
+          <p class="muted">剩余次数：{{ max_attempts - attempts }} / {{ max_attempts }}</p>
+          <form method="post" action="/api/public/verify" class="section" style="padding:0; border:0;">
+            <input type="hidden" name="token" value="{{ token }}" />
+            <div class="field">
+              <label>姓名</label>
+              <input class="input" name="name" required pattern="[\u4e00-\u9fffA-Za-z·\\s]{2,20}" title="2-20位中文/英文，可含空格/·" />
+            </div>
+            <div class="field">
+              <label>手机号</label>
+              <input class="input" name="phone" required pattern="1[3-9][0-9]{9}" title="11位中国大陆手机号（可输入 +86 前缀，后端会自动处理）" inputmode="numeric" />
+            </div>
+            <button class="btn btn-primary" type="submit">验证并继续</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>试卷详情</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"], ["\\(", "\\)"]],
+          displayMath: [["$$", "$$"], ["\\[", "\\]"]],
+        },
+        options: { skipHtmlTags: ["script", "noscript", "style", "textarea", "pre", "code"] },
+      };
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+      .q { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 14px; padding: 12px; margin: 10px 0; background: rgba(15, 23, 42, 0.02); }
+      .muted { color: var(--muted); }
+      pre { white-space: pre-wrap; margin: 8px 0 0; }
+      .md { white-space: normal; }
+      .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="Servforce Quiz 管理后台">
+          <span class="brand-badge" aria-hidden="true"></span>
+          <span>Servforce Quiz</span>
+        </div>
+        <nav class="nav" aria-label="主导航">
+          <a class="nav-link active" href="/admin#tab-exams">试卷</a>
+          <a class="nav-link" href="/admin#tab-assign">分发</a>
+          <a class="nav-link" href="/admin/candidates">候选人</a>
+        </nav>
+        <form method="post" action="/admin/logout" style="margin:0;">
+          <button class="btn btn-danger" type="submit">退出</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="container page">
+      <div class="surface" role="region" aria-label="试卷详情">
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2 class="title">{{ spec.title }} <span class="muted">({{ spec.id }})</span></h2>
+              <p class="sub">{{ spec.description }}</p>
+            </div>
+            <div class="flex" style="gap:10px; justify-content:flex-end; flex-wrap: wrap;">
+              <a class="btn btn-primary" href="/admin#tab-exams">返回列表</a>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h3 class="title" style="font-size:16px; margin-bottom: 10px;">题目</h3>
+          {% for q in spec.questions %}
+            <div class="q">
+              <div class="flex">
+                <div><b>{{ q.label or q.qid }}</b></div>
+                <div><code>{{ q.type }}</code></div>
+                <div class="muted">{{ q.max_points }}分</div>
+              </div>
+              <div class="md">{{ q.stem_md | md }}</div>
+              {% if q.options %}
+                <ul>
+                {% for o in q.options %}
+                  <li>{{ o.key }}) {{ o.text }} {% if o.correct %}<b>（正确）</b>{% endif %}</li>
+                {% endfor %}
+                </ul>
+              {% endif %}
+              {% if q.rubric %}
+                <details><summary>rubric</summary><pre>{{ q.rubric }}</pre></details>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>管理后台</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <style>
+      .hint {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        border: 1px dashed rgba(15, 23, 42, 0.18);
+        background: rgba(15, 23, 42, 0.02);
+        border-radius: 12px;
+        margin: 10px 0 14px;
+      }
+      .hint strong { font-size: 13px; }
+      .hint span { color: var(--muted); font-size: 13px; }
+      .grid-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+      @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="Servforce Quiz 管理后台">
+          <span class="brand-badge" aria-hidden="true"></span>
+          <span>Servforce Quiz</span>
+        </div>
+
+        <nav class="nav" aria-label="主导航">
+          <a class="nav-link active" href="#tab-exams" data-nav="exams">试卷</a>
+          <a class="nav-link" href="#tab-assign" data-nav="assign">分发</a>
+          <a class="nav-link" href="/admin/candidates">候选人</a>
+        </nav>
+
+        <form method="post" action="/admin/logout" style="margin:0;">
+          <button class="btn btn-danger" type="submit">退出</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="container page">
+      {% for m in get_flashed_messages() %}
+      <div class="flash">{{ m }}</div>
+      {% endfor %}
+
+      <div class="surface" role="region" aria-label="后台内容">
+        <div class="tabs" role="tablist" aria-label="功能页">
+          <div class="tabs-left">
+            <button class="tab active" type="button" role="tab" aria-controls="tab-exams" aria-selected="true" data-tab="exams">上传试卷</button>
+            <button class="tab" type="button" role="tab" aria-controls="tab-assign" aria-selected="false" data-tab="assign">候选人分发</button>
+            <a class="tab-link" role="tab" aria-selected="false" href="/admin/candidates">候选人管理</a>
+          </div>
+          <div class="tabs-right" aria-label="快捷操作">
+            <div class="tabs-meta" data-action-for="exams">试卷与分发管理</div>
+          </div>
+        </div>
+
+        <section id="tab-exams" class="panel active" role="tabpanel" aria-label="上传试卷">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">上传试卷（QML Markdown）</h2>
+              <p class="panel-sub">上传 .md 或包含试卷+图片的 .zip（建议：md 同级放 img/ 目录）后会自动解析并生成试卷数据。</p>
+            </div>
+
+            <form class="form-row" method="post" action="/admin/exams/upload" enctype="multipart/form-data">
+              <div class="field" style="min-width: 320px;">
+                <label for="file">选择文件</label>
+                <input id="file" class="input" type="file" name="file" accept=".md,.zip,text/markdown,application/zip" required />
+              </div>
+              <button class="btn btn-primary" type="submit">上传并解析</button>
+            </form>
+          </div>
+
+          <div class="hint">
+            <div>
+              <strong>试卷列表</strong>
+              <span>点击“查看”可进入试卷详情。</span>
+            </div>
+            <form method="get" action="/admin" style="margin:0; display:flex; gap:10px; align-items:end;">
+              <div class="field" style="min-width: 260px;">
+                <label for="exam_q">搜索试卷</label>
+                <input id="exam_q" class="input" name="exam_q" value="{{ exam_q or '' }}" placeholder="exam_key/标题" />
+              </div>
+              <button class="btn" type="submit">查询</button>
+              {% if exam_q %}
+                <a class="btn" href="/admin#tab-exams">清除</a>
+              {% endif %}
+            </form>
+          </div>
+
+          <table aria-label="试卷列表">
+            <thead>
+              <tr>
+                <th style="width: 220px;">exam_key</th>
+                <th>标题</th>
+                <th style="width: 90px;">题数</th>
+                <th style="width: 200px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in exams_page %}
+              <tr>
+                <td><code>{{ e.exam_key }}</code></td>
+                <td>{{ e.title }}</td>
+                <td>{{ e.count }}</td>
+                <td class="td-action" style="white-space: nowrap;">
+                  <a class="btn" href="/admin/exams/{{ e.exam_key }}">查看</a>
+                  <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该试卷？删除后候选人关联试卷将显示为“已删除”，但已归档答题仍可查看。');">
+                    <button class="btn btn-danger" type="submit">删除</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          {% if total_exam_pages and total_exam_pages > 1 %}
+          <div class="flex" style="justify-content: space-between; margin-top: 12px;">
+            <div class="sub" style="margin:0;">共 {{ total_exams }} 个 · 第 {{ exam_page }} / {{ total_exam_pages }} 页</div>
+            <div class="flex">
+              {% if exam_page > 1 %}
+                <a class="btn" href="/admin?exam_page={{ exam_page - 1 }}#tab-exams">上一页</a>
+              {% endif %}
+              {% if exam_page < total_exam_pages %}
+                <a class="btn" href="/admin?exam_page={{ exam_page + 1 }}#tab-exams">下一页</a>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+        </section>
+
+        <section id="tab-assign" class="panel" role="tabpanel" aria-label="候选人分发">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">候选人分发</h2>
+              <p class="panel-sub">选择试卷与候选人，生成 token/链接/二维码并发送。</p>
+            </div>
+          </div>
+
+          <form method="post" action="/admin/assignments">
+            <div class="grid-2">
+              <div class="field">
+                <label for="exam_key">试卷</label>
+                <select id="exam_key" name="exam_key" required>
+                  {% for e in exams_all %}
+                    <option value="{{ e.exam_key }}">{{ e.exam_key }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="candidate_id">候选人</label>
+                <select id="candidate_id" name="candidate_id" required>
+                  {% for c in candidates %}
+                    {% set status_map = {'created':'已创建','distributed':'已分发','verified':'已验证','finished':'已完成'} %}
+                    <option value="{{ c.id }}">#{{ c.id }} {{ c.name }} {{ c.phone }} ({{ status_map.get(c.status, c.status) }})</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            <div class="grid-3" style="margin-top: 10px;">
+              <div class="field">
+                <label for="time_limit_seconds">限时（时:分:秒）</label>
+                <input id="time_limit_seconds" class="input" name="time_limit_seconds" value="02:00:00" placeholder="02:00:00" />
+              </div>
+              <div class="field">
+                <label for="pass_threshold">阈值（0-100）</label>
+                <input id="pass_threshold" class="input" name="pass_threshold" value="60" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="verify_max_attempts">验证次数</label>
+                <input id="verify_max_attempts" class="input" name="verify_max_attempts" value="3" inputmode="numeric" />
+              </div>
+            </div>
+
+            <div style="margin-top: 12px; display:flex; gap:10px; justify-content:flex-end; flex-wrap: wrap;">
+              <button class="btn btn-primary" type="submit">生成链接/二维码并发送（状态=已分发）</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      document.body.classList.add("js");
+
+      const tabButtons = Array.from(document.querySelectorAll("[data-tab]"));
+      const panels = new Map([
+        ["exams", document.getElementById("tab-exams")],
+        ["assign", document.getElementById("tab-assign")],
+      ]);
+      const navLinks = Array.from(document.querySelectorAll("[data-nav]"));
+
+      function setActive(tabKey) {
+        for (const btn of tabButtons) {
+          const active = btn.dataset.tab === tabKey;
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+        }
+
+        for (const [key, el] of panels.entries()) {
+          el.classList.toggle("active", key === tabKey);
+        }
+
+        for (const a of navLinks) {
+          a.classList.toggle("active", a.dataset.nav === tabKey);
+        }
+      }
+
+      function tabKeyFromHash() {
+        const h = (location.hash || "").toLowerCase();
+        if (h.includes("assign")) return "assign";
+        if (h.includes("exams")) return "exams";
+        return "exams";
+      }
+
+      for (const btn of tabButtons) {
+        btn.addEventListener("click", () => {
+          const key = btn.dataset.tab;
+          setActive(key);
+          location.hash = key === "assign" ? "#tab-assign" : "#tab-exams";
+        });
+      }
+
+      window.addEventListener("hashchange", () => setActive(tabKeyFromHash()));
+      setActive(tabKeyFromHash());
+    </script>
+  </body>
+</html>

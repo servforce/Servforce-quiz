@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>管理员登录</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <style>
+      body { display: grid; place-items: center; padding: 22px; }
+      .wrap { width: min(980px, 100%); display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; }
+      .hero {
+        border-radius: var(--radius);
+        padding: 28px 26px;
+        color: rgba(229, 231, 235, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+        backdrop-filter: blur(10px);
+        box-shadow: var(--shadow-soft);
+        overflow: hidden;
+        position: relative;
+      }
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: -2px;
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.45), rgba(124, 58, 237, 0.35), rgba(16, 185, 129, 0.15));
+        filter: blur(40px);
+        opacity: 0.55;
+      }
+      .hero > * { position: relative; }
+      .logo { width: 40px; height: 40px; border-radius: 14px; background: linear-gradient(135deg, var(--brand), var(--brand2)); box-shadow: 0 12px 26px rgba(37, 99, 235, 0.35); }
+      .brand-title { font-weight: 900; color: rgba(255, 255, 255, 0.92); }
+      .brand-sub { font-size: 13px; color: rgba(229, 231, 235, 0.75); margin-top: 2px; }
+      .hero h1 { font-size: 28px; margin: 10px 0 8px; line-height: 1.2; color: rgba(255, 255, 255, 0.96); }
+      .hero p { margin: 0; color: rgba(229, 231, 235, 0.82); line-height: 1.7; font-size: 14px; }
+      .pill { margin-top: 18px; display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.16); font-size: 13px; }
+      .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(34, 197, 94, 0.95); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.16); }
+      .card { border-radius: var(--radius); background: var(--card); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: var(--shadow); overflow: hidden; }
+      .card-inner { padding: 22px 22px 18px; }
+      .hint { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+      .field { margin-bottom: 12px; }
+      .btn { width: 100%; }
+      .footer { padding: 12px 22px 16px; border-top: 1px solid rgba(15, 23, 42, 0.08); color: var(--muted); font-size: 12px; background: rgba(255, 255, 255, 0.75); }
+      @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } .hero { display: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="hero" aria-label="产品介绍">
+        <div class="brand">
+          <div class="logo" aria-hidden="true"></div>
+          <div>
+            <div class="brand-title">Servforce Quiz</div>
+            <div class="brand-sub">管理后台 · 试卷分发与评测</div>
+          </div>
+        </div>
+        <h1>欢迎回来</h1>
+        <p>登录后可上传试卷、分发链接/二维码、管理候选人并查看成绩与评估结果。</p>
+        <div class="pill"><span class="dot" aria-hidden="true"></span><span>服务运行中</span></div>
+      </section>
+
+      <section class="card" aria-label="管理员登录">
+        <div class="card-inner">
+          <h2>管理员登录</h2>
+          <p class="hint">请输入账号和密码以继续。</p>
+
+          {% for m in get_flashed_messages() %}
+          <div class="flash">{{ m }}</div>
+          {% endfor %}
+
+          <form method="post" action="/admin/login">
+            <div class="field">
+              <label for="username">账号</label>
+              <input id="username" class="input" name="username" autocomplete="username" placeholder="请输入账号" />
+            </div>
+            <div class="field">
+              <label for="password">密码</label>
+              <input id="password" class="input" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" />
+            </div>
+            <button class="btn" type="submit">登录</button>
+          </form>
+        </div>
+
+        <div class="footer">
+          默认账号密码可通过环境变量 <code>ADMIN_USERNAME</code>/<code>ADMIN_PASSWORD</code 配置。
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>已提交</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <style>
+      body { display: grid; place-items: center; padding: 22px; }
+      .card { width: min(720px, 100%); }
+    </style>
+  </head>
+  <body>
+    <div class="surface card" role="region" aria-label="试卷已提交">
+      <div class="section">
+        <h2 class="title">试卷已提交</h2>
+        {% if assignment.grading %}
+          <p class="sub">总分：<b>{{ assignment.grading.total }}</b> / 100；是否进入面试：<b>{{ "是" if assignment.grading.interview else "否" }}</b></p>
+          <p class="sub" style="font-size:12px;">如对结果有疑问，请联系管理员。</p>
+        {% else %}
+          <p class="sub">等待判卷...</p>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>分发成功</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <style>
+      .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; align-items: start; }
+      .card-mini { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 12px; padding: 14px; background: rgba(15, 23, 42, 0.02); }
+      .label { color: var(--muted); font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+      .value { margin-top: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: rgba(17, 24, 39, 0.08); padding: 4px 8px; border-radius: 10px; word-break: break-all; }
+      .linkbox { flex: 1; min-width: 280px; padding: 10px 12px; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 12px; background: rgba(255, 255, 255, 0.92); word-break: break-all; }
+      .hint { color: var(--muted); font-size: 13px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .qr { display: grid; place-items: center; padding: 10px; background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 12px; }
+      @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="Servforce Quiz 管理后台">
+          <span class="brand-badge" aria-hidden="true"></span>
+          <span>Servforce Quiz</span>
+        </div>
+
+        <nav class="nav" aria-label="主导航">
+          <a class="nav-link" href="/admin#tab-exams">试卷</a>
+          <a class="nav-link active" href="/admin#tab-assign">分发</a>
+          <a class="nav-link" href="/admin/candidates">候选人</a>
+        </nav>
+
+        <form method="post" action="/admin/logout" style="margin:0;">
+          <button class="btn btn-danger" type="submit">退出</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="container page">
+      <div class="surface" role="region" aria-label="分发成功">
+        <section class="section">
+          <div class="section-head">
+            <div>
+              <h2 class="title">分发成功</h2>
+              <p class="sub">链接与二维码已生成，可复制链接发送给候选人。</p>
+            </div>
+            <a class="btn" href="/admin#tab-assign">返回分发</a>
+          </div>
+
+          <div class="hint">
+            <span>token：</span>
+            <span class="mono" id="tokenText">{{ token }}</span>
+            <button class="btn" type="button" data-copy="#tokenText">复制 token</button>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="grid">
+            <div class="card-mini">
+              <div class="label">答题链接</div>
+              <div class="value">
+                <div class="linkbox" id="urlText">{{ url }}</div>
+                <a class="btn btn-primary" href="{{ url }}" target="_blank" rel="noopener">打开</a>
+                <button class="btn" type="button" data-copy="#urlText">复制链接</button>
+              </div>
+              <p class="sub" style="margin-top:10px;">候选人状态已更新为 <span class="mono">已分发</span>。</p>
+            </div>
+
+            <div class="card-mini">
+              <div class="label">二维码</div>
+              <div class="value" style="justify-content:center;">
+                <div class="qr">
+                  <img src="/admin/qr/{{ token }}.png" width="220" height="220" alt="答题二维码" />
+                </div>
+              </div>
+              <div class="value" style="justify-content:center; margin-top:10px;">
+                <a class="btn" href="/admin/qr/{{ token }}.png" target="_blank" rel="noopener">打开图片</a>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      async function copyTextFrom(selector) {
+        const el = document.querySelector(selector);
+        if (!el) return;
+        const text = (el.textContent || "").trim();
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (_e) {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand("copy");
+          ta.remove();
+        }
+      }
+
+      for (const btn of document.querySelectorAll("[data-copy]")) {
+        btn.addEventListener("click", () => copyTextFrom(btn.dataset.copy));
+      }
+    </script>
+  </body>
+</html>
