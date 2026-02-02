@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -92,11 +93,24 @@ def _grade_objective(q: dict[str, Any], ans: Any) -> int:
 
 def _default_prompt(question: str, rubric: str, answer: str, max_points: int) -> str:
     return (
-        "你是严格的阅卷老师。只根据评分标准给分。\n"
-        f"请输出 JSON：{{\"score\":0..{max_points},\"reason\":\"...\"}}。\n"
+        "你是一名公正的阅卷老师，只能依据评分标准评分，但要允许部分得分。\n"
+        "评分规则：\n"
+        f"1) score 为 0..{max_points} 的整数（可取中间分，不要只给 0 或满分）。\n"
+        "2) 若答案只命中部分要点，请按要点覆盖程度给分；rubric 未细分时请自行拆分为 3-5 个要点再评。\n"
+        "3) reason 用 1-3 句说明得分点/失分点，不要泄露标准答案原文。\n"
+        f"只输出 JSON：{{\"score\":0..{max_points},\"reason\":\"...\"}}。\n"
         f"【题目】{question}\n"
         f"【评分标准】{rubric}\n"
         f"【考生回答】{answer}\n"
+    )
+
+def _short_grading_prefix(max_points: int) -> str:
+    return (
+        "评分补充要求：\n"
+        f"- 必须使用 0..{max_points} 的整数分，允许部分得分（可取中间分）。\n"
+        "- 若 rubric 未给出分点，请自行拆分要点并按覆盖程度给分。\n"
+        "- 只依据考生回答作答，不要推测其“可能想表达什么”。\n"
+        f"- 只输出 JSON：{{\"score\":0..{max_points},\"reason\":\"...\"}}。\n"
     )
 
 
@@ -124,6 +138,8 @@ def _grade_short(
     else:
         prompt = _default_prompt(question, rubric, answer, max_points)
 
+    prompt = _short_grading_prefix(max_points) + "\n" + prompt
+
     raw = call_llm_json(prompt)
     if not raw:
         return 0, "LLM 调用失败"
@@ -136,11 +152,17 @@ def _grade_short(
             if l != -1 and r != -1 and r > l:
                 try_text = try_text[l : r + 1]
         obj = json.loads(try_text)
-        score = int(obj.get("score", 0))
+        raw_score = obj.get("score", 0)
+        if isinstance(raw_score, (int, float)):
+            score = int(round(float(raw_score)))
+        else:
+            m = re.search(r"-?\d+(?:\.\d+)?", str(raw_score))
+            score = int(round(float(m.group(0)))) if m else 0
         reason = str(obj.get("reason", "")).strip() or "模型未返回原因"
     except Exception:
         try:
-            score = int(str(raw).strip())
+            m = re.search(r"-?\d+(?:\.\d+)?", str(raw).strip())
+            score = int(round(float(m.group(0)))) if m else 0
             reason = ""
         except Exception:
             logger.warning("LLM output parse failed: %r", raw)

@@ -137,6 +137,7 @@ code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font: inherit;
   border: 1px solid transparent;
   background: transparent;
   color: var(--muted);

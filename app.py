@@ -24,7 +24,7 @@ from flask import (
 )
 from markupsafe import Markup
 
-from config import ADMIN_PASSWORD, ADMIN_USERNAME, SECRET_KEY, STORAGE_DIR, logger
+from config import ADMIN_PASSWORD, ADMIN_USERNAME, BASE_DIR, SECRET_KEY, STORAGE_DIR, logger
 from db import (
     create_candidate,
     delete_candidate,
@@ -95,6 +95,92 @@ _MD_IMAGE_RE = re.compile(r"!\[[^\]]*]\((?P<path>[^)]+)\)")
 _FILENAME_UNSAFE_RE = re.compile(r'[\\\\/:*?"<>|]+')
 
 
+def _protect_math_for_markdown(raw: str) -> tuple[str, list[tuple[str, str]]]:
+    """
+    Python-Markdown treats trailing backslashes as hard line breaks and can
+    consume TeX row separators like `\\\\` at end-of-line (e.g. inside `cases`).
+    To keep MathJax/TeX intact, temporarily replace math segments with tokens
+    before markdown processing, then restore them in the generated HTML.
+    """
+
+    text = str(raw or "")
+    replacements: list[tuple[str, str]] = []
+    out: list[str] = []
+
+    def is_escaped(pos: int) -> bool:
+        # Consider a '$' escaped if preceded by an odd number of backslashes.
+        bs = 0
+        j = pos - 1
+        while j >= 0 and text[j] == "\\":
+            bs += 1
+            j -= 1
+        return (bs % 2) == 1
+
+    i = 0
+    while i < len(text):
+        if text.startswith("$$", i) and not is_escaped(i):
+            j = i + 2
+            while True:
+                k = text.find("$$", j)
+                if k < 0:
+                    break
+                if not is_escaped(k):
+                    seg = text[i : k + 2]
+                    token = f"@@MATH{len(replacements)}@@"
+                    replacements.append((token, html.escape(seg, quote=False)))
+                    out.append(token)
+                    i = k + 2
+                    break
+                j = k + 1
+            else:
+                # Unreachable; keep structure explicit.
+                pass
+            if i != j and out and out[-1].startswith("@@MATH"):
+                continue
+
+        if text.startswith("\\[", i):
+            k = text.find("\\]", i + 2)
+            if k >= 0:
+                seg = text[i : k + 2]
+                token = f"@@MATH{len(replacements)}@@"
+                replacements.append((token, html.escape(seg, quote=False)))
+                out.append(token)
+                i = k + 2
+                continue
+
+        if text.startswith("\\(", i):
+            k = text.find("\\)", i + 2)
+            if k >= 0:
+                seg = text[i : k + 2]
+                token = f"@@MATH{len(replacements)}@@"
+                replacements.append((token, html.escape(seg, quote=False)))
+                out.append(token)
+                i = k + 2
+                continue
+
+        if text[i] == "$" and not is_escaped(i) and not text.startswith("$$", i):
+            j = i + 1
+            while True:
+                k = text.find("$", j)
+                if k < 0:
+                    break
+                if not is_escaped(k):
+                    seg = text[i : k + 1]
+                    token = f"@@MATH{len(replacements)}@@"
+                    replacements.append((token, html.escape(seg, quote=False)))
+                    out.append(token)
+                    i = k + 1
+                    break
+                j = k + 1
+            if out and out[-1].startswith("@@MATH"):
+                continue
+
+        out.append(text[i])
+        i += 1
+
+    return "".join(out), replacements
+
+
 def _safe_relpath(raw: str) -> str:
     p = (raw or "").strip().strip('"').strip("'")
     p = p.split("#", 1)[0].strip()
@@ -124,6 +210,36 @@ def _collect_md_assets(markdown_text: str) -> set[str]:
 
 def _asset_url(exam_key: str, relpath: str) -> str:
     return f"/exams/{exam_key}/assets/{_safe_relpath(relpath)}"
+
+
+def _resolve_exam_asset_file(exam_key: str, relpath: str) -> Path | None:
+    """
+    Resolve an asset file path.
+
+    Primary: `storage/exams/<exam_key>/assets/<relpath>`
+    Fallback (dev-friendly): `<repo>/examples/<relpath>`
+    """
+    rp = _safe_relpath(relpath)
+    exam_assets_base = (STORAGE_DIR / "exams" / str(exam_key or "") / "assets").resolve()
+    try:
+        p = (exam_assets_base / rp).resolve()
+    except Exception:
+        p = exam_assets_base / rp
+    if exam_assets_base not in p.parents and p != exam_assets_base:
+        return None
+    if p.exists() and p.is_file():
+        return p
+
+    examples_base = (BASE_DIR / "examples").resolve()
+    try:
+        p2 = (examples_base / rp).resolve()
+    except Exception:
+        p2 = examples_base / rp
+    if examples_base not in p2.parents and p2 != examples_base:
+        return None
+    if p2.exists() and p2.is_file():
+        return p2
+    return None
 
 
 def _rewrite_exam_asset_paths(exam_key: str, spec: dict, public_spec: dict) -> None:
@@ -194,16 +310,31 @@ def create_app() -> Flask:
     @app.template_filter("md")
     def _render_md(value: str) -> Markup:
         # Escape HTML tags/entities to avoid XSS, but keep quotes so code samples display normally.
-        text = html.escape(str(value or ""), quote=False)
-        return Markup(mdlib.markdown(text, extensions=["extra", "sane_lists"], output_format="html5"))
+        # Also protect TeX math so Markdown doesn't consume `\\\\` row separators (hard line breaks).
+        protected, math_repls = _protect_math_for_markdown(value)
+        text = html.escape(protected, quote=False)
+        rendered = mdlib.markdown(
+            text,
+            extensions=[
+                "markdown.extensions.fenced_code",
+                "markdown.extensions.footnotes",
+                "markdown.extensions.attr_list",
+                "markdown.extensions.def_list",
+                "markdown.extensions.tables",
+                "markdown.extensions.abbr",
+                "markdown.extensions.md_in_html",
+                "markdown.extensions.sane_lists",
+            ],
+            output_format="html5",
+        )
+        for token, math_html in math_repls:
+            rendered = rendered.replace(token, math_html)
+        return Markup(rendered)
 
     @app.get("/exams/<exam_key>/assets/<path:relpath>")
     def public_exam_asset(exam_key: str, relpath: str):
-        base = (STORAGE_DIR / "exams" / exam_key / "assets").resolve()
-        p = (base / _safe_relpath(relpath)).resolve()
-        if base not in p.parents and p != base:
-            abort(404)
-        if not p.exists() or not p.is_file():
+        p = _resolve_exam_asset_file(exam_key, relpath)
+        if not p:
             abort(404)
         return send_file(p)
 

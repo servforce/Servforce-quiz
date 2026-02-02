@@ -69,7 +69,13 @@ def call_llm_json(prompt: str, model: str = QWEN_MODEL) -> str:
     """
     try:
         start = time.time()
-        system = "你是严格的阅卷老师，必须按评分标准评分。请输出 JSON：{\"score\":0..max,\"reason\":\"...\"}。"
+        system = (
+            "你是一名公正的阅卷老师，必须严格依据评分标准评分，但要允许部分得分。\n"
+            "要求：\n"
+            "1) score 必须是 0..max 的整数（可取中间分，不要只给 0 或满分）。\n"
+            "2) 若答案只覆盖部分要点，请给对应比例的分数。\n"
+            "3) 只输出一个 JSON 对象：{\"score\":0..max,\"reason\":\"...\"}，不要输出多余文本。\n"
+        )
 
         if LLM_PROVIDER == "ollama":
             out = _ollama_chat(prompt, system=system, model=OLLAMA_MODEL, format_json=True)
