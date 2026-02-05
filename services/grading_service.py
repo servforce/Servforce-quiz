@@ -96,9 +96,16 @@ def _default_prompt(question: str, rubric: str, answer: str, max_points: int) ->
         "你是一名公正的阅卷老师，只能依据评分标准评分，但要允许部分得分。\n"
         "评分规则：\n"
         f"1) score 为 0..{max_points} 的整数（可取中间分，不要只给 0 或满分）。\n"
-        "2) 若答案只命中部分要点，请按要点覆盖程度给分；rubric 未细分时请自行拆分为 3-5 个要点再评。\n"
-        "3) reason 用 1-3 句说明得分点/失分点，不要泄露标准答案原文。\n"
-        f"只输出 JSON：{{\"score\":0..{max_points},\"reason\":\"...\"}}。\n"
+        "2) 不要求与标准答案完全一致：允许同义改写、不同表述方式、举例说明；只要与评分要点沾边就可给部分分。\n"
+        "3) 若答案为空、纯数字/乱码/随意输入等无意义内容，或与题目/评分标准完全无关：score=0。\n"
+        "4) 若答案与评分标准矛盾、把关键事实说反（核心因果/结论颠倒）：score=0。\n"
+        "5) 若答案只命中部分要点，请按要点覆盖程度给分；rubric 未细分时请自行拆分为 3-5 个要点再评。\n"
+        "6) reason 用 1-3 句说明得分点/失分点，不要泄露标准答案原文。\n"
+        "输出格式：只输出 JSON，必须包含字段：score、reason、relevance、contradiction。\n"
+        f"- score: 0..{max_points} 的整数\n"
+        "- relevance: 0..3（0=完全无关/无意义；1=略相关；2=相关且部分正确；3=高度相关且基本正确）\n"
+        "- contradiction: true/false（true=关键事实与评分标准矛盾/说反，必须 score=0）\n"
+        f"示例：{{\"score\":3,\"reason\":\"...\",\"relevance\":2,\"contradiction\":false}}。\n"
         f"【题目】{question}\n"
         f"【评分标准】{rubric}\n"
         f"【考生回答】{answer}\n"
@@ -108,16 +115,37 @@ def _short_grading_prefix(max_points: int) -> str:
     return (
         "评分补充要求：\n"
         f"- 必须使用 0..{max_points} 的整数分，允许部分得分（可取中间分）。\n"
+        "- 若答案为空、纯数字/乱码/随意输入等无意义内容、与题目或评分标准完全无关：给 0 分。\n"
+        "- 若答案与评分标准矛盾、把关键事实说反（核心因果/结论颠倒）：给 0 分。\n"
+        "- 只要与评分要点沾边一点，就允许给部分分（1..满分任意整数），不要求逐字一致。\n"
         "- 若 rubric 未给出分点，请自行拆分要点并按覆盖程度给分。\n"
         "- 只依据考生回答作答，不要推测其“可能想表达什么”。\n"
-        f"- 只输出 JSON：{{\"score\":0..{max_points},\"reason\":\"...\"}}。\n"
+        f"- 只输出 JSON，必须包含：score、reason、relevance、contradiction。\n"
     )
+
+
+def _is_blank_short_answer(answer: Any) -> bool:
+    s = "" if answer is None else str(answer)
+    s = s.strip()
+    if not s:
+        return True
+    s2 = re.sub(r"\s+", "", s).lower()
+    if s2 in {"无", "暂无", "没有", "不知道", "不清楚", "不会", "不会做", "不懂", "n/a", "na", "null"}:
+        return True
+    # Treat pure digits as meaningless (e.g., "1414123") -> 0 points.
+    if re.fullmatch(r"\d+", s2):
+        return True
+    return re.search(r"[A-Za-z0-9\u4e00-\u9fff]", s2) is None
 
 
 def _grade_short(
     q: dict[str, Any], answer: str, exam_llm: dict[str, Any]
 ) -> tuple[int, str]:
     max_points = int(q.get("max_points") or q.get("points") or 0)
+    answer = "" if answer is None else str(answer)
+    answer = answer.replace("\r\n", "\n").strip()
+    if _is_blank_short_answer(answer):
+        return 0, "未作答、无意义内容或与题目无关，得 0 分"
     rubric = q.get("rubric") or ""
     question = q.get("stem_md") or ""
     q_llm = q.get("llm") or {}
@@ -158,16 +186,31 @@ def _grade_short(
         else:
             m = re.search(r"-?\d+(?:\.\d+)?", str(raw_score))
             score = int(round(float(m.group(0)))) if m else 0
-        reason = str(obj.get("reason", "")).strip() or "模型未返回原因"
+        contradiction = bool(obj.get("contradiction", False))
+        relevance_raw = obj.get("relevance", None)
+        try:
+            relevance = int(relevance_raw) if relevance_raw is not None else None
+        except Exception:
+            relevance = None
+        reason = str(obj.get("reason", "")).strip() or "???????"
     except Exception:
         try:
             m = re.search(r"-?\d+(?:\.\d+)?", str(raw).strip())
             score = int(round(float(m.group(0)))) if m else 0
+            contradiction = False
+            relevance = None
             reason = ""
         except Exception:
             logger.warning("LLM output parse failed: %r", raw)
             return 0, "模型返回无法解析"
     score = max(0, min(max_points, score))
+    # Guard rails: contradictions and totally irrelevant answers should be 0.
+    if contradiction or relevance == 0:
+        score = 0
+        if not reason:
+            reason = "???????????????? 0 ?"
+        elif "0" not in reason and "? 0" not in reason:
+            reason = f"{reason}???? 0 ??"
     if (not reason or reason in {"模型未返回原因", "模型仅返回分数"}) and rubric:
         reason = _grade_short_reason(question=question, rubric=rubric, answer=answer, score=score, max_points=max_points)
     return score, reason

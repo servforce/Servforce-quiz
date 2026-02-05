@@ -7,6 +7,8 @@ class TestGradingServiceLLM(unittest.TestCase):
 
         def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
             self.assertIn("【评分标准】", prompt)
+            self.assertIn("完全无关", prompt)
+            self.assertIn("部分分", prompt)
             return '{"score": 3, "reason": "命中2个要点，少1个要点"}'
 
         def fake_call_llm_text(prompt: str, model=None):  # noqa: ARG001
@@ -45,6 +47,121 @@ class TestGradingServiceLLM(unittest.TestCase):
         finally:
             gs.call_llm_json = orig_json
             gs.call_llm_text = orig_text
+
+    def test_empty_short_answer_gets_zero_without_llm_call(self):
+        import services.grading_service as gs
+
+        def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
+            raise AssertionError("LLM should not be called for empty short answer")
+
+        orig_json = gs.call_llm_json
+        gs.call_llm_json = fake_call_llm_json
+        try:
+            spec = {
+                "title": "demo",
+                "questions": [
+                    {
+                        "qid": "Q1",
+                        "type": "short",
+                        "max_points": 5,
+                        "stem_md": "简答题",
+                        "rubric": "评分标准",
+                    }
+                ],
+            }
+            assignment = {"answers": {"Q1": "   \n"}, "pass_threshold": 70}
+            grading = gs.grade_attempt(spec, assignment)
+            self.assertEqual(grading["raw_scored"], 0)
+            self.assertEqual(grading["subjective"][0]["score"], 0)
+            self.assertIn("无意义", grading["subjective"][0]["reason"])
+        finally:
+            gs.call_llm_json = orig_json
+
+    def test_numeric_only_short_answer_gets_zero_without_llm_call(self):
+        import services.grading_service as gs
+
+        def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
+            raise AssertionError("LLM should not be called for numeric-only short answer")
+
+        orig_json = gs.call_llm_json
+        gs.call_llm_json = fake_call_llm_json
+        try:
+            spec = {
+                "title": "demo",
+                "questions": [
+                    {
+                        "qid": "Q1",
+                        "type": "short",
+                        "max_points": 5,
+                        "stem_md": "用不超过150字解释过拟合的定义与危害。",
+                        "rubric": "定义+表现+危害",
+                    }
+                ],
+            }
+            assignment = {"answers": {"Q1": "1414141123123123"}, "pass_threshold": 70}
+            grading = gs.grade_attempt(spec, assignment)
+            self.assertEqual(grading["raw_scored"], 0)
+            self.assertEqual(grading["subjective"][0]["score"], 0)
+            self.assertIn("无意义", grading["subjective"][0]["reason"])
+        finally:
+            gs.call_llm_json = orig_json
+
+    def test_contradiction_flag_forces_zero(self):
+        import services.grading_service as gs
+
+        def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
+            return '{"score": 3, "reason": "关键结论说反了", "relevance": 2, "contradiction": true}'
+
+        orig_json = gs.call_llm_json
+        gs.call_llm_json = fake_call_llm_json
+        try:
+            spec = {
+                "title": "demo",
+                "questions": [
+                    {
+                        "qid": "Q1",
+                        "type": "short",
+                        "max_points": 10,
+                        "stem_md": "用不超过150字解释过拟合的定义与危害。",
+                        "rubric": "定义+表现+危害",
+                    }
+                ],
+            }
+            assignment = {"answers": {"Q1": "过拟合是训练损失过大，测试损失过低"}, "pass_threshold": 70}
+            grading = gs.grade_attempt(spec, assignment)
+            self.assertEqual(grading["raw_scored"], 0)
+            self.assertEqual(grading["subjective"][0]["score"], 0)
+            self.assertIn("0", grading["subjective"][0]["reason"])
+        finally:
+            gs.call_llm_json = orig_json
+
+    def test_relevance_zero_forces_zero(self):
+        import services.grading_service as gs
+
+        def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
+            return '{"score": 4, "reason": "与题目无关", "relevance": 0, "contradiction": false}'
+
+        orig_json = gs.call_llm_json
+        gs.call_llm_json = fake_call_llm_json
+        try:
+            spec = {
+                "title": "demo",
+                "questions": [
+                    {
+                        "qid": "Q1",
+                        "type": "short",
+                        "max_points": 10,
+                        "stem_md": "简答题",
+                        "rubric": "评分标准",
+                    }
+                ],
+            }
+            assignment = {"answers": {"Q1": "随便写点无关的"}, "pass_threshold": 70}
+            grading = gs.grade_attempt(spec, assignment)
+            self.assertEqual(grading["raw_scored"], 0)
+            self.assertEqual(grading["subjective"][0]["score"], 0)
+        finally:
+            gs.call_llm_json = orig_json
 
     def test_integer_only_score_triggers_reason_generation(self):
         import services.grading_service as gs
@@ -93,4 +210,3 @@ class TestGradingServiceLLM(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

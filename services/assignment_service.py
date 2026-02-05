@@ -40,14 +40,15 @@ def compute_min_submit_seconds(time_limit_seconds: int, min_submit_seconds: int 
         limit = 0
     if limit <= 0:
         return 0
-    half_or_more = (limit + 1) // 2
+    #  (limit + 1) // 2
+    half_or_more = 60
     if min_submit_seconds is None:
-        return half_or_more
+        return int(half_or_more)
     try:
         given = int(min_submit_seconds or 0)
     except Exception:
         given = 0
-    return max(0, max(given, half_or_more))
+    return max(0, max(int(given), int(half_or_more)))
 
 
 def create_assignment(
