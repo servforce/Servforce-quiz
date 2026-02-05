@@ -37,5 +37,4 @@
 - 后台创建候选人（写入 PostgreSQL 的 `candidate` 表）。
 - 后台选择试卷 + 候选人生成链接/二维码（候选人状态置为 `send`）。
 - 候选人打开链接输入姓名/手机号验证（通过后状态 `verified`），进入作答页。
-- 提交/超时交卷（状态 `finished`），系统自动判分并回写候选人表的 `score/duration_seconds/interview/remark`。
-
+- 提交/超时交卷（状态 `finished`），系统自动判分并回写候选人表的 `score/duration_seconds`。

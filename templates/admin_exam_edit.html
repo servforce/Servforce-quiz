@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>修改试卷</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <style>
+      textarea.editor {
+        width: 100%;
+        min-height: 62vh;
+        resize: vertical;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.92);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .exam-tabs {
+        display: inline-flex;
+        gap: 6px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+      }
+      .exam-tabs a {
+        padding: 10px 12px;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 15px;
+        color: var(--text);
+        text-decoration: none;
+        border: 1px solid transparent;
+        background: transparent;
+      }
+      .exam-tabs a:hover { background: rgba(15, 23, 42, 0.04); text-decoration: none; }
+      .exam-tabs a.active { background: rgba(37, 99, 235, 0.10); border-color: rgba(37, 99, 235, 0.22); color: #1d4ed8; }
+
+      .exam-head {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+      }
+      .exam-head .left { min-width: 0; }
+      .exam-head .center { justify-self: center; }
+      .exam-head .right { justify-self: end; }
+
+      .section.compact { padding-bottom: 8px; }
+      .section.compact .section-head { margin-bottom: 0; }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="Servforce Quiz 管理后台">
+          <span class="brand-badge" aria-hidden="true"></span>
+          <span>Servforce Quiz</span>
+        </div>
+        <nav class="nav" aria-label="主导航">
+          <a class="nav-link active" href="/admin#tab-exams">试卷管理</a>
+          <a class="nav-link" href="/admin/candidates">候选人管理</a>
+          <a class="nav-link" href="/admin#tab-assign">答题邀请</a>
+        </nav>
+        <form method="post" action="/admin/logout" style="margin:0;">
+          <button class="btn btn-danger" type="submit">退出</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="container page">
+      {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
+      {% for m in get_flashed_messages() %}
+      <div class="flash">{{ m }}</div>
+      {% endfor %}
+
+      <div class="surface" role="region" aria-label="修改试卷">
+        <section class="section compact">
+          <div class="section-head">
+            <div class="exam-head">
+              <div class="left"></div>
+              <div class="center">
+                <div class="exam-tabs" aria-label="试卷页签">
+                  <a class="active" href="/admin/exams/{{ exam_href_id }}/edit">修改试卷</a>
+                  <a href="/admin/exams/{{ exam_href_id }}">试卷详情</a>
+                  <a href="/admin/exams/{{ exam_href_id }}/paper">答题试卷</a>
+                </div>
+              </div>
+              <div class="right">
+                <a class="btn btn-primary" href="/admin#tab-exams">返回</a>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <form method="post" action="/admin/exams/{{ exam_href_id }}/edit">
+            <div class="field">
+              <label for="source_md">Markdown 内容</label>
+              <textarea id="source_md" name="source_md" class="editor" spellcheck="false" required>{{ source_md }}</textarea>
+            </div>
+            <div class="flex" style="justify-content:flex-end; gap:10px;">
+              <button class="btn btn-primary" type="submit">保存并重新解析</button>
+            </div>
+          </form>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

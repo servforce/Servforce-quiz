@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>分发成功</title>
+    <title>答题邀请已生成</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <style>
       .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; align-items: start; }
@@ -26,9 +26,9 @@
         </div>
 
         <nav class="nav" aria-label="主导航">
-          <a class="nav-link" href="/admin#tab-exams">试卷</a>
-          <a class="nav-link active" href="/admin#tab-assign">分发</a>
-          <a class="nav-link" href="/admin/candidates">候选人</a>
+          <a class="nav-link" href="/admin#tab-exams">试卷管理</a>
+          <a class="nav-link" href="/admin/candidates">候选人管理</a>
+          <a class="nav-link active" href="/admin#tab-assign">答题邀请</a>
         </nav>
 
         <form method="post" action="/admin/logout" style="margin:0;">
@@ -38,20 +38,14 @@
     </header>
 
     <main class="container page">
-      <div class="surface" role="region" aria-label="分发成功">
+      <div class="surface" role="region" aria-label="答题邀请已生成">
         <section class="section">
           <div class="section-head">
             <div>
-              <h2 class="title">分发成功</h2>
+              <h2 class="title">答题邀请已生成</h2>
               <p class="sub">链接与二维码已生成，可复制链接发送给候选人。</p>
             </div>
-            <a class="btn" href="/admin#tab-assign">返回分发</a>
-          </div>
-
-          <div class="hint">
-            <span>token：</span>
-            <span class="mono" id="tokenText">{{ token }}</span>
-            <button class="btn" type="button" data-copy="#tokenText">复制 token</button>
+            <a class="btn btn-primary" href="/admin#tab-assign">返回答题邀请</a>
           </div>
         </section>
 
@@ -64,7 +58,6 @@
                 <a class="btn btn-primary" href="{{ url }}" target="_blank" rel="noopener">打开</a>
                 <button class="btn" type="button" data-copy="#urlText">复制链接</button>
               </div>
-              <p class="sub" style="margin-top:10px;">候选人状态已更新为 <span class="mono">已分发</span>。</p>
             </div>
 
             <div class="card-mini">

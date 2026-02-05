@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>试卷详情</title>
+    <title>答题试卷</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <script>
       window.MathJax = {
@@ -16,13 +16,11 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
-      .q { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 14px; padding: 12px; margin: 10px 0; background: rgba(15, 23, 42, 0.02); }
+      .q { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 14px; padding: 12px; margin: 12px 0; background: rgba(15, 23, 42, 0.02); }
       .muted { color: var(--muted); }
-      pre { white-space: pre-wrap; margin: 8px 0 0; }
+      .opt { display:block; margin: 8px 0; }
       .md { white-space: normal; }
       .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
-      .q ul { list-style: none; padding-left: 0; margin: 8px 0 0; }
-      .q li { margin: 2px 0; }
       .exam-tabs {
         display: inline-flex;
         gap: 6px;
@@ -61,12 +59,9 @@
       .section.compact { padding-bottom: 8px; }
       .section.compact .section-head { margin-bottom: 0; }
 
-      .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+      .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: center; }
       .exam-meta-title h2 { margin: 0; font-size: 18px; }
-      .exam-meta-desc { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
-      .exam-meta { text-align: center; }
-      .exam-meta-title { justify-content: center; }
-      .exam-meta-desc { max-width: 920px; margin: 6px auto 0; }
+      .exam-meta-desc { max-width: 920px; margin: 6px auto 0; color: var(--muted); font-size: 13px; line-height: 1.6; text-align: center; }
       .exam-meta-stats { margin-top: 10px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
       .pill {
         display: inline-flex;
@@ -103,7 +98,11 @@
 
     <main class="container page">
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
-      <div class="surface" role="region" aria-label="试卷详情">
+      {% for m in get_flashed_messages() %}
+      <div class="flash">{{ m }}</div>
+      {% endfor %}
+
+      <div class="surface" role="region" aria-label="答题试卷">
         <section class="section compact">
           <div class="section-head">
             <div class="exam-head">
@@ -111,8 +110,8 @@
               <div class="center">
                 <div class="exam-tabs" aria-label="试卷页签">
                   <a href="/admin/exams/{{ exam_href_id }}/edit">修改试卷</a>
-                  <a class="active" href="/admin/exams/{{ exam_href_id }}">试卷详情</a>
-                  <a href="/admin/exams/{{ exam_href_id }}/paper">答题试卷</a>
+                  <a href="/admin/exams/{{ exam_href_id }}">试卷详情</a>
+                  <a class="active" href="/admin/exams/{{ exam_href_id }}/paper">答题试卷</a>
                 </div>
               </div>
               <div class="right">
@@ -123,43 +122,41 @@
         </section>
 
         <section class="section">
-          <div class="exam-meta">
-            <div class="exam-meta-title">
-              <h2>{{ spec.title }}</h2>
-              <span class="muted">({{ spec.id }})</span>
-            </div>
-            {% if spec.description %}
-              <div class="exam-meta-desc">{{ spec.description }}</div>
-            {% endif %}
-            <div class="exam-meta-stats" aria-label="试卷统计">
-              <span class="pill">题目数：{{ (exam_stats or {}).get('total_questions', 0) }}</span>
-              <span class="pill">总分：{{ (exam_stats or {}).get('total_points', 0) }} 分</span>
-              {% set type_name = {'single':'单选','multiple':'多选','short':'简答','unknown':'其他'} %}
-              {% for t, c in ((exam_stats or {}).get('counts_by_type', {}) or {}).items() %}
-                {% set pts = ((exam_stats or {}).get('points_by_type', {}) or {}).get(t, 0) %}
-                <span class="pill">{{ type_name.get(t, t) }}：{{ c }} 题 / {{ pts }} 分</span>
-              {% endfor %}
-            </div>
+          <div class="exam-meta-title">
+            <h2>{{ title }}</h2>
+            <span class="muted">({{ exam_key }})</span>
+          </div>
+          {% if description %}
+            <div class="exam-meta-desc">{{ description }}</div>
+          {% endif %}
+          <div class="exam-meta-stats" aria-label="试卷统计">
+            <span class="pill">题目数：{{ (exam_stats or {}).get('total_questions', 0) }}</span>
+            <span class="pill">总分：{{ (exam_stats or {}).get('total_points', 0) }} 分</span>
+            {% set type_name = {'single':'单选','multiple':'多选','short':'简答','unknown':'其他'} %}
+            {% for t, c in ((exam_stats or {}).get('counts_by_type', {}) or {}).items() %}
+              {% set pts = ((exam_stats or {}).get('points_by_type', {}) or {}).get(t, 0) %}
+              <span class="pill">{{ type_name.get(t, t) }}：{{ c }} 题 / {{ pts }} 分</span>
+            {% endfor %}
           </div>
 
-          <h3 class="title" style="font-size:16px; margin-bottom: 10px;">题目</h3>
           {% for q in spec.questions %}
-            <div class="q">
+            <div class="q" data-qid="{{ q.qid }}">
               <div class="flex">
                 <div><b>{{ q.label or q.qid }}</b></div>
-                <div><code>{{ q.type }}</code></div>
-                <div class="muted">{{ q.max_points }}分</div>
+                <div class="muted">({{ q.max_points }}分)</div>
               </div>
-              <div class="md">{{ q.stem_md | md }}</div>
-              {% if q.options %}
-                <ul>
+              <div class="md" style="margin: 8px 0 0;">{{ q.stem_md | md }}</div>
+
+              {% if q.type in ['single','multiple'] and q.options %}
                 {% for o in q.options %}
-                  <li>{{ o.key }}) {{ o.text }} {% if o.correct %}<b>（正确）</b>{% endif %}</li>
+                  <label class="opt">
+                    <input type="{% if q.type == 'single' %}radio{% else %}checkbox{% endif %}" disabled />
+                    {{ o.key }}) {{ o.text }}
+                  </label>
                 {% endfor %}
-                </ul>
-              {% endif %}
-              {% if q.rubric %}
-                <details><summary>rubric</summary><pre>{{ q.rubric }}</pre></details>
+              {% elif q.type == 'short' %}
+                <div class="sub" style="margin-top: 10px;">（简答题：此处为候选人输入区域预览）</div>
+                <textarea class="input" style="min-height: 80px;" disabled placeholder="候选人作答区域"></textarea>
               {% endif %}
             </div>
           {% endfor %}

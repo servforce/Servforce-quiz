@@ -41,6 +41,7 @@ from db import (
     set_candidate_exam_key,
     set_candidate_status,
     mark_exam_deleted,
+    rename_exam_key,
     update_candidate,
     update_candidate_result,
     verify_candidate,
@@ -284,6 +285,71 @@ def _write_exam_to_storage(exam_text: str, *, assets: dict[str, bytes] | None = 
     write_json(exam_dir / "public.json", public_spec)
     return exam_key
 
+
+def _rewrite_exam_in_dir(exam_key: str, exam_text: str) -> None:
+    spec, public_spec = parse_qml_markdown(exam_text)
+    parsed_key = str(spec.get("id") or "")
+    if parsed_key != str(exam_key or ""):
+        raise ValueError("exam_key mismatch after parse")
+
+    exam_dir = STORAGE_DIR / "exams" / str(exam_key or "")
+    exam_dir.mkdir(parents=True, exist_ok=True)
+    (exam_dir / "source.md").write_text(exam_text, encoding="utf-8")
+    _rewrite_exam_asset_paths(exam_key, spec, public_spec)
+    write_json(exam_dir / "spec.json", spec)
+    write_json(exam_dir / "public.json", public_spec)
+
+
+def _migrate_assignment_exam_key(old_exam_key: str, new_exam_key: str) -> int:
+    """
+    Best-effort migration: update assignment JSON files to keep tokens working
+    after an exam_key rename.
+    Returns number of updated assignment files.
+    """
+    updated = 0
+    assignments_dir = STORAGE_DIR / "assignments"
+    if not assignments_dir.exists():
+        return 0
+    for p in assignments_dir.glob("*.json"):
+        try:
+            a = read_json(p)
+        except Exception:
+            continue
+        if str(a.get("exam_key") or "") != str(old_exam_key or ""):
+            continue
+        a["exam_key"] = str(new_exam_key or "")
+        try:
+            write_json(p, a)
+            updated += 1
+        except Exception:
+            logger.exception("Failed to migrate assignment exam_key: %s", p)
+    return updated
+
+
+def _admin_update_exam_from_source(old_exam_key: str, new_source_md: str) -> str:
+    spec_tmp, _public_tmp = parse_qml_markdown(new_source_md)
+    new_exam_key = str(spec_tmp.get("id") or "").strip()
+    if not new_exam_key:
+        raise ValueError("missing exam id")
+
+    old_exam_key = str(old_exam_key or "").strip()
+    if new_exam_key != old_exam_key:
+        old_dir = STORAGE_DIR / "exams" / old_exam_key
+        new_dir = STORAGE_DIR / "exams" / new_exam_key
+        if new_dir.exists():
+            raise FileExistsError(f"target exam id already exists: {new_exam_key}")
+        if not old_dir.exists():
+            raise FileNotFoundError("exam not found")
+        old_dir.rename(new_dir)
+
+        try:
+            rename_exam_key(old_exam_key, new_exam_key)
+        except Exception:
+            logger.exception("Failed to migrate candidate.exam_key: %s -> %s", old_exam_key, new_exam_key)
+        _migrate_assignment_exam_key(old_exam_key, new_exam_key)
+
+    _rewrite_exam_in_dir(new_exam_key, new_source_md)
+    return new_exam_key
     
 def create_app() -> Flask:
     app = Flask(__name__)   # 确定项目根目录，确定templates和static路径
@@ -374,6 +440,8 @@ def create_app() -> Flask:
         candidates = list_candidates(limit=200)  # 获取考生列表，最多取 200 条
 
         exam_q = (request.args.get("exam_q") or "").strip()
+        assign_exam_key = (request.args.get("assign_exam_key") or "").strip()
+        assign_candidate_id = (request.args.get("assign_candidate_id") or "").strip()
         if exam_q:
             ql = exam_q.lower()
             exams_all = [
@@ -400,6 +468,27 @@ def create_app() -> Flask:
         end = start + per_page
         exams_page = exams_all[start:end]
 
+        attempt_candidates = []
+        for c in candidates:
+            try:
+                has_attempt = _find_latest_archive(c) is not None
+            except Exception:
+                has_attempt = False
+            if not has_attempt:
+                continue
+            attempt_candidates.append(
+                {
+                    "id": int(c.get("id") or 0),
+                    "name": str(c.get("name") or ""),
+                    "phone": str(c.get("phone") or ""),
+                    "exam_key": str(c.get("exam_key") or ""),
+                    "score": c.get("score"),
+                    "exam_started_at": c.get("exam_started_at"),
+                    "exam_submitted_at": c.get("exam_submitted_at"),
+                    "attempt_href": url_for("admin_candidate_attempt", candidate_id=int(c.get("id") or 0)),
+                }
+            )
+
         return render_template(
             "admin_dashboard.html",
             exams_all=exams_all,
@@ -408,7 +497,10 @@ def create_app() -> Flask:
             total_exams=total_exams,
             total_exam_pages=total_exam_pages,
             exam_q=exam_q,
+            assign_exam_key=assign_exam_key,
+            assign_candidate_id=assign_candidate_id,
             candidates=candidates,
+            attempt_candidates=attempt_candidates,
         )
 
     @app.post("/admin/exams/upload")    # 上传
@@ -480,6 +572,9 @@ def create_app() -> Flask:
                 flash(f"解析失败：{e}（line={e.line}）")
                 return redirect(url_for("admin_dashboard"))
             flash(f"上传并解析成功：{exam_key}")
+            sort_id = _sort_id_from_exam_key(exam_key)
+            if sort_id:
+                return redirect(url_for("admin_exam_detail_by_sort_id", exam_id=sort_id))
             return redirect(url_for("admin_exam_detail", exam_key=exam_key))
 
         # Plain markdown upload (assets must be URLs).
@@ -490,16 +585,237 @@ def create_app() -> Flask:
             flash(f"解析失败：{e}（line={e.line}）")
             return redirect(url_for("admin_dashboard"))
         flash(f"上传并解析成功：{exam_key}")
+        sort_id = _sort_id_from_exam_key(exam_key)
+        if sort_id:
+            return redirect(url_for("admin_exam_detail_by_sort_id", exam_id=sort_id))
         return redirect(url_for("admin_exam_detail", exam_key=exam_key))
 
     @app.get("/admin/exams/<exam_key>")     # 根据key值得到试卷细节
     @admin_required
+    @admin_required
     def admin_exam_detail(exam_key: str):
+        sort_id = _sort_id_from_exam_key(exam_key)
+        if sort_id:
+            return redirect(url_for("admin_exam_detail_by_sort_id", exam_id=sort_id))
         spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
         if not spec_path.exists():
             abort(404)
         spec = read_json(spec_path)
-        return render_template("admin_exam_detail.html", spec=spec)
+        exam_stats = _compute_exam_stats(spec)
+
+        return render_template(
+            "admin_exam_detail.html",
+            spec=spec,
+            exam_key=exam_key,
+            exam_sort_id=None,
+            view="detail",
+            exam_stats=exam_stats,
+        )
+
+    def _compute_exam_stats(spec: dict) -> dict:
+        questions = list(spec.get("questions") or [])
+        counts_by_type: dict[str, int] = {}
+        points_by_type: dict[str, int] = {}
+        total_points = 0
+        for q in questions:
+            t = str(q.get("type") or "").strip() or "unknown"
+            counts_by_type[t] = int(counts_by_type.get(t, 0)) + 1
+            try:
+                pts = int(q.get("max_points") or 0)
+            except Exception:
+                pts = 0
+            points_by_type[t] = int(points_by_type.get(t, 0)) + pts
+            total_points += pts
+        return {
+            "total_questions": len(questions),
+            "total_points": int(total_points),
+            "counts_by_type": counts_by_type,
+            "points_by_type": points_by_type,
+        }
+
+    @app.get("/admin/exams/<int:exam_id>")  # sort-id URL (newest=larger id)
+    @admin_required
+    def admin_exam_detail_by_sort_id(exam_id: int):
+        exam_key = _exam_key_from_sort_id(exam_id)
+        if not exam_key:
+            abort(404)
+        spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
+        if not spec_path.exists():
+            abort(404)
+        spec = read_json(spec_path)
+        exam_stats = _compute_exam_stats(spec)
+        return render_template(
+            "admin_exam_detail.html",
+            spec=spec,
+            exam_key=exam_key,
+            exam_sort_id=int(exam_id),
+            view="detail",
+            exam_stats=exam_stats,
+        )
+
+    @app.get("/admin/exams/<int:exam_id>/edit")
+    @admin_required
+    def admin_exam_edit_by_sort_id(exam_id: int):
+        exam_key = _exam_key_from_sort_id(exam_id)
+        if not exam_key:
+            abort(404)
+        exam_dir = STORAGE_DIR / "exams" / exam_key
+        source_path = exam_dir / "source.md"
+        spec_path = exam_dir / "spec.json"
+        if not source_path.exists() or not spec_path.exists():
+            abort(404)
+        try:
+            source_md = source_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            source_md = ""
+        spec = read_json(spec_path)
+        return render_template(
+            "admin_exam_edit.html",
+            exam_key=exam_key,
+            exam_sort_id=int(exam_id),
+            spec=spec,
+            source_md=source_md,
+            view="edit",
+        )
+
+    @app.post("/admin/exams/<int:exam_id>/edit")
+    @admin_required
+    def admin_exam_edit_save_by_sort_id(exam_id: int):
+        exam_key = _exam_key_from_sort_id(exam_id)
+        if not exam_key:
+            abort(404)
+        new_source_md = request.form.get("source_md") or ""
+        new_source_md = new_source_md.replace("\r\n", "\n")
+        if not new_source_md.strip():
+            flash("??????")
+            return redirect(url_for("admin_exam_edit_by_sort_id", exam_id=int(exam_id)))
+        try:
+            new_exam_key = _admin_update_exam_from_source(exam_key, new_source_md)
+        except FileExistsError as e:
+            flash(str(e))
+            return redirect(url_for("admin_exam_edit_by_sort_id", exam_id=int(exam_id)))
+        except QmlParseError as e:
+            flash(f"?????{e}?line={e.line}?")
+            return render_template(
+                "admin_exam_edit.html",
+                exam_key=exam_key,
+                exam_sort_id=int(exam_id),
+                spec=read_json(STORAGE_DIR / "exams" / exam_key / "spec.json"),
+                source_md=new_source_md,
+                view="edit",
+            )
+        except Exception as e:
+            logger.exception("Edit exam failed (exam_key=%s)", exam_key)
+            flash(f"?????{e}")
+            return redirect(url_for("admin_exam_edit_by_sort_id", exam_id=int(exam_id)))
+        flash("????????")
+        new_sort_id = _sort_id_from_exam_key(new_exam_key)
+        if new_sort_id:
+            return redirect(url_for("admin_exam_detail_by_sort_id", exam_id=int(new_sort_id)))
+        return redirect(url_for("admin_exam_detail", exam_key=new_exam_key))
+
+    @app.get("/admin/exams/<int:exam_id>/paper")
+    @admin_required
+    def admin_exam_paper_by_sort_id(exam_id: int):
+        exam_key = _exam_key_from_sort_id(exam_id)
+        if not exam_key:
+            abort(404)
+        public_path = STORAGE_DIR / "exams" / exam_key / "public.json"
+        spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
+        if not public_path.exists() or not spec_path.exists():
+            abort(404)
+        public_spec = read_json(public_path)
+        spec = read_json(spec_path)
+        exam_stats = _compute_exam_stats(spec)
+        return render_template(
+            "admin_exam_paper.html",
+            exam_key=exam_key,
+            exam_sort_id=int(exam_id),
+            spec=public_spec,
+            title=str(spec.get("title") or ""),
+            description=str(spec.get("description") or ""),
+            exam_stats=exam_stats,
+            view="paper",
+        )
+
+    @app.get("/admin/exams/<exam_key>/edit")
+    @admin_required
+    def admin_exam_edit(exam_key: str):
+        sort_id = _sort_id_from_exam_key(exam_key)
+        if sort_id:
+            return redirect(url_for("admin_exam_edit_by_sort_id", exam_id=sort_id))
+        exam_dir = STORAGE_DIR / "exams" / exam_key
+        source_path = exam_dir / "source.md"
+        spec_path = exam_dir / "spec.json"
+        if not source_path.exists() or not spec_path.exists():
+            abort(404)
+        try:
+            source_md = source_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            source_md = ""
+        spec = read_json(spec_path)
+        return render_template(
+            "admin_exam_edit.html",
+            exam_key=exam_key,
+            exam_sort_id=None,
+            spec=spec,
+            source_md=source_md,
+            view="edit",
+        )
+
+    @app.post("/admin/exams/<exam_key>/edit")
+    @admin_required
+    def admin_exam_edit_save(exam_key: str):
+        new_source_md = request.form.get("source_md") or ""
+        new_source_md = new_source_md.replace("\r\n", "\n")
+        if not new_source_md.strip():
+            flash("内容不能为空")
+            return redirect(url_for("admin_exam_edit", exam_key=exam_key))
+        try:
+            new_exam_key = _admin_update_exam_from_source(exam_key, new_source_md)
+        except FileExistsError as e:
+            flash(str(e))
+            return redirect(url_for("admin_exam_edit", exam_key=exam_key))
+        except QmlParseError as e:
+            flash(f"解析失败：{e}（line={e.line}）")
+            return render_template(
+                "admin_exam_edit.html",
+                exam_key=exam_key,
+                exam_sort_id=_sort_id_from_exam_key(exam_key),
+                spec=read_json(STORAGE_DIR / "exams" / exam_key / "spec.json"),
+                source_md=new_source_md,
+                view="edit",
+            )
+        except Exception as e:
+            logger.exception("Edit exam failed (exam_key=%s)", exam_key)
+            flash(f"保存失败：{e}")
+            return redirect(url_for("admin_exam_edit", exam_key=exam_key))
+        flash("已保存并重新解析")
+        return redirect(url_for("admin_exam_detail", exam_key=new_exam_key))
+
+    @app.get("/admin/exams/<exam_key>/paper")
+    @admin_required
+    def admin_exam_paper(exam_key: str):
+        sort_id = _sort_id_from_exam_key(exam_key)
+        if sort_id:
+            return redirect(url_for("admin_exam_paper_by_sort_id", exam_id=sort_id))
+        public_path = STORAGE_DIR / "exams" / exam_key / "public.json"
+        spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
+        if not public_path.exists() or not spec_path.exists():
+            abort(404)
+        public_spec = read_json(public_path)
+        spec = read_json(spec_path)
+        exam_stats = _compute_exam_stats(spec)
+        return render_template(
+            "admin_exam_paper.html",
+            exam_key=exam_key,
+            exam_sort_id=None,
+            spec=public_spec,
+            title=str(spec.get("title") or ""),
+            description=str(spec.get("description") or ""),
+            exam_stats=exam_stats,
+            view="paper",
+        )
 
     @app.post("/admin/exams/<exam_key>/delete")
     @admin_required
@@ -703,10 +1019,13 @@ def create_app() -> Flask:
         if not c:
             flash("候选人不存在")
             return redirect(url_for("admin_candidates"))
+        if str(c.get("status") or "") != "finished":
+            flash("候选者未提交答卷")
+            return redirect(url_for("admin_dashboard") + "#tab-assign")
         p = _find_latest_archive(c)
         if not p:
-            flash("未找到该候选人的答题归档（可能未提交或归档未生成）")
-            return redirect(url_for("admin_candidates"))
+            flash("候选者未提交答卷")
+            return redirect(url_for("admin_dashboard") + "#tab-assign")
         try:
             archive = read_json(p)
         except Exception:
@@ -931,6 +1250,7 @@ def create_app() -> Flask:
             exam_key = assignment["exam_key"]
             public_path = STORAGE_DIR / "exams" / exam_key / "public.json"
             public_spec = read_json(public_path)
+            exam_stats = _compute_exam_stats(public_spec)
             min_submit_seconds = compute_min_submit_seconds(
                 time_limit_seconds, assignment.get("min_submit_seconds")
             )
@@ -941,7 +1261,15 @@ def create_app() -> Flask:
         return render_template(
             "public_exam.html",
             token=token,
+            exam_key=exam_key,
             spec=public_spec,
+            exam_stats=exam_stats,
+            type_label_map={
+                "single": "单选",
+                "multiple": "多选",
+                "short": "简答",
+                "unknown": "其他",
+            },
             remaining_seconds=remaining,
             time_limit_seconds=time_limit_seconds,
             min_submit_seconds=min_submit_seconds,
@@ -1077,9 +1405,44 @@ def _list_exams():
                 "_mtime": mtime,
             }
         )
-    # Newest uploads first (by spec.json mtime)
-    out.sort(key=lambda x: x.get("_mtime", 0), reverse=True)
+    # Assign an incremental id by upload/parse order (oldest -> newest),
+    # then sort by id desc (newest first).
+    out.sort(key=lambda x: x.get("_mtime", 0))
+    for idx, item in enumerate(out, start=1):
+        item["id"] = idx
+    out.sort(key=lambda x: x.get("id", 0), reverse=True)
     return out
+
+
+def _exam_key_from_sort_id(exam_id: int) -> str | None:
+    try:
+        exam_id = int(exam_id)
+    except Exception:
+        return None
+    if exam_id <= 0:
+        return None
+    for e in _list_exams():
+        try:
+            if int(e.get("id") or 0) == exam_id:
+                v = str(e.get("exam_key") or "").strip()
+                return v or None
+        except Exception:
+            continue
+    return None
+
+
+def _sort_id_from_exam_key(exam_key: str) -> int | None:
+    k = str(exam_key or "").strip()
+    if not k:
+        return None
+    for e in _list_exams():
+        if str(e.get("exam_key") or "") == k:
+            try:
+                v = int(e.get("id") or 0)
+            except Exception:
+                v = 0
+            return v or None
+    return None
 
 
 def _remaining_seconds(assignment: dict) -> int:
@@ -1160,8 +1523,6 @@ def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) 
         exam_started_at=started_at,
         exam_submitted_at=submitted_at,
         duration_seconds=duration_seconds,
-        interview=bool(grading.get("interview")),
-        remark=str(assignment.get("candidate_remark") or grading.get("overall_reason") or ""),
     )
 
     try:
@@ -1469,8 +1830,6 @@ def _sync_candidate_finished_from_assignment(assignment: dict) -> None:
             exam_started_at=started_at,
             exam_submitted_at=submitted_at,
             duration_seconds=duration_seconds,
-            interview=bool(grading.get("interview")),
-            remark=str(assignment.get("candidate_remark") or grading.get("overall_reason") or ""),
         )
     except Exception:
         logger.exception("Sync candidate finished failed (candidate_id=%s)", candidate_id)

@@ -18,11 +18,28 @@
     <style>
       .q { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 14px; padding: 12px; margin: 12px 0; background: rgba(15, 23, 42, 0.02); }
       .muted { color: var(--muted); }
-      .top { display:flex; justify-content: space-between; align-items:flex-start; gap: 12px; }
       .opt { display:block; margin: 8px 0; }
       .opt input { width: auto; margin-right: 8px; }
       .md { white-space: normal; }
       .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
+
+      .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: center; }
+      .exam-meta-title h2 { margin: 0; font-size: 18px; }
+      .exam-meta-desc { max-width: 920px; margin: 6px auto 0; color: var(--muted); font-size: 13px; line-height: 1.6; text-align: center; }
+      .exam-meta-stats { margin-top: 10px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(255, 255, 255, 0.86);
+        font-weight: 800;
+        font-size: 12px;
+        color: rgba(15, 23, 42, 0.86);
+        white-space: nowrap;
+      }
     </style>
   </head>
   <body>
@@ -52,11 +69,20 @@
 
       <div class="surface" role="region" aria-label="试卷">
         <section class="section">
-          <div class="top">
-            <div>
-              <h2 class="title" style="font-size:20px;">{{ spec.title }}</h2>
-              <p class="sub">{{ spec.description }}</p>
-            </div>
+          <div class="exam-meta-title">
+            <h2>{{ spec.title }}</h2>
+            <span class="muted">({{ exam_key }})</span>
+          </div>
+          {% if spec.description %}
+            <div class="exam-meta-desc">{{ spec.description }}</div>
+          {% endif %}
+          <div class="exam-meta-stats" aria-label="试卷统计">
+            <span class="pill">题目数：{{ (exam_stats or {}).get('total_questions', 0) }}</span>
+            <span class="pill">总分：{{ (exam_stats or {}).get('total_points', 0) }} 分</span>
+            {% for t, c in ((exam_stats or {}).get('counts_by_type', {}) or {}).items() %}
+              {% set pts = ((exam_stats or {}).get('points_by_type', {}) or {}).get(t, 0) %}
+              <span class="pill">{{ (type_label_map or {}).get(t, t) }}：{{ c }} 题 / {{ pts }} 分</span>
+            {% endfor %}
           </div>
         </section>
 

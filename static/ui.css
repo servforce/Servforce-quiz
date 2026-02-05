@@ -217,7 +217,7 @@ textarea { min-height: 120px; }
   padding: 10px 12px;
   border-radius: 12px;
   margin: 0;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
   overflow: hidden;
   animation: flash-life 5s ease forwards;
@@ -245,7 +245,7 @@ textarea { min-height: 120px; }
 
 /* Tables */
 table { width: 100%; border-collapse: collapse; }
-th, td { border-bottom: 1px solid rgba(15, 23, 42, 0.10); padding: 10px 8px; text-align: left; vertical-align: middle; }
+th, td { border-bottom: 1px solid rgba(15, 23, 42, 0.10); padding: 15px 8px; text-align: left; vertical-align: middle; }
 th { color: var(--muted); font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
 tbody tr:hover { background: rgba(15, 23, 42, 0.02); }
 

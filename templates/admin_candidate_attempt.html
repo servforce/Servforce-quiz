@@ -39,9 +39,9 @@
           <span>Servforce Quiz</span>
         </div>
         <nav class="nav" aria-label="主导航">
-          <a class="nav-link" href="/admin#tab-exams">试卷</a>
-          <a class="nav-link" href="/admin#tab-assign">分发</a>
-          <a class="nav-link active" href="/admin/candidates">候选人</a>
+          <a class="nav-link" href="/admin#tab-exams">试卷管理</a>
+          <a class="nav-link" href="/admin/candidates">候选人管理</a>
+          <a class="nav-link active" href="/admin#tab-assign">答题邀请</a>
         </nav>
         <form method="post" action="/admin/logout" style="margin:0;">
           <button class="btn btn-danger" type="submit">退出</button>
@@ -67,7 +67,7 @@
                 {% endif %}
               </p>
             </div>
-            <a class="btn btn-primary" href="/admin/candidates">返回列表</a>
+            <a class="btn btn-primary" href="/admin#tab-assign">返回</a>
           </div>
         </section>
 

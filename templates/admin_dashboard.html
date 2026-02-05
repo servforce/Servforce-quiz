@@ -8,7 +8,7 @@
     <style>
       .hint {
         display: flex;
-        align-items: center;
+        align-items: flex-end;
         justify-content: space-between;
         gap: 10px;
         padding: 12px 14px;
@@ -21,6 +21,63 @@
       .hint span { color: var(--muted); font-size: 13px; }
       .grid-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
       @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+      .assign-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      @media (max-width: 980px) { .assign-grid-2 { grid-template-columns: 1fr; } }
+
+      .upload-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+      .upload-row .field { margin: 0; }
+      #tab-exams .upload-row { margin-top: 10px; }
+      input[type="file"].file-input {
+        display: block;
+        width: min(620px, 100%);
+        padding: 8px 10px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.92);
+      }
+
+      .exam-search { margin: 0; display: flex; gap: 10px; align-items: flex-end; flex: 1; min-width: 280px; }
+      .exam-search { flex: 0 1 420px; max-width: 420px; min-width: 260px; }
+      .exam-search .field { margin: 0; flex: 1; min-width: 240px; }
+
+      tr.row-link { cursor: pointer; }
+      tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
+      a.row-a { color: inherit; text-decoration: none; }
+      a.row-a code { color: inherit; }
+      a.row-a:hover { text-decoration: underline; }
+
+      table.exam-table { table-layout: fixed; width: 100%; }
+      table.exam-table th, table.exam-table td { vertical-align: middle; }
+      table.exam-table th { white-space: nowrap; }
+      td.col-key, td.col-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      td.col-key code { white-space: nowrap; }
+      th.col-count, td.col-count { text-align: center; white-space: nowrap; }
+      th.col-title, td.col-title { padding-left: 3cm; }
+      .td-action { text-align: right; }
+      .btn-icon {
+        min-width: 64px;
+        padding: 9px 12px;
+        text-align: center;
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .assign-form { max-width: 100%; margin: 0; }
+      #tab-assign .assign-form { margin-top: 10px; }
+      .assign-attempts { max-width: 100%; margin: 14px 0 0; }
+      .table-scroll { overflow-x: auto; }
+      .attempt-table { width: 100%; min-width: 980px; font-size: 16px; }
+      .attempt-table th, .attempt-table td { vertical-align: middle; }
+      .attempt-table th {
+        white-space: nowrap;
+        font-size: 14px;
+        text-transform: none;
+        letter-spacing: 0;
+      }
+      .attempt-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .attempt-table th.center, .attempt-table td.center { text-align: center; }
+      .attempt-table td.nowrap { white-space: nowrap; }
+      .attempt-table td.center { font-variant-numeric: tabular-nums; }
     </style>
   </head>
   <body>
@@ -32,9 +89,9 @@
         </div>
 
         <nav class="nav" aria-label="主导航">
-          <a class="nav-link active" href="#tab-exams" data-nav="exams">试卷</a>
-          <a class="nav-link" href="#tab-assign" data-nav="assign">分发</a>
-          <a class="nav-link" href="/admin/candidates">候选人</a>
+          <a class="nav-link active" href="#tab-exams" data-nav="exams">试卷管理</a>
+          <a class="nav-link" href="/admin/candidates">候选人管理</a>
+          <a class="nav-link" href="#tab-assign" data-nav="assign">答题邀请</a>
         </nav>
 
         <form method="post" action="/admin/logout" style="margin:0;">
@@ -49,70 +106,53 @@
       {% endfor %}
 
       <div class="surface" role="region" aria-label="后台内容">
-        <div class="tabs" role="tablist" aria-label="功能页">
-          <div class="tabs-left">
-            <button class="tab active" type="button" role="tab" aria-controls="tab-exams" aria-selected="true" data-tab="exams">上传试卷</button>
-            <button class="tab" type="button" role="tab" aria-controls="tab-assign" aria-selected="false" data-tab="assign">候选人分发</button>
-            <a class="tab-link" role="tab" aria-selected="false" href="/admin/candidates">候选人管理</a>
-          </div>
-          <div class="tabs-right" aria-label="快捷操作">
-            <div class="tabs-meta" data-action-for="exams">试卷与分发管理</div>
-          </div>
-        </div>
-
-        <section id="tab-exams" class="panel active" role="tabpanel" aria-label="上传试卷">
+        <section id="tab-exams" class="panel active" role="tabpanel" aria-label="试卷管理">
           <div class="panel-head">
             <div>
-              <h2 class="panel-title">上传试卷（QML Markdown）</h2>
-              <p class="panel-sub">上传 .md 或包含试卷+图片的 .zip（建议：md 同级放 img/ 目录）后会自动解析并生成试卷数据。</p>
+              <h2 class="title">试卷管理（上传/查看）</h2>
+              <p class="sub">上传 .md 或包含试卷+图片的 .zip（建议：md 同级放 img/ 目录）后会自动解析并生成试卷数据。</p>
             </div>
 
-            <form class="form-row" method="post" action="/admin/exams/upload" enctype="multipart/form-data">
-              <div class="field" style="min-width: 320px;">
+            <form class="upload-row" method="post" action="/admin/exams/upload" enctype="multipart/form-data">
+              <div class="field">
                 <label for="file">选择文件</label>
-                <input id="file" class="input" type="file" name="file" accept=".md,.zip,text/markdown,application/zip" required />
+                <input id="file" class="file-input" type="file" name="file" accept=".md,.zip,text/markdown,application/zip" required />
               </div>
-              <button class="btn btn-primary" type="submit">上传并解析</button>
+              <button class="btn btn-primary" type="submit">上传解析</button>
             </form>
           </div>
 
-          <div class="hint">
-            <div>
-              <strong>试卷列表</strong>
-              <span>点击“查看”可进入试卷详情。</span>
-            </div>
-            <form method="get" action="/admin" style="margin:0; display:flex; gap:10px; align-items:end;">
-              <div class="field" style="min-width: 260px;">
+          <div class="flex" style="justify-content:flex-start; margin: 10px 0 14px;">
+            <form class="exam-search" method="get" action="/admin">
+              <div class="field">
                 <label for="exam_q">搜索试卷</label>
-                <input id="exam_q" class="input" name="exam_q" value="{{ exam_q or '' }}" placeholder="exam_key/标题" />
+                <input id="exam_q" class="input" name="exam_q" value="{{ exam_q or '' }}" placeholder="exam_key/标题" autocomplete="off" />
               </div>
-              <button class="btn" type="submit">查询</button>
-              {% if exam_q %}
-                <a class="btn" href="/admin#tab-exams">清除</a>
-              {% endif %}
             </form>
           </div>
 
-          <table aria-label="试卷列表">
+          <table class="exam-table" aria-label="试卷列表">
             <thead>
               <tr>
+                <th style="width: 70px;">id</th>
                 <th style="width: 220px;">exam_key</th>
-                <th>标题</th>
-                <th style="width: 90px;">题数</th>
-                <th style="width: 200px;"></th>
+                <th class="col-title">标题</th>
+                <th class="col-count" style="width: 90px;">题数</th>
+                <th style="width: 160px;"></th>
               </tr>
             </thead>
             <tbody>
               {% for e in exams_page %}
-              <tr>
-                <td><code>{{ e.exam_key }}</code></td>
-                <td>{{ e.title }}</td>
-                <td>{{ e.count }}</td>
+              <tr class="row-link" data-href="/admin/exams/{{ e.id }}">
+                <td>{{ e.id }}</td>
+                <td class="col-key"><code>{{ e.exam_key }}</code></td>
+                <td class="col-title">{{ e.title }}</td>
+                <td class="col-count">{{ e.count }}</td>
                 <td class="td-action" style="white-space: nowrap;">
-                  <a class="btn" href="/admin/exams/{{ e.exam_key }}">查看</a>
                   <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该试卷？删除后候选人关联试卷将显示为“已删除”，但已归档答题仍可查看。');">
                     <button class="btn btn-danger" type="submit">删除</button>
                   </form>
+                  <a class="btn btn-primary btn-icon" href="/admin?assign_exam_key={{ e.exam_key }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
                 </td>
               </tr>
               {% endfor %}
@@ -134,21 +174,21 @@
           {% endif %}
         </section>
 
-        <section id="tab-assign" class="panel" role="tabpanel" aria-label="候选人分发">
+        <section id="tab-assign" class="panel" role="tabpanel" aria-label="答题邀请">
           <div class="panel-head">
             <div>
-              <h2 class="panel-title">候选人分发</h2>
-              <p class="panel-sub">选择试卷与候选人，生成 token/链接/二维码并发送。</p>
+              <h2 class="title">答题邀请</h2>
+              <p class="sub">选择试卷与候选人，生成 token/链接/二维码并发送。</p>
             </div>
           </div>
 
-          <form method="post" action="/admin/assignments">
-            <div class="grid-2">
+          <form class="assign-form" method="post" action="/admin/assignments">
+            <div class="assign-grid-2">
               <div class="field">
                 <label for="exam_key">试卷</label>
                 <select id="exam_key" name="exam_key" required>
                   {% for e in exams_all %}
-                    <option value="{{ e.exam_key }}">{{ e.exam_key }}</option>
+                    <option value="{{ e.exam_key }}" {% if assign_exam_key and assign_exam_key == e.exam_key %}selected{% endif %}>{{ e.exam_key }}</option>
                   {% endfor %}
                 </select>
               </div>
@@ -158,20 +198,17 @@
                 <select id="candidate_id" name="candidate_id" required>
                   {% for c in candidates %}
                     {% set status_map = {'created':'已创建','distributed':'已分发','verified':'已验证','finished':'已完成'} %}
-                    <option value="{{ c.id }}">#{{ c.id }} {{ c.name }} {{ c.phone }} ({{ status_map.get(c.status, c.status) }})</option>
+                    <option value="{{ c.id }}" {% if assign_candidate_id and (assign_candidate_id|int) == c.id %}selected{% endif %}>#{{ c.id }} {{ c.name }} {{ c.phone }} ({{ status_map.get(c.status, c.status) }})</option>
                   {% endfor %}
                 </select>
               </div>
             </div>
 
-            <div class="grid-3" style="margin-top: 10px;">
+            <input type="hidden" name="pass_threshold" value="60" />
+            <div class="assign-grid-2" style="margin-top: 10px;">
               <div class="field">
                 <label for="time_limit_seconds">限时（时:分:秒）</label>
                 <input id="time_limit_seconds" class="input" name="time_limit_seconds" value="02:00:00" placeholder="02:00:00" />
-              </div>
-              <div class="field">
-                <label for="pass_threshold">阈值（0-100）</label>
-                <input id="pass_threshold" class="input" name="pass_threshold" value="60" inputmode="numeric" />
               </div>
               <div class="field">
                 <label for="verify_max_attempts">验证次数</label>
@@ -180,9 +217,46 @@
             </div>
 
             <div style="margin-top: 12px; display:flex; gap:10px; justify-content:flex-end; flex-wrap: wrap;">
-              <button class="btn btn-primary" type="submit">生成链接/二维码并发送（状态=已分发）</button>
+              <button class="btn btn-primary" type="submit">生成邀请链接/二维码</button>
             </div>
           </form>
+
+          <div class="assign-attempts" role="region" aria-label="候选人答题情况">
+            <div class="section-head" style="margin: 0 0 10px;">
+              <div>
+                <h3 class="title" style="font-size:16px; margin:0;">候选人答题情况</h3>
+              </div>
+            </div>
+
+            <div class="table-scroll">
+              <table class="attempt-table" aria-label="候选人答题情况列表">
+                <thead>
+                  <tr>
+                    <th style="width:60px;">ID</th>
+                    <th style="width:120px;">姓名</th>
+                    <th style="width:140px;">电话</th>
+                    <th style="width:150px;">试卷</th>
+                    <th class="center" style="width:90px;">成绩</th>
+                    <th style="width:180px;">进入时间</th>
+                    <th style="width:180px;">提交时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for c in attempt_candidates %}
+                  <tr class="row-link" data-href="{{ c.attempt_href }}">
+                    <td>{{ c.id }}</td>
+                    <td class="ellipsis">{{ c.name }}</td>
+                    <td class="ellipsis">{{ c.phone }}</td>
+                    <td class="ellipsis"><code>{{ c.exam_key }}</code></td>
+                    <td class="center">{{ c.score if c.score is not none else "" }}</td>
+                    <td class="nowrap">{{ c.exam_started_at.strftime("%Y-%m-%d %H:%M:%S") if c.exam_started_at else "" }}</td>
+                    <td class="nowrap">{{ c.exam_submitted_at.strftime("%Y-%m-%d %H:%M:%S") if c.exam_submitted_at else "" }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </section>
       </div>
     </main>
@@ -230,6 +304,34 @@
 
       window.addEventListener("hashchange", () => setActive(tabKeyFromHash()));
       setActive(tabKeyFromHash());
+
+      // Live fuzzy search (debounced) for exams.
+      const examQ = document.getElementById("exam_q");
+      if (examQ && examQ.form) {
+        let t = null;
+        examQ.addEventListener("input", () => {
+          if (t) window.clearTimeout(t);
+          t = window.setTimeout(() => {
+            const v = (examQ.value || "").trim();
+            const u = new URL(window.location.href);
+            if (v) u.searchParams.set("exam_q", v);
+            else u.searchParams.delete("exam_q");
+            u.searchParams.delete("exam_page");
+            u.hash = "#tab-exams";
+            window.location.href = u.toString();
+          }, 300);
+        });
+      }
+
+      // Clickable rows (except clicking buttons/links in the action column).
+      for (const tr of document.querySelectorAll("tr[data-href]")) {
+        tr.addEventListener("click", (ev) => {
+          const el = ev.target;
+          if (el && (el.closest("a") || el.closest("button") || el.closest("form"))) return;
+          const href = tr.getAttribute("data-href");
+          if (href) window.location.href = href;
+        });
+      }
     </script>
   </body>
 </html>

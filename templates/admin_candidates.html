@@ -6,9 +6,31 @@
     <title>候选人管理</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <style>
-      .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; align-items: end; }
+      .form-grid {
+        display: grid;
+        grid-template-columns: 280px 280px max-content;
+        gap: 10px;
+        align-items: end;
+        justify-content: start;
+        max-width: 980px;
+        width: 100%;
+      }
       .status-code { display: inline-block; white-space: nowrap; }
-      @media (max-width: 980px) { .form-grid { grid-template-columns: 1fr; } }
+      .search-inline { display:flex; align-items: flex-end; gap: 10px; margin: 0; max-width: 360px; width: 100%; }
+      .search-inline .field { margin: 0; width: 100%; }
+      .btn-icon {
+        min-width: 64px;
+        padding: 9px 12px;
+        text-align: center;
+        font-size: 18px;
+        line-height: 1;
+      }
+      .cand-actions { display: inline-flex; gap: 10px; align-items: center; justify-content: flex-end; }
+      .cand-actions .btn { padding: 7px 10px; font-weight: 800; }
+      .cand-actions .btn-icon { min-width: 44px; padding: 7px 0; }
+      @media (max-width: 980px) {
+        .form-grid { grid-template-columns: 1fr; max-width: 100%; }
+      }
     </style>
   </head>
   <body>
@@ -20,9 +42,9 @@
         </div>
 
         <nav class="nav" aria-label="主导航">
-          <a class="nav-link" href="/admin#tab-exams">试卷</a>
-          <a class="nav-link" href="/admin#tab-assign">分发</a>
-          <a class="nav-link active" href="/admin/candidates">候选人</a>
+          <a class="nav-link" href="/admin#tab-exams">试卷管理</a>
+          <a class="nav-link active" href="/admin/candidates">候选人管理</a>
+          <a class="nav-link" href="/admin#tab-assign">答题邀请</a>
         </nav>
 
         <form method="post" action="/admin/logout" style="margin:0;">
@@ -41,9 +63,8 @@
           <div class="section-head">
             <div>
               <h2 class="title">候选人管理</h2>
-              <p class="sub">维护候选人信息，用于分发前的身份验证与状态跟踪。</p>
+              <p class="sub">维护候选人信息，用于答题邀请前的身份验证与状态跟踪。</p>
             </div>
-            <a class="btn btn-primary" href="/admin#tab-assign">返回分发</a>
           </div>
 
           <form method="post" action="/admin/candidates">
@@ -72,22 +93,16 @@
                 <button class="btn btn-primary" type="submit">上传导入</button>
               </div>
             </div>
-            <p class="sub" style="margin-top: 6px;">表头支持 name/phone/exam_key 或 姓名/手机号/试卷（可选）；无表头时按前 3 列读取。</p>
           </form>
         </section>
 
         <section class="section">
           <div class="section-head">
-            <div>
-              <h3 class="title" style="font-size:16px;">候选人列表</h3>
-              <p class="sub">状态：已创建 / 已分发 / 已验证 / 已完成。</p>
-            </div>
-            <form method="get" action="/admin/candidates" style="margin:0; display:flex; gap:10px; align-items:end;">
-              <div class="field" style="min-width: 260px;">
-                <label for="q">搜索</label>
-                <input id="q" class="input" name="q" value="{{ q or '' }}" placeholder="姓名/手机号" />
+            <form class="search-inline" method="get" action="/admin/candidates">
+              <div class="field">
+                <label for="q">候选人列表</label>
+                <input id="q" class="input" name="q" value="{{ q or '' }}" placeholder="姓名/手机号" autocomplete="off" />
               </div>
-              <button class="btn" type="submit">查询</button>
             </form>
           </div>
 
@@ -95,41 +110,31 @@
             <thead>
               <tr>
                 <th style="width:70px;">ID</th>
-                <th style="width:140px;">姓名</th>
-                <th style="width:160px;">电话</th>
-                <th style="width:170px;">创建时间</th>
-                <th style="width:160px;">试卷</th>
+                <th style="width:160px;">姓名</th>
+                <th style="width:180px;">电话</th>
+                <th style="width:190px;">创建时间</th>
                 <th style="width:140px;">状态</th>
-                <th style="width:80px;">成绩</th>
-                <th style="width:170px;">进入时间</th>
-                <th style="width:170px;">提交时间</th>
-                <th style="width:80px;">面试</th>
-                <th style="width:140px;"></th>
+                <th style="width:220px;"></th>
               </tr>
             </thead>
             <tbody>
               {% for c in candidates %}
               {% set created = c.created_at %}
-              {% set started = c.exam_started_at %}
-              {% set submitted = c.exam_submitted_at %}
               <tr>
                 <td>{{ c.id }}</td>
                 <td>{{ c.name }}</td>
                 <td>{{ c.phone }}</td>
                 <td>{{ created.strftime("%Y-%m-%d %H:%M:%S") if created else "" }}</td>
-                <td><code>{{ c.exam_key or "" }}</code></td>
                 {% set status_map = {'created':'已创建','distributed':'已分发','verified':'已验证','finished':'已完成'} %}
                 <td><code class="status-code">{{ status_map.get(c.status, c.status) }}</code></td>
-                <td>{{ c.score }}</td>
-                <td>{{ started.strftime("%Y-%m-%d %H:%M:%S") if started else "" }}</td>
-                <td>{{ submitted.strftime("%Y-%m-%d %H:%M:%S") if submitted else "" }}</td>
-                <td>{{ "是" if c.interview else "否" }}</td>
                 <td style="white-space: nowrap;">
-                  <a class="btn" href="/admin/candidates/{{ c.id }}/attempt">查看</a>
-                  <a class="btn" href="/admin/candidates/{{ c.id }}/edit">编辑</a>
-                  <form method="post" action="/admin/candidates/{{ c.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该候选人？');">
-                    <button class="btn btn-danger" type="submit">删除</button>
-                  </form>
+                  <div class="cand-actions">
+                    <a class="btn" href="/admin/candidates/{{ c.id }}/edit">编辑</a>
+                    <form method="post" action="/admin/candidates/{{ c.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该候选人？');">
+                      <button class="btn btn-danger" type="submit">删除</button>
+                    </form>
+                    <a class="btn btn-primary btn-icon" href="/admin?assign_candidate_id={{ c.id }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
+                  </div>
                 </td>
               </tr>
               {% endfor %}
@@ -152,5 +157,24 @@
         </section>
       </div>
     </main>
+
+    <script>
+      // Live fuzzy search (debounced) for candidates.
+      const qInput = document.getElementById("q");
+      if (qInput && qInput.form) {
+        let t = null;
+        qInput.addEventListener("input", () => {
+          if (t) window.clearTimeout(t);
+          t = window.setTimeout(() => {
+            const v = (qInput.value || "").trim();
+            const u = new URL(window.location.href);
+            if (v) u.searchParams.set("q", v);
+            else u.searchParams.delete("q");
+            u.searchParams.delete("page");
+            window.location.href = u.toString();
+          }, 300);
+        });
+      }
+    </script>
   </body>
 </html>

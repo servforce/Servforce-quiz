@@ -144,9 +144,7 @@ CREATE TABLE IF NOT EXISTS candidate (
   score            INT NOT NULL DEFAULT 0 CHECK (score BETWEEN 0 AND 100),
   exam_started_at  TIMESTAMPTZ NULL,
   exam_submitted_at TIMESTAMPTZ NULL,
-  duration_seconds INT NULL CHECK (duration_seconds IS NULL OR duration_seconds >= 0),
-  interview        BOOLEAN NOT NULL DEFAULT FALSE,
-  remark           TEXT NOT NULL DEFAULT ''
+  duration_seconds INT NULL CHECK (duration_seconds IS NULL OR duration_seconds >= 0)
 );
 
 DO $$
@@ -188,6 +186,10 @@ ALTER TABLE candidate ALTER COLUMN status SET DEFAULT 'created'::candidate_statu
      END;
    END IF;
  END$$;
+
+ -- Drop deprecated columns (we no longer use them).
+ ALTER TABLE candidate DROP COLUMN IF EXISTS interview;
+ ALTER TABLE candidate DROP COLUMN IF EXISTS remark;
  
  -- Migrate legacy status values to the new lifecycle (best-effort).
  UPDATE candidate
@@ -232,7 +234,7 @@ def list_candidates(
 ) -> list[dict[str, Any]]:
     # 查询的sql语句
     sql = """
-SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds, interview, remark
+SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds
 FROM candidate
 """
     params: list[Any] = []      # 最多返回多少条
@@ -318,7 +320,7 @@ LIMIT 1
 
 def get_candidate_by_phone(phone: str) -> dict[str, Any] | None:
     sql = """
-SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds, interview, remark
+SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds
 FROM candidate
 WHERE phone = %s
 ORDER BY id DESC
@@ -366,7 +368,7 @@ RETURNING id
 # 候选人（考生）的 id查找到候选者的身份信息
 def get_candidate(candidate_id: int) -> dict[str, Any] | None:
     sql = """
-SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds, interview, remark
+SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds
 FROM candidate
 WHERE id = %s
 """
@@ -402,6 +404,18 @@ def mark_exam_deleted(exam_key: str, *, marker: str = "已删除") -> int:
             cur.execute(sql, (str(marker), str(exam_key or "")))
             return int(cur.rowcount or 0)
 
+
+def rename_exam_key(old_exam_key: str, new_exam_key: str) -> int:
+    """
+    Rename exam_key references in candidate table.
+    Returns number of affected rows.
+    """
+    sql = "UPDATE candidate SET exam_key=%s WHERE exam_key=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(new_exam_key or ""), str(old_exam_key or "")))
+            return int(cur.rowcount or 0)
+
 # 根据id修改候选者姓名和手机号
 def update_candidate(candidate_id: int, *, name: str, phone: str, created_at=None) -> None:
     if created_at is None:
@@ -424,9 +438,7 @@ SET
   score=0,
   exam_started_at=NULL,
   exam_submitted_at=NULL,
-  duration_seconds=NULL,
-  interview=FALSE,
-  remark=''
+  duration_seconds=NULL
 WHERE id=%s
 """
     with conn_scope() as conn:
@@ -493,9 +505,7 @@ SET
   score=0,
   exam_started_at=NULL,
   exam_submitted_at=NULL,
-  duration_seconds=NULL,
-  interview=FALSE,
-  remark=''
+  duration_seconds=NULL
 WHERE id=%s
 """,
                         (name, phone, exam_key, int(row["id"])),
@@ -553,8 +563,6 @@ def update_candidate_result(
     exam_started_at=None,
     exam_submitted_at=None,
     duration_seconds: int | None,
-    interview: bool,
-    remark: str,
 ) -> None:
     sql = """
 UPDATE candidate
@@ -562,9 +570,7 @@ SET status=%s,
     score=%s,
     exam_started_at=COALESCE(exam_started_at, %s),
     exam_submitted_at=%s,
-    duration_seconds=%s,
-    interview=%s,
-    remark=%s
+    duration_seconds=%s
 WHERE id=%s
 """
     with conn_scope() as conn:
@@ -577,8 +583,6 @@ WHERE id=%s
                     exam_started_at,
                     exam_submitted_at,
                     duration_seconds,
-                    bool(interview),
-                    remark,
                     int(candidate_id),
                 ),
             )

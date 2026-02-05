@@ -231,8 +231,7 @@ CREATE TABLE IF NOT EXISTS candidate (
   status           candidate_status NOT NULL DEFAULT 'send',
   score            INT NOT NULL DEFAULT 0 CHECK (score BETWEEN 0 AND 100),
   duration_seconds INT NULL CHECK (duration_seconds IS NULL OR duration_seconds >= 0),
-  interview        BOOLEAN NOT NULL DEFAULT FALSE,
-  remark           TEXT NOT NULL DEFAULT '',
+  -- Deprecated: interview/remark columns removed
   UNIQUE (phone)
 );
 
@@ -249,7 +248,7 @@ CREATE INDEX IF NOT EXISTS idx_candidate_status ON candidate(status);
 - `graded`：已判分出结果
 - `expired`：超时或被锁定失效
 
-同时在“提交/判分完成”阶段写回：`score`（0-100）、`duration_seconds`（答题时间）、`interview`（是否进入面试）、`remark`（评价/理由）。
+同时在“提交/判分完成”阶段写回：`score`（0-100）、`duration_seconds`（答题时间）。
 
 ---
 
