@@ -226,6 +226,17 @@
               <div>
                 <h3 class="title" style="font-size:16px; margin:0;">候选人答题情况</h3>
               </div>
+              <form class="exam-search" method="get" action="/admin#tab-assign" style="margin:0;">
+                <div class="field">
+                  <label for="attempt_q">查询</label>
+                  <input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷" />
+                </div>
+                {% if exam_q %}<input type="hidden" name="exam_q" value="{{ exam_q }}" />{% endif %}
+                {% if exam_page %}<input type="hidden" name="exam_page" value="{{ exam_page }}" />{% endif %}
+                {% if assign_exam_key %}<input type="hidden" name="assign_exam_key" value="{{ assign_exam_key }}" />{% endif %}
+                {% if assign_candidate_id %}<input type="hidden" name="assign_candidate_id" value="{{ assign_candidate_id }}" />{% endif %}
+                <button class="btn" type="submit">搜索</button>
+              </form>
             </div>
 
             <div class="table-scroll">

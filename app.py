@@ -326,6 +326,55 @@ def _migrate_assignment_exam_key(old_exam_key: str, new_exam_key: str) -> int:
     return updated
 
 
+def _migrate_archives_exam_key(old_exam_key: str, new_exam_key: str) -> int:
+    """
+    Best-effort migration: rename archived attempt files and update embedded exam_key.
+    This keeps "候选人答题情况" and archive enrichment working after an exam_key rename.
+    """
+    old_exam_key = str(old_exam_key or "").strip()
+    new_exam_key = str(new_exam_key or "").strip()
+    if not old_exam_key or not new_exam_key or old_exam_key == new_exam_key:
+        return 0
+
+    archives_dir = STORAGE_DIR / "archives"
+    if not archives_dir.exists():
+        return 0
+
+    old_suffix = _sanitize_archive_part(old_exam_key)
+    new_suffix = _sanitize_archive_part(new_exam_key)
+    if not old_suffix or not new_suffix:
+        return 0
+
+    migrated = 0
+    for p in archives_dir.glob(f"*_{old_suffix}.json"):
+        if not p.is_file():
+            continue
+        stem = p.stem
+        if not stem.endswith(f"_{old_suffix}"):
+            continue
+        new_stem = stem[: -(len(old_suffix) + 1)] + f"_{new_suffix}"
+        new_path = p.with_name(new_stem + ".json")
+        if new_path.exists():
+            continue
+        try:
+            p.rename(new_path)
+        except Exception:
+            continue
+
+        try:
+            archive = read_json(new_path)
+            exam = archive.get("exam") or {}
+            if isinstance(exam, dict) and str(exam.get("exam_key") or "").strip() == old_exam_key:
+                exam["exam_key"] = new_exam_key
+                archive["exam"] = exam
+                write_json(new_path, archive)
+        except Exception:
+            pass
+        migrated += 1
+
+    return migrated
+
+
 def _admin_update_exam_from_source(old_exam_key: str, new_source_md: str) -> str:
     spec_tmp, _public_tmp = parse_qml_markdown(new_source_md)
     new_exam_key = str(spec_tmp.get("id") or "").strip()
@@ -347,6 +396,7 @@ def _admin_update_exam_from_source(old_exam_key: str, new_source_md: str) -> str
         except Exception:
             logger.exception("Failed to migrate candidate.exam_key: %s -> %s", old_exam_key, new_exam_key)
         _migrate_assignment_exam_key(old_exam_key, new_exam_key)
+        _migrate_archives_exam_key(old_exam_key, new_exam_key)
 
     _rewrite_exam_in_dir(new_exam_key, new_source_md)
     return new_exam_key
@@ -440,6 +490,7 @@ def create_app() -> Flask:
         candidates = list_candidates(limit=200)  # 获取考生列表，最多取 200 条
 
         exam_q = (request.args.get("exam_q") or "").strip()
+        attempt_q = (request.args.get("attempt_q") or "").strip()
         assign_exam_key = (request.args.get("assign_exam_key") or "").strip()
         assign_candidate_id = (request.args.get("assign_candidate_id") or "").strip()
         if exam_q:
@@ -470,24 +521,44 @@ def create_app() -> Flask:
 
         attempt_candidates = []
         for c in candidates:
+            p = None
             try:
-                has_attempt = _find_latest_archive(c) is not None
+                p = _find_latest_archive(c)
             except Exception:
-                has_attempt = False
-            if not has_attempt:
+                p = None
+            if not p:
                 continue
+
+            # Prefer the exam_key recorded in the archive file. This keeps the table stable
+            # even if the candidate.exam_key changed after an exam rename.
+            display_exam_key = str(c.get("exam_key") or "")
+            try:
+                a = read_json(p)
+                display_exam_key = str(((a.get("exam") or {}).get("exam_key")) or "") or display_exam_key
+            except Exception:
+                pass
             attempt_candidates.append(
                 {
                     "id": int(c.get("id") or 0),
                     "name": str(c.get("name") or ""),
                     "phone": str(c.get("phone") or ""),
-                    "exam_key": str(c.get("exam_key") or ""),
+                    "exam_key": display_exam_key,
                     "score": c.get("score"),
                     "exam_started_at": c.get("exam_started_at"),
                     "exam_submitted_at": c.get("exam_submitted_at"),
                     "attempt_href": url_for("admin_candidate_attempt", candidate_id=int(c.get("id") or 0)),
                 }
             )
+
+        if attempt_q:
+            ql = attempt_q.lower()
+            attempt_candidates = [
+                x
+                for x in attempt_candidates
+                if ql in str(x.get("name") or "").lower()
+                or ql in str(x.get("phone") or "").lower()
+                or ql in str(x.get("exam_key") or "").lower()
+            ]
 
         return render_template(
             "admin_dashboard.html",
@@ -497,6 +568,7 @@ def create_app() -> Flask:
             total_exams=total_exams,
             total_exam_pages=total_exam_pages,
             exam_q=exam_q,
+            attempt_q=attempt_q,
             assign_exam_key=assign_exam_key,
             assign_candidate_id=assign_candidate_id,
             candidates=candidates,
@@ -687,7 +759,7 @@ def create_app() -> Flask:
         new_source_md = request.form.get("source_md") or ""
         new_source_md = new_source_md.replace("\r\n", "\n")
         if not new_source_md.strip():
-            flash("??????")
+            flash("内容不能为空")
             return redirect(url_for("admin_exam_edit_by_sort_id", exam_id=int(exam_id)))
         try:
             new_exam_key = _admin_update_exam_from_source(exam_key, new_source_md)
@@ -695,7 +767,7 @@ def create_app() -> Flask:
             flash(str(e))
             return redirect(url_for("admin_exam_edit_by_sort_id", exam_id=int(exam_id)))
         except QmlParseError as e:
-            flash(f"?????{e}?line={e.line}?")
+            flash(f"解析失败：{e}（line={e.line}）")
             return render_template(
                 "admin_exam_edit.html",
                 exam_key=exam_key,
@@ -706,9 +778,9 @@ def create_app() -> Flask:
             )
         except Exception as e:
             logger.exception("Edit exam failed (exam_key=%s)", exam_key)
-            flash(f"?????{e}")
+            flash(f"保存失败：{e}")
             return redirect(url_for("admin_exam_edit_by_sort_id", exam_id=int(exam_id)))
-        flash("????????")
+        flash("已保存并重新解析")
         new_sort_id = _sort_id_from_exam_key(new_exam_key)
         if new_sort_id:
             return redirect(url_for("admin_exam_detail_by_sort_id", exam_id=int(new_sort_id)))
@@ -1607,6 +1679,15 @@ def _archive_filename(name: str, phone: str, exam_key: str) -> str:
     return f"{raw}.json"
 
 
+def _sanitize_archive_part(value: str) -> str:
+    raw = (value or "").strip()
+    raw = _FILENAME_UNSAFE_RE.sub("_", raw)
+    raw = re.sub(r"\s+", " ", raw).strip()
+    raw = raw.replace(" ", "_")
+    raw = raw.strip("._")
+    return raw
+
+
 def _try_load_public_spec(exam_key: str) -> dict | None:
     public_path = STORAGE_DIR / "exams" / exam_key / "public.json"
     try:
@@ -1742,22 +1823,26 @@ def _find_latest_archive(candidate: dict) -> Path | None:
         exam_key = str(candidate.get("exam_key") or "").strip()
     except Exception:
         return None
-    if not phone or not exam_key:
+    if not phone:
         return None
     archives_dir = STORAGE_DIR / "archives"
     if not archives_dir.exists():
         return None
-    # When exam is deleted we set exam_key to "已删除". In that case, we still want
-    # to show the latest archived attempt for this phone.
-    matches = []
-    pattern = f"*_{phone}_*.json" if exam_key == "已删除" else f"*_{phone}_{exam_key}.json"
-    for p in archives_dir.glob(pattern):
-        if p.is_file():
-            matches.append(p)
-    if not matches:
-        return None
-    matches.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-    return matches[0]
+
+    def _pick_latest(pattern: str) -> Path | None:
+        matches = [p for p in archives_dir.glob(pattern) if p.is_file()]
+        if not matches:
+            return None
+        matches.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        return matches[0]
+
+    # Primary: match by phone + current exam_key.
+    # Fallback: match by phone only (covers exam_key renames or cleared exam_key).
+    if exam_key and exam_key != "已删除":
+        hit = _pick_latest(f"*_{phone}_{exam_key}.json")
+        if hit:
+            return hit
+    return _pick_latest(f"*_{phone}_*.json")
 
 
 def _augment_archive_with_spec(archive: dict) -> dict:
