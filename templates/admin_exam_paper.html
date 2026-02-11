@@ -16,9 +16,6 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
-      .q { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 14px; padding: 12px; margin: 12px 0; background: rgba(15, 23, 42, 0.02); }
-      .muted { color: var(--muted); }
-      .opt { display:block; margin: 8px 0; }
       .md { white-space: normal; }
       .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
       .exam-tabs {
@@ -29,6 +26,9 @@
         background: transparent;
       }
       .exam-tabs a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
         padding: 10px 12px;
         border-radius: 12px;
         font-weight: 700;
@@ -38,6 +38,7 @@
         border: 1px solid transparent;
         background: transparent;
       }
+      .exam-tabs .ico { font-size: 14px; line-height: 1; opacity: 0.9; }
       .exam-tabs a.active {
         background: rgba(37, 99, 235, 0.10);
         border-color: rgba(37, 99, 235, 0.22);
@@ -55,12 +56,14 @@
       .exam-head .left { min-width: 0; }
       .exam-head .center { justify-self: center; }
       .exam-head .right { justify-self: end; }
+      .head-actions { display: inline-flex; align-items: center; gap: 10px; }
+      .head-actions .btn-eq { min-width: 64px; text-align: center; }
 
       .section.compact { padding-bottom: 8px; }
       .section.compact .section-head { margin-bottom: 0; }
 
       .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: center; }
-      .exam-meta-title h2 { margin: 0; font-size: 18px; }
+      .exam-meta-title h2 { margin: 0; font-size: 30px; font-weight: 950; letter-spacing: -0.3px; line-height: 1.12; }
       .exam-meta-desc { max-width: 920px; margin: 6px auto 0; color: var(--muted); font-size: 13px; line-height: 1.6; text-align: center; }
       .exam-meta-stats { margin-top: 10px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
       .pill {
@@ -80,7 +83,7 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="container topbar-inner">
+      <div class="container topbar-inner exam-frame">
         <div class="brand" aria-label="Servforce Quiz 管理后台">
           <span class="brand-badge" aria-hidden="true"></span>
           <span>Servforce Quiz</span>
@@ -96,7 +99,7 @@
       </div>
     </header>
 
-    <main class="container page">
+    <main class="container page exam-frame">
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
       {% for m in get_flashed_messages() %}
       <div class="flash">{{ m }}</div>
@@ -109,13 +112,16 @@
               <div class="left"></div>
               <div class="center">
                 <div class="exam-tabs" aria-label="试卷页签">
-                  <a href="/admin/exams/{{ exam_href_id }}/edit">修改试卷</a>
-                  <a href="/admin/exams/{{ exam_href_id }}">试卷详情</a>
-                  <a class="active" href="/admin/exams/{{ exam_href_id }}/paper">答题试卷</a>
+                  <a href="/admin/exams/{{ exam_href_id }}"><span class="ico" aria-hidden="true">👁</span>预览</a>
+                  <a class="active" href="/admin/exams/{{ exam_href_id }}/paper"><span class="ico" aria-hidden="true">👥</span>候选者视图</a>
+                  <a href="/admin/exams/{{ exam_href_id }}/edit"><span class="ico" aria-hidden="true">✎</span>编辑</a>
                 </div>
               </div>
               <div class="right">
-                <a class="btn btn-primary" href="/admin#tab-exams">返回</a>
+                <div class="head-actions">
+                  <a class="btn btn-primary btn-eq" href="/admin?assign_exam_key={{ exam_key }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
+                  <a class="btn btn-primary btn-eq" href="/admin#tab-exams">返回</a>
+                </div>
               </div>
             </div>
           </div>
@@ -139,27 +145,42 @@
             {% endfor %}
           </div>
 
-          {% for q in spec.questions %}
-            <div class="q" data-qid="{{ q.qid }}">
-              <div class="flex">
-                <div><b>{{ q.label or q.qid }}</b></div>
-                <div class="muted">({{ q.max_points }}分)</div>
-              </div>
-              <div class="md" style="margin: 8px 0 0;">{{ q.stem_md | md }}</div>
+          {% set type_label_map = {'single':'单选','multiple':'多选','short':'简答','unknown':'其他'} %}
+          <div class="exam-question-list">
+            {% for q in spec.questions %}
+              <div class="exam-q" data-qid="{{ q.qid }}">
+                <div class="exam-q__inner">
+                  <div class="exam-q__head">
+                    <div class="exam-q__head-left">
+                      <span class="exam-q__qid">{{ q.label or q.qid }}</span>
+                      <span class="exam-tag type">{{ type_label_map.get(q.type, q.type) }}</span>
+                    </div>
+                    <span class="exam-tag points">{{ q.max_points }}分</span>
+                  </div>
 
-              {% if q.type in ['single','multiple'] and q.options %}
-                {% for o in q.options %}
-                  <label class="opt">
-                    <input type="{% if q.type == 'single' %}radio{% else %}checkbox{% endif %}" disabled />
-                    {{ o.key }}) {{ o.text }}
-                  </label>
-                {% endfor %}
-              {% elif q.type == 'short' %}
-                <div class="sub" style="margin-top: 10px;">（简答题：此处为候选人输入区域预览）</div>
-                <textarea class="input" style="min-height: 80px;" disabled placeholder="候选人作答区域"></textarea>
-              {% endif %}
-            </div>
-          {% endfor %}
+                  <div class="exam-q__body">
+                    <div class="md">{{ q.stem_md | md }}</div>
+
+                    {% if q.type in ['single','multiple'] and q.options %}
+                      <div class="exam-options" aria-label="选项">
+                        {% for o in q.options %}
+                          <label class="exam-opt">
+                            <input type="{% if q.type == 'single' %}radio{% else %}checkbox{% endif %}" disabled />
+                            <div class="exam-opt__box">
+                              <div class="exam-opt__key">{{ o.key }}</div>
+                              <div class="exam-opt__text">{{ o.text }}</div>
+                            </div>
+                          </label>
+                        {% endfor %}
+                      </div>
+                    {% elif q.type == 'short' %}
+                      <textarea class="exam-short" disabled placeholder="候选人作答区域"></textarea>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
         </section>
       </div>
     </main>

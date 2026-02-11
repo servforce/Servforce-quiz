@@ -18,11 +18,10 @@
 4) `services/`
    - `services/assignment_service.py`：token/assignment 文件（JSON）读写
    - `services/grading_service.py`：判分逻辑（客观题 + 简答题）
-   - `services/llm_client.py`：大模型调用（OpenAI 兼容/本地 Ollama）
+- `services/llm_client.py`：大模型调用（豆包 /responses）
 
 5) `qml/parser.py`
    - QML Markdown 解析，把试卷转成结构化 JSON（`spec.json` / `public.json`）。
 
 6) `templates/` + `static/ui.css`
    - 页面结构与 UI 风格（统一玻璃拟态风格）。
-

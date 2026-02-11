@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from contextlib import contextmanager
 from typing import Any, Iterator
 from urllib.parse import urlsplit
@@ -134,24 +136,31 @@ END$$;
 """
 
     schema_ddl = """
-CREATE TABLE IF NOT EXISTS candidate (
-  id               BIGSERIAL PRIMARY KEY,
-  name             TEXT NOT NULL,
-  phone            TEXT NOT NULL,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  status           candidate_status NOT NULL DEFAULT 'created',
-  exam_key         TEXT NULL,
-  score            INT NOT NULL DEFAULT 0 CHECK (score BETWEEN 0 AND 100),
-  exam_started_at  TIMESTAMPTZ NULL,
-  exam_submitted_at TIMESTAMPTZ NULL,
-  duration_seconds INT NULL CHECK (duration_seconds IS NULL OR duration_seconds >= 0)
-);
+ CREATE TABLE IF NOT EXISTS candidate (
+   id               BIGSERIAL PRIMARY KEY,
+   name             TEXT NOT NULL,
+   phone            TEXT NOT NULL,
+   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+   status           candidate_status NOT NULL DEFAULT 'created',
+   exam_key         TEXT NULL,
+   score            INT NOT NULL DEFAULT 0 CHECK (score BETWEEN 0 AND 100),
+   exam_started_at  TIMESTAMPTZ NULL,
+   exam_submitted_at TIMESTAMPTZ NULL,
+  duration_seconds INT NULL CHECK (duration_seconds IS NULL OR duration_seconds >= 0),
+  resume_bytes     BYTEA NULL,
+  resume_filename  TEXT NULL,
+  resume_mime      TEXT NULL,
+  resume_size      INT NULL,
+  resume_parsed    JSONB NULL,
+  resume_parsed_at TIMESTAMPTZ NULL
+ );
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'candidate_phone_key') THEN
-    BEGIN
-      ALTER TABLE candidate ADD CONSTRAINT candidate_phone_key UNIQUE (phone);
+ DO $$
+ BEGIN
+   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'candidate_phone_key') THEN
+     BEGIN
+       ALTER TABLE candidate ADD CONSTRAINT candidate_phone_key UNIQUE (phone);
     EXCEPTION
       WHEN unique_violation THEN
         -- Existing duplicates; keep running without enforcing uniqueness to avoid startup failure.
@@ -165,6 +174,11 @@ UPDATE candidate SET created_at = NOW() WHERE created_at IS NULL;
 ALTER TABLE candidate ALTER COLUMN created_at SET DEFAULT NOW();
 ALTER TABLE candidate ALTER COLUMN created_at SET NOT NULL;
 
+ALTER TABLE candidate ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+UPDATE candidate SET updated_at = NOW() WHERE updated_at IS NULL;
+ALTER TABLE candidate ALTER COLUMN updated_at SET DEFAULT NOW();
+ALTER TABLE candidate ALTER COLUMN updated_at SET NOT NULL;
+
 -- Ensure status default is "created" even when the table already existed (CREATE TABLE IF NOT EXISTS won't update defaults).
 ALTER TABLE candidate ALTER COLUMN status SET DEFAULT 'created'::candidate_status;
 
@@ -172,6 +186,12 @@ ALTER TABLE candidate ALTER COLUMN status SET DEFAULT 'created'::candidate_statu
  ALTER TABLE candidate ADD COLUMN IF NOT EXISTS exam_started_at TIMESTAMPTZ NULL;
  ALTER TABLE candidate ADD COLUMN IF NOT EXISTS exam_submitted_at TIMESTAMPTZ NULL;
  ALTER TABLE candidate ADD COLUMN IF NOT EXISTS duration_seconds INT NULL;
+ ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_bytes BYTEA NULL;
+ ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_filename TEXT NULL;
+ ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_mime TEXT NULL;
+ ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_size INT NULL;
+ ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_parsed JSONB NULL;
+ ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_parsed_at TIMESTAMPTZ NULL;
 
  DO $$
  BEGIN
@@ -187,12 +207,12 @@ ALTER TABLE candidate ALTER COLUMN status SET DEFAULT 'created'::candidate_statu
    END IF;
  END$$;
 
- -- Drop deprecated columns (we no longer use them).
- ALTER TABLE candidate DROP COLUMN IF EXISTS interview;
- ALTER TABLE candidate DROP COLUMN IF EXISTS remark;
- 
- -- Migrate legacy status values to the new lifecycle (best-effort).
- UPDATE candidate
+  -- Drop deprecated columns (we no longer use them).
+  ALTER TABLE candidate DROP COLUMN IF EXISTS interview;
+  ALTER TABLE candidate DROP COLUMN IF EXISTS remark;
+  
+  -- Migrate legacy status values to the new lifecycle (best-effort).
+  UPDATE candidate
  SET status = CASE
   WHEN status::text = 'distributed' THEN 'distributed'::candidate_status
   WHEN status::text = 'verified' THEN 'verified'::candidate_status
@@ -208,10 +228,10 @@ UPDATE candidate
 SET status = 'created'::candidate_status
 WHERE status = 'distributed'::candidate_status AND exam_key IS NULL;
 
-CREATE INDEX IF NOT EXISTS idx_candidate_phone ON candidate(phone);
-CREATE INDEX IF NOT EXISTS idx_candidate_status ON candidate(status);
-CREATE INDEX IF NOT EXISTS idx_candidate_created_at ON candidate(created_at);
-"""
+ CREATE INDEX IF NOT EXISTS idx_candidate_phone ON candidate(phone);
+ CREATE INDEX IF NOT EXISTS idx_candidate_status ON candidate(status);
+ CREATE INDEX IF NOT EXISTS idx_candidate_created_at ON candidate(created_at);
+ """
     try:
         # PostgreSQL requires committing enum value changes before using them in
         # defaults/updates within the same session. Execute enum DDL separately.
@@ -230,18 +250,55 @@ CREATE INDEX IF NOT EXISTS idx_candidate_created_at ON candidate(created_at);
 
 # 从 PostgreSQL 的 candidate 表里查询候选人（考生）列表，倒序排列
 def list_candidates(
-    limit: int | None = None, offset: int = 0, *, query: str | None = None
+    limit: int | None = None,
+    offset: int = 0,
+    *,
+    query: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
 ) -> list[dict[str, Any]]:
     # 查询的sql语句
     sql = """
-SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds
-FROM candidate
-"""
+ SELECT
+   id,
+   name,
+   phone,
+   created_at,
+   status,
+   exam_key,
+   score,
+   exam_started_at,
+   exam_submitted_at,
+   duration_seconds,
+   (resume_bytes IS NOT NULL) AS has_resume
+  FROM candidate
+  """
     params: list[Any] = []      # 最多返回多少条
     if query:   # 搜索关键字
-        sql += " WHERE name ILIKE %s OR phone LIKE %s"      # 不区分大小写的模糊查询
-        q = f"%{query}%"    # 包含query这个内容就可以
-        params.extend([q, q])   # 一个给name，一个给phone
+        qraw = str(query or "").strip()
+        q = f"%{qraw}%"  # 包含query这个内容就可以
+        where_parts: list[str] = []
+        if qraw.isdigit():
+            where_parts.append("id = %s")
+            params.append(int(qraw))
+        where_parts.append("name ILIKE %s")  # 不区分大小写的模糊查询
+        where_parts.append("phone LIKE %s")
+        params.extend([q, q])  # 一个给name，一个给phone
+        sql += " WHERE " + " OR ".join(where_parts)
+
+    if created_from is not None:
+        if " WHERE " in sql:
+            sql += " AND created_at >= %s"
+        else:
+            sql += " WHERE created_at >= %s"
+        params.append(created_from)
+    if created_to is not None:
+        if " WHERE " in sql:
+            sql += " AND created_at <= %s"
+        else:
+            sql += " WHERE created_at <= %s"
+        params.append(created_to)
+
     sql += "\nORDER BY id DESC\n"   # 按照id倒序输出
     # 将限制的limit的数量传到数据库中
     if limit is not None:
@@ -259,9 +316,16 @@ def count_candidates(*, query: str | None = None) -> int:
     sql = "SELECT COUNT(*) FROM candidate"
     params: list[Any] = []
     if query:
-        sql += " WHERE name ILIKE %s OR phone LIKE %s"
-        q = f"%{query}%"
+        qraw = str(query or "").strip()
+        q = f"%{qraw}%"
+        where_parts: list[str] = []
+        if qraw.isdigit():
+            where_parts.append("id = %s")
+            params.append(int(qraw))
+        where_parts.append("name ILIKE %s")
+        where_parts.append("phone LIKE %s")
         params.extend([q, q])
+        sql += " WHERE " + " OR ".join(where_parts)
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, tuple(params))
@@ -302,26 +366,10 @@ LIMIT 1
             return cur.fetchone() is not None
 
 
-def has_recent_created_by_phone(phone: str, *, months: int = 6) -> bool:
-    if months <= 0:
-        return False
-    sql = """
-SELECT 1
-FROM candidate
-WHERE phone=%s
-  AND created_at >= (NOW() - (%s || ' months')::interval)
-LIMIT 1
-"""
-    with conn_scope() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (str(phone or ""), int(months)))
-            return cur.fetchone() is not None
-
-
 def get_candidate_by_phone(phone: str) -> dict[str, Any] | None:
     sql = """
-SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds
-FROM candidate
+ SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds
+ FROM candidate
 WHERE phone = %s
 ORDER BY id DESC
 LIMIT 1
@@ -333,32 +381,12 @@ LIMIT 1
             return dict(row) if row else None
 
 
-def has_recent_identity(name: str, phone: str, *, months: int = 6) -> bool:
-    """
-    Business rule helper: treat (name, phone) as an identity. If an identity was
-    created within the last `months`, consider it "recent".
-    """
-    if months <= 0:
-        return False
-    sql = """
-SELECT 1
-FROM candidate
-WHERE name=%s AND phone=%s
-  AND created_at >= (NOW() - (%s || ' months')::interval)
-LIMIT 1
-"""
-    with conn_scope() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (str(name or ""), str(phone or ""), int(months)))
-            return cur.fetchone() is not None
-
-
 def create_candidate(name: str, phone: str) -> int:
     sql = """
-INSERT INTO candidate(name, phone)
-VALUES (%s, %s)
-RETURNING id
-"""
+ INSERT INTO candidate(name, phone)
+ VALUES (%s, %s)
+ RETURNING id
+ """
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (name, phone))
@@ -368,26 +396,119 @@ RETURNING id
 # 候选人（考生）的 id查找到候选者的身份信息
 def get_candidate(candidate_id: int) -> dict[str, Any] | None:
     sql = """
-SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds
-FROM candidate
-WHERE id = %s
-"""
+ SELECT id, name, phone, created_at, updated_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds,
+        resume_filename, resume_mime, resume_size, resume_parsed, resume_parsed_at
+  FROM candidate
+  WHERE id = %s
+  """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (int(candidate_id),))
             row = cur.fetchone()
             return dict(row) if row else None
 
+
+def get_candidate_resume(candidate_id: int) -> dict[str, Any] | None:
+    sql = """
+ SELECT resume_bytes, resume_filename, resume_mime, resume_size
+ FROM candidate
+ WHERE id=%s
+ """
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (int(candidate_id),))
+            row = cur.fetchone()
+            if not row:
+                return None
+            d = dict(row)
+            b = d.get("resume_bytes")
+            if isinstance(b, memoryview):
+                d["resume_bytes"] = b.tobytes()
+            return d
+
+
+def update_candidate_resume(
+    candidate_id: int,
+    *,
+    resume_bytes: bytes,
+    resume_filename: str | None = None,
+    resume_mime: str | None = None,
+    resume_size: int | None = None,
+    resume_parsed: dict[str, Any] | None = None,
+) -> None:
+    sql = """
+UPDATE candidate
+SET
+  resume_bytes=%s,
+  resume_filename=%s,
+  resume_mime=%s,
+  resume_size=%s,
+  resume_parsed=%s,
+  resume_parsed_at=NOW(),
+  updated_at=NOW()
+WHERE id=%s
+"""
+    parsed_param = None
+    if resume_parsed is not None:
+        parsed_param = psycopg2.extras.Json(
+            resume_parsed, dumps=lambda x: json.dumps(x, ensure_ascii=False)
+        )
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    psycopg2.Binary(resume_bytes),
+                    (resume_filename or None),
+                    (resume_mime or None),
+                    (int(resume_size) if resume_size is not None else None),
+                    parsed_param,
+                    int(candidate_id),
+                ),
+            )
+
+
+def update_candidate_resume_parsed(
+    candidate_id: int,
+    *,
+    resume_parsed: dict[str, Any] | None,
+    touch_resume_parsed_at: bool = True,
+) -> None:
+    if touch_resume_parsed_at:
+        sql = """
+ UPDATE candidate
+ SET
+   resume_parsed=%s,
+   resume_parsed_at=NOW(),
+   updated_at=NOW()
+ WHERE id=%s
+ """
+    else:
+        sql = """
+ UPDATE candidate
+ SET
+   resume_parsed=%s,
+   updated_at=NOW()
+ WHERE id=%s
+ """
+    parsed_param = None
+    if resume_parsed is not None:
+        parsed_param = psycopg2.extras.Json(resume_parsed, dumps=lambda x: json.dumps(x, ensure_ascii=False))
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (parsed_param, int(candidate_id)))
+
+
 # 设置id值候选者的状态
 def set_candidate_status(candidate_id: int, status: str) -> None:
-    sql = "UPDATE candidate SET status = %s WHERE id = %s"
+    sql = "UPDATE candidate SET status = %s, updated_at=NOW() WHERE id = %s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (status, int(candidate_id)))
 
 # 根据id值设置试卷id值
 def set_candidate_exam_key(candidate_id: int, exam_key: str) -> None:
-    sql = "UPDATE candidate SET exam_key=%s WHERE id=%s"
+    sql = "UPDATE candidate SET exam_key=%s, updated_at=NOW() WHERE id=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (str(exam_key or ""), int(candidate_id)))
@@ -419,10 +540,10 @@ def rename_exam_key(old_exam_key: str, new_exam_key: str) -> int:
 # 根据id修改候选者姓名和手机号
 def update_candidate(candidate_id: int, *, name: str, phone: str, created_at=None) -> None:
     if created_at is None:
-        sql = "UPDATE candidate SET name=%s, phone=%s WHERE id=%s"
+        sql = "UPDATE candidate SET name=%s, phone=%s, updated_at=NOW() WHERE id=%s"
         params = (name, phone, int(candidate_id))
     else:
-        sql = "UPDATE candidate SET name=%s, phone=%s, created_at=%s WHERE id=%s"
+        sql = "UPDATE candidate SET name=%s, phone=%s, created_at=%s, updated_at=NOW() WHERE id=%s"
         params = (name, phone, created_at, int(candidate_id))
     with conn_scope() as conn:
         with conn.cursor() as cur:
@@ -431,99 +552,21 @@ def update_candidate(candidate_id: int, *, name: str, phone: str, created_at=Non
 
 def reset_candidate_exam_state(candidate_id: int) -> None:
     sql = """
-UPDATE candidate
-SET
-  status='created',
-  exam_key=NULL,
-  score=0,
-  exam_started_at=NULL,
-  exam_submitted_at=NULL,
-  duration_seconds=NULL
-WHERE id=%s
-"""
+ UPDATE candidate
+ SET
+   status='created',
+   exam_key=NULL,
+   score=0,
+   exam_started_at=NULL,
+   exam_submitted_at=NULL,
+   duration_seconds=NULL,
+   updated_at=NOW()
+ WHERE id=%s
+ """
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (int(candidate_id),))
 
-
-def bulk_import_candidates(
-    records: list[dict[str, Any]], *, overwrite_after_months: int = 6
-) -> tuple[int, int]:
-    """
-    Bulk import candidates from a file:
-    - If phone exists and created_at is within overwrite_after_months: reject.
-    - If phone exists and is older: overwrite (reset as new).
-    - If phone does not exist: create.
-
-    Returns: (created_count, updated_count)
-    """
-    created = 0
-    updated = 0
-    months = int(overwrite_after_months)
-    with conn_scope() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            for r in records:
-                name = str(r.get("name") or "").strip()
-                phone = str(r.get("phone") or "").strip()
-                exam_key = (str(r.get("exam_key") or "").strip() or None)
-
-                cur.execute(
-                    """
-SELECT id
-FROM candidate
-WHERE phone=%s
-ORDER BY id DESC
-LIMIT 1
-FOR UPDATE
-""",
-                    (phone,),
-                )
-                row = cur.fetchone()
-                if row:
-                    cur.execute(
-                        """
-SELECT 1
-FROM candidate
-WHERE phone=%s
-  AND created_at >= (NOW() - (%s || ' months')::interval)
-LIMIT 1
-""",
-                        (phone, months),
-                    )
-                    if cur.fetchone() is not None:
-                        raise RuntimeError("recent_candidate_in_file")
-
-                    cur.execute(
-                        """
-UPDATE candidate
-SET
-  name=%s,
-  phone=%s,
-  created_at=NOW(),
-  status='created',
-  exam_key=%s,
-  score=0,
-  exam_started_at=NULL,
-  exam_submitted_at=NULL,
-  duration_seconds=NULL
-WHERE id=%s
-""",
-                        (name, phone, exam_key, int(row["id"])),
-                    )
-                    updated += 1
-                else:
-                    cur.execute(
-                        """
-INSERT INTO candidate(name, phone, exam_key)
-VALUES (%s, %s, %s)
-RETURNING id
-""",
-                        (name, phone, exam_key),
-                    )
-                    _ = cur.fetchone()
-                    created += 1
-
-    return created, updated
 
 # 根据id号删除候选者id
 def delete_candidate(candidate_id: int) -> None:

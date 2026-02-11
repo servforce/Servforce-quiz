@@ -1,9 +1,7 @@
 """
 LLM client helpers used by grading and evaluation.
 
-Supports:
-- OpenAI-compatible endpoints (DashScope / 讯飞 MaaS / self-hosted gateways)
-- Local Ollama (free, no API key)
+Doubao (Volcengine Ark) is used exclusively via the OpenAI-compatible Responses API.
 """
 
 from __future__ import annotations
@@ -11,61 +9,105 @@ from __future__ import annotations
 import json
 import os
 import time
+from typing import Any
 from urllib.request import Request, urlopen
 
-from config import (
-    LLM_API_KEY,
-    LLM_BASE_URL,
-    LLM_PROVIDER,
-    OLLAMA_BASE_URL,
-    OLLAMA_MODEL,
-    QWEN_MODEL,
-    logger,
-)
-
-_openai_client = None
-
-
-def _get_openai_client():
-    global _openai_client
-    if _openai_client is None:
-        try:
-            from openai import OpenAI  # type: ignore
-        except ModuleNotFoundError as e:
-            raise RuntimeError("Missing dependency: openai. Please install requirements.txt") from e
-        _openai_client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
-    return _openai_client
+from config import DOUBAO_API_KEY, DOUBAO_BASE_URL, DOUBAO_MODEL, logger
 
 
 def _supports_response_format_json() -> bool:
     return os.getenv("LLM_RESPONSE_FORMAT_JSON", "").strip().lower() in {"1", "true", "yes"}
 
 
-def _ollama_chat(prompt: str, *, system: str, model: str, format_json: bool) -> str:
-    url = f"{OLLAMA_BASE_URL}/api/chat"
-    payload: dict[str, object] = {
+def _doubao_responses(
+    *,
+    input_messages: list[dict[str, Any]],
+    model: str,
+    temperature: float,
+    top_p: float,
+    timeout_seconds: int = 60,
+    response_format_json: bool = False,
+) -> dict[str, Any]:
+    if not DOUBAO_API_KEY:
+        raise RuntimeError("DOUBAO_API_KEY/ARK_API_KEY is empty")
+
+    url = f"{DOUBAO_BASE_URL.rstrip('/')}/responses"
+    payload: dict[str, Any] = {
         "model": model,
-        "stream": False,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt},
-        ],
+        "input": input_messages,
+        "temperature": temperature,
+        "top_p": top_p,
     }
-    if format_json:
-        payload["format"] = "json"
+    # Best-effort: some OpenAI-compatible providers support response_format for JSON.
+    if response_format_json:
+        payload["response_format"] = {"type": "json_object"}
 
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-    with urlopen(req, timeout=60) as resp:
+    req = Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {DOUBAO_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urlopen(req, timeout=timeout_seconds) as resp:
         raw = resp.read().decode("utf-8", errors="replace")
-    obj = json.loads(raw)
-    return str(((obj.get("message") or {}).get("content") or "")).strip()
+    try:
+        return json.loads(raw)
+    except Exception as e:
+        raise RuntimeError(f"Doubao /responses returned non-JSON: {raw[:400]}") from e
 
 
-def call_llm_json(prompt: str, model: str = QWEN_MODEL) -> str:
+def _extract_output_text(obj: dict[str, Any]) -> str:
+    """
+    Try a few common OpenAI Responses-compatible shapes.
+    """
+    if not isinstance(obj, dict):
+        return ""
+    t = obj.get("output_text")
+    if isinstance(t, str) and t.strip():
+        return t.strip()
+
+    out = obj.get("output")
+    if isinstance(out, list):
+        parts: list[str] = []
+        for item in out:
+            if not isinstance(item, dict):
+                continue
+            content = item.get("content")
+            if not isinstance(content, list):
+                continue
+            for c in content:
+                if not isinstance(c, dict):
+                    continue
+                if str(c.get("type") or "") in {"output_text", "text"} and isinstance(c.get("text"), str):
+                    parts.append(str(c.get("text") or ""))
+        txt = "".join(parts).strip()
+        if txt:
+            return txt
+
+    # Some gateways may still return chat.completions-like shape.
+    try:
+        choices = obj.get("choices")
+        if isinstance(choices, list) and choices:
+            msg = (choices[0] or {}).get("message") or {}
+            if isinstance(msg, dict):
+                return str(msg.get("content") or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _to_text_parts(prompt: str) -> list[dict[str, Any]]:
+    return [{"type": "input_text", "text": str(prompt or "")}]
+
+
+def call_llm_json(prompt: str, model: str | None = None) -> str:
     """
     Structured output call used by short-answer grading.
-    Expected to return a JSON object string: {"score":0..max,"reason":"..."}.
+    Expected to return a JSON object string with score + explanation (and optional guard-rail fields).
     """
     try:
         start = time.time()
@@ -74,74 +116,121 @@ def call_llm_json(prompt: str, model: str = QWEN_MODEL) -> str:
             "要求：\n"
             "1) score 必须是 0..max 的整数（可取中间分，不要只给 0 或满分）。\n"
             "2) 若答案只覆盖部分要点，请给对应比例的分数。\n"
-            "3) 只输出一个 JSON 对象：{\"score\":0..max,\"reason\":\"...\"}，不要输出多余文本。\n"
+            "3) 只输出一个 JSON 对象，不要输出多余文本。\n"
+            "4) 字段：\n"
+            "   - score: 0..max 的整数\n"
+            "   - reason: 1-3 句简短理由\n"
+            "   - relevance: 0..3（0=完全无关/无意义）\n"
+            "   - contradiction: true/false（关键事实说反/矛盾时为 true，且应 score=0）\n"
+            "示例：{\"score\":3,\"reason\":\"...\",\"relevance\":2,\"contradiction\":false}\n"
         )
-
-        if LLM_PROVIDER == "ollama":
-            out = _ollama_chat(prompt, system=system, model=OLLAMA_MODEL, format_json=True)
-            logger.debug("LLM(ollama) ok in %.2fs", time.time() - start)
-            return out
-
-        if not LLM_API_KEY:
-            logger.error("LLM_API_KEY is empty (LLM_PROVIDER=openai_compat)")
-            return ""
-
-        kwargs: dict[str, object] = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
+        use_model = (model or "").strip() or DOUBAO_MODEL
+        obj = _doubao_responses(
+            input_messages=[
+                {
+                    "role": "user",
+                    "content": _to_text_parts(system + "\n" + str(prompt or "")),
+                },
             ],
-            "temperature": 0,
-            "top_p": 1,
-            "presence_penalty": 0,
-            "frequency_penalty": 0,
-            "n": 1,
-            "seed": 42,
-        }
-        if _supports_response_format_json():
-            kwargs["response_format"] = {"type": "json_object"}
-
-        response = _get_openai_client().chat.completions.create(**kwargs)  # type: ignore[arg-type]
-        logger.debug("LLM(openai_compat) ok in %.2fs", time.time() - start)
-        return (response.choices[0].message.content or "").strip()
+            model=use_model,
+            temperature=0.0,
+            top_p=1.0,
+            timeout_seconds=90,
+            response_format_json=_supports_response_format_json(),
+        )
+        logger.debug("LLM(doubao,json) ok in %.2fs", time.time() - start)
+        return _extract_output_text(obj)
     except Exception as e:
-        logger.error(f"LLM call failed: {e}")
+        logger.error("LLM call failed (doubao,json): %s", e)
         return ""
 
 
-def call_llm_text(prompt: str, model: str = QWEN_MODEL) -> str:
+def call_llm_text(prompt: str, model: str | None = None) -> str:
     """
     Free-text call used by remark generation.
     """
     try:
         start = time.time()
         system = "你是一名资深面试官与能力评估专家。"
-
-        if LLM_PROVIDER == "ollama":
-            out = _ollama_chat(prompt, system=system, model=OLLAMA_MODEL, format_json=False)
-            logger.debug("LLM(ollama,text) ok in %.2fs", time.time() - start)
-            return out
-
-        if not LLM_API_KEY:
-            logger.error("LLM_API_KEY is empty (LLM_PROVIDER=openai_compat)")
-            return ""
-
-        response = _get_openai_client().chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
+        use_model = (model or "").strip() or DOUBAO_MODEL
+        obj = _doubao_responses(
+            input_messages=[
+                {
+                    "role": "user",
+                    "content": _to_text_parts(system + "\n" + str(prompt or "")),
+                },
             ],
+            model=use_model,
             temperature=0.2,
-            top_p=1,
-            presence_penalty=0,
-            frequency_penalty=0,
-            n=1,
-            seed=42,
+            top_p=1.0,
+            timeout_seconds=90,
+            response_format_json=False,
         )
-        logger.debug("LLM(openai_compat,text) ok in %.2fs", time.time() - start)
-        return (response.choices[0].message.content or "").strip()
+        logger.debug("LLM(doubao,text) ok in %.2fs", time.time() - start)
+        return _extract_output_text(obj)
     except Exception as e:
-        logger.error(f"LLM call failed (text): {e}")
+        logger.error("LLM call failed (doubao,text): %s", e)
+        return ""
+
+
+def call_llm_structured(prompt: str, *, system: str, model: str | None = None) -> str:
+    """
+    Generic structured call returning a JSON string (best-effort).
+    Used by various extractors.
+    """
+    try:
+        start = time.time()
+        use_model = (model or "").strip() or DOUBAO_MODEL
+        obj = _doubao_responses(
+            input_messages=[
+                {
+                    "role": "user",
+                    "content": _to_text_parts(str(system or "") + "\n" + str(prompt or "")),
+                },
+            ],
+            model=use_model,
+            temperature=0.0,
+            top_p=1.0,
+            timeout_seconds=120,
+            response_format_json=_supports_response_format_json(),
+        )
+        dt = time.time() - start
+        logger.debug("LLM(doubao,structured) ok in %.2fs", dt)
+        return _extract_output_text(obj)
+    except Exception as e:
+        logger.error("LLM call failed (doubao,structured): %s", e)
+        return ""
+
+
+def call_llm_vision_text(
+    *,
+    image_url: str,
+    prompt: str,
+    system: str | None = None,
+    model: str | None = None,
+) -> str:
+    """
+    Vision call using the /responses "input_image" + "input_text" format (as in the user's curl example).
+
+    Note: you still need to provide a reachable URL or data URL.
+    """
+    try:
+        start = time.time()
+        use_model = (model or "").strip() or DOUBAO_MODEL
+        parts: list[dict[str, Any]] = [
+            {"type": "input_image", "image_url": str(image_url or "")},
+            {"type": "input_text", "text": ((str(system or "") + "\n") if system else "") + str(prompt or "")},
+        ]
+        obj = _doubao_responses(
+            input_messages=[{"role": "user", "content": parts}],
+            model=use_model,
+            temperature=0.0,
+            top_p=1.0,
+            timeout_seconds=120,
+            response_format_json=False,
+        )
+        logger.debug("LLM(doubao,vision) ok in %.2fs", time.time() - start)
+        return _extract_output_text(obj)
+    except Exception as e:
+        logger.error("LLM call failed (doubao,vision): %s", e)
         return ""

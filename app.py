@@ -30,10 +30,8 @@ from db import (
     delete_candidate,
     get_candidate,
     get_candidate_by_phone,
-    bulk_import_candidates,
-    has_recent_created_by_phone,
+    get_candidate_resume,
     has_recent_exam_submission_by_phone,
-    has_recent_identity,
     init_db,
     list_candidates,
     reset_candidate_exam_state,
@@ -43,6 +41,8 @@ from db import (
     mark_exam_deleted,
     rename_exam_key,
     update_candidate,
+    update_candidate_resume,
+    update_candidate_resume_parsed,
     update_candidate_result,
     verify_candidate,
 )
@@ -56,14 +56,22 @@ from services.assignment_service import (
     save_assignment,
 )
 from services.grading_service import generate_candidate_remark, grade_attempt
+from services.resume_service import (
+    extract_resume_text,
+    extract_resume_section,
+    parse_resume_details_llm,
+    parse_resume_identity_fast,
+    parse_resume_identity_llm,
+    parse_resume_name_llm,
+)
+from services.university_tags import classify_university
 from storage.json_store import ensure_dirs, read_json, write_json
 from web.auth import admin_required
-
-import openpyxl
 
 # 使用正则表达式 
 _NAME_RE = re.compile(r"^[\u4e00-\u9fffA-Za-z·\s]{2,20}$")  # 用来验证一个名字是否符合特定的规则
 _PHONE_RE = re.compile(r"^1[3-9]\d{9}$")    # 验证一个手机号是否符合特定规则
+_FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
 
 
 # 接收一个字符串类型的参数 value，返回一个布尔值 True 或 False，表示该名字是否有效
@@ -83,13 +91,122 @@ def _is_valid_phone(value: str) -> bool:
 
 # 将输入的手机号都变成标准的输出
 def _normalize_phone(value: str) -> str:
-    v = (value or "").strip()   # 去掉前后端的空白字符
-    v = v.replace(" ", "").replace("-", "")
-    if v.startswith("+86") and len(v) == 12:
-        v = v[3:]
-    if v.startswith("86") and len(v) == 13:
-        v = v[2:]
-    return v
+    v = (value or "").strip()
+    v = v.translate(_FULLWIDTH_DIGITS)
+    digits = re.sub(r"\D+", "", v)
+    if digits.startswith("0086"):
+        digits = digits[4:]
+    if digits.startswith("86") and len(digits) >= 13:
+        cand = digits[2:]
+        if _PHONE_RE.fullmatch(cand):
+            digits = cand
+    if len(digits) > 11:
+        tail = digits[-11:]
+        if _PHONE_RE.fullmatch(tail):
+            digits = tail
+    return digits
+
+
+def _clean_projects_raw(text: str) -> str:
+    """
+    Best-effort cleanup for displaying the raw "项目经历" section:
+    - remove the leading section label ("项目经历/项目经验") if it is glued to content
+    - add line breaks before common field labels for readability
+    """
+    s = str(text or "").strip()
+    if not s:
+        return ""
+
+    # Remove leading label.
+    s = re.sub(r"^\s*(项目经历|项目经验)\s*[:：\-—]*\s*", "", s)
+    # Sometimes PDF extraction glues the label to the next token without spaces/punctuation.
+    if s.startswith("项目经历") or s.startswith("项目经验"):
+        s = s[4:].lstrip()
+
+    # Add line breaks before common labels when they appear inline.
+    labels = ["内容：", "工作：", "职责：", "项目成果：", "项目结果：", "项目描述："]
+    for lab in labels:
+        s = re.sub(rf"(?<!\n){re.escape(lab)}", "\n" + lab, s)
+
+    # Normalize excessive blank lines.
+    s = re.sub(r"\n{3,}", "\n\n", s).strip()
+    return s
+
+
+_PROJECT_PERIOD_RE = re.compile(
+    r"(?P<period>(?:19|20)\d{2}年\d{1,2}月\s*-\s*(?:19|20)\d{2}年\d{1,2}月)"
+)
+
+
+def _split_projects_raw(text: str) -> list[dict[str, str]]:
+    """
+    Split projects_raw into blocks and render in a "title | period" layout without rewriting content.
+    Returns: [{"title":..., "period":..., "body":...}, ...]
+    """
+    s = str(text or "").strip()
+    if not s:
+        return []
+
+    # Match "title + period" even if it appears mid-line (PDF glue).
+    head_re = re.compile(
+        r"(?P<title>[^\n]{2,120}?)\s*(?P<period>(?:19|20)\d{2}年\d{1,2}月\s*-\s*(?:19|20)\d{2}年\d{1,2}月)"
+    )
+    matches = list(head_re.finditer(s))
+    if not matches:
+        return []
+
+    out: list[dict[str, str]] = []
+    for i, m in enumerate(matches):
+        start = m.start()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(s)
+
+        full_title = str(m.group("title") or "").strip()
+        # Keep only the last line as title (avoid swallowing previous content when glued).
+        if "\n" in full_title:
+            full_title = full_title.splitlines()[-1].strip()
+        full_title = re.sub(r"^\s*(项目经历|项目经验)\s*[:：\-—]*\s*", "", full_title).strip()
+
+        period = str(m.group("period") or "").strip()
+
+        # If the extracted "title" accidentally contains a previous project's tail such as "项目成果：...论文基于...基于XXX",
+        # move the prefix back to the previous block and keep only the actual project name for this block.
+        title = full_title
+        if any(k in full_title for k in ("项目成果", "项目结果", "成果")) and "基于" in full_title:
+            split_pos = full_title.rfind("基于")
+            if split_pos > 0:
+                prefix = full_title[:split_pos].strip()
+                candidate = full_title[split_pos:].strip()
+                if prefix and out:
+                    prev = out[-1]
+                    prev_body = (prev.get("body") or "").rstrip()
+                    if prev_body:
+                        prev_body += "\n"
+                    prev["body"] = (prev_body + prefix).strip()
+                title = candidate
+        # Another common pattern: "...论文基于占用网格..." -> keep "基于占用网格..." as project name.
+        if "论文基于" in title:
+            tail = title.split("论文基于")[-1].strip()
+            if tail and not tail.startswith("基于"):
+                tail = "基于" + tail
+            title = tail or title
+
+        body = s[m.end() : end].strip()
+        body = body.lstrip("：: \t-—")
+        body = re.sub(r"\n{3,}", "\n\n", body).strip()
+
+        # Skip obviously-bad titles.
+        if not title or len(title) > 120:
+            continue
+        out.append({"title": title, "period": period, "body": body})
+
+    return out[:8]
+
+
+def _safe_int(v, default: int = 0) -> int:
+    try:
+        return int(v)
+    except Exception:
+        return int(default)
 
 
 _MD_IMAGE_RE = re.compile(r"!\[[^\]]*]\((?P<path>[^)]+)\)")
@@ -495,14 +612,19 @@ def create_app() -> Flask:
         assign_candidate_id = (request.args.get("assign_candidate_id") or "").strip()
         if exam_q:
             ql = exam_q.lower()
+            digits = ql.isdigit()
             exams_all = [
                 e
                 for e in exams_all
                 if ql in str(e.get("exam_key") or "").lower()
                 or ql in str(e.get("title") or "").lower()
+                or (digits and ql in str(e.get("id") or ""))
             ]
 
-        per_page = 10
+        # Always show most recently updated first.
+        exams_all.sort(key=lambda x: float(x.get("_mtime") or 0), reverse=True)
+
+        per_page = 20
         try:
             exam_page = int(request.args.get("exam_page") or "1")
         except Exception:
@@ -518,6 +640,18 @@ def create_app() -> Flask:
         start = (exam_page - 1) * per_page
         end = start + per_page
         exams_page = exams_all[start:end]
+        for e in exams_page:
+            try:
+                mtime = float(e.get("_mtime") or 0)
+            except Exception:
+                mtime = 0
+            if mtime > 0:
+                try:
+                    e["updated_at"] = datetime.fromtimestamp(mtime)
+                except Exception:
+                    e["updated_at"] = None
+            else:
+                e["updated_at"] = None
 
         attempt_candidates = []
         for c in candidates:
@@ -560,6 +694,24 @@ def create_app() -> Flask:
                 or ql in str(x.get("exam_key") or "").lower()
             ]
 
+        attempt_per_page = 20
+
+        try:
+            attempt_page = int(request.args.get("attempt_page") or "1")
+        except Exception:
+            attempt_page = 1
+        attempt_page = max(1, attempt_page)
+        total_attempts = len(attempt_candidates)
+        total_attempt_pages = (total_attempts + attempt_per_page - 1) // attempt_per_page
+        if total_attempt_pages > 0:
+            attempt_page = min(attempt_page, total_attempt_pages)
+        else:
+            attempt_page = 1
+
+        start2 = (attempt_page - 1) * attempt_per_page
+        end2 = start2 + attempt_per_page
+        attempt_candidates_page = attempt_candidates[start2:end2]
+
         return render_template(
             "admin_dashboard.html",
             exams_all=exams_all,
@@ -568,11 +720,16 @@ def create_app() -> Flask:
             total_exams=total_exams,
             total_exam_pages=total_exam_pages,
             exam_q=exam_q,
+            exam_per_page=per_page,
             attempt_q=attempt_q,
             assign_exam_key=assign_exam_key,
             assign_candidate_id=assign_candidate_id,
             candidates=candidates,
-            attempt_candidates=attempt_candidates,
+            attempt_candidates=attempt_candidates_page,
+            attempt_page=attempt_page,
+            total_attempts=total_attempts,
+            total_attempt_pages=total_attempt_pages,
+            attempt_per_page=attempt_per_page,
         )
 
     @app.post("/admin/exams/upload")    # 上传
@@ -943,8 +1100,600 @@ def create_app() -> Flask:
     @admin_required
     def admin_candidates():
         q = (request.args.get("q") or "").strip()
-        candidates = list_candidates(query=q)
-        return render_template("admin_candidates.html", candidates=candidates, q=q)
+        created_from_raw = (request.args.get("created_from") or "").strip()
+        created_to_raw = (request.args.get("created_to") or "").strip()
+
+        def _parse_dt(v: str, *, end_of_day: bool = False) -> datetime | None:
+            s = str(v or "").strip()
+            if not s:
+                return None
+            try:
+                # Supports "YYYY-MM-DD" and "YYYY-MM-DDTHH:MM".
+                dt = datetime.fromisoformat(s)
+            except Exception:
+                return None
+            if s.count("-") == 2 and "T" not in s and " " not in s:
+                if end_of_day:
+                    return dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+                return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            return dt
+
+        created_from = _parse_dt(created_from_raw, end_of_day=False)
+        created_to = _parse_dt(created_to_raw, end_of_day=True)
+
+        candidates_all = list_candidates(query=q, created_from=created_from, created_to=created_to)
+
+        per_page = 20
+
+        try:
+            page = int(request.args.get("page") or "1")
+        except Exception:
+            page = 1
+        page = max(1, page)
+        total = len(candidates_all)
+        total_pages = (total + per_page - 1) // per_page
+        if total_pages > 0:
+            page = min(page, total_pages)
+        else:
+            page = 1
+
+        start = (page - 1) * per_page
+        end = start + per_page
+        candidates = candidates_all[start:end]
+
+        return render_template(
+            "admin_candidates.html",
+            candidates=candidates,
+            q=q,
+            created_from=created_from_raw,
+            created_to=created_to_raw,
+            page=page,
+            per_page=per_page,
+            total=total,
+            total_pages=total_pages,
+        )
+
+    @app.get("/admin/candidates/<int:candidate_id>")
+    @admin_required
+    def admin_candidate_profile(candidate_id: int):
+        c = get_candidate(candidate_id)
+        if not c:
+            abort(404)
+
+        parsed = c.get("resume_parsed") or {}
+        if not isinstance(parsed, dict):
+            parsed = {}
+        details = parsed.get("details") or {}
+        if not isinstance(details, dict):
+            details = {}
+        details_status = str(details.get("status") or "")
+        details_data = details.get("data") or {}
+        if not isinstance(details_data, dict):
+            details_data = {}
+
+        def _degree_rank(v: str) -> int:
+            s = str(v or "").strip()
+            order = {"高中": 1, "大专": 2, "本科": 3, "硕士": 4, "博士": 5}
+            return order.get(s, 0)
+
+        def _highest_degree(educations: list[dict]) -> str:
+            best = ""
+            best_r = 0
+            for e in educations or []:
+                if not isinstance(e, dict):
+                    continue
+                d = str(e.get("degree") or "").strip()
+                r = _degree_rank(d)
+                if r > best_r:
+                    best_r = r
+                    best = d
+            if best:
+                return best
+            return str(details_data.get("highest_education") or "").strip()
+
+        educations = details_data.get("educations") or []
+        if not isinstance(educations, list):
+            educations = []
+        edu_list = [e for e in educations if isinstance(e, dict)]
+
+        highest = _highest_degree(edu_list)
+        show_degrees: set[str] = set()
+        if highest == "博士":
+            show_degrees = {"本科", "硕士", "博士"}
+        elif highest == "硕士":
+            show_degrees = {"本科", "硕士"}
+        elif highest == "本科":
+            show_degrees = {"本科"}
+        elif highest:
+            show_degrees = {highest}
+
+        edu_show = [e for e in edu_list if not show_degrees or str(e.get("degree") or "") in show_degrees]
+        edu_show.sort(key=lambda x: _degree_rank(str(x.get("degree") or "")))
+        for e in edu_show:
+            try:
+                tag, label = classify_university(str(e.get("school") or ""))
+            except Exception:
+                tag, label = "", ""
+            e["school_tag"] = tag
+            e["school_tag_label"] = label
+
+        email = ""
+        emails = details_data.get("emails") or []
+        if isinstance(emails, list) and emails:
+            email = str(emails[0] or "").strip()
+
+        english = details_data.get("english") or {}
+        if not isinstance(english, dict):
+            english = {}
+
+        projects = details_data.get("projects") or []
+        if not isinstance(projects, list):
+            projects = []
+        projects = [p for p in projects if isinstance(p, dict)]
+        projects_raw = ""
+        try:
+            projects_raw = str(details_data.get("projects_raw") or "").strip()
+        except Exception:
+            projects_raw = ""
+        projects_raw_blocks: list[dict[str, str]] = []
+        if projects_raw:
+            try:
+                projects_raw_blocks = _split_projects_raw(projects_raw)
+            except Exception:
+                projects_raw_blocks = []
+
+        evaluation_llm = ""
+        try:
+            evaluation_llm = str(details_data.get("evaluation") or "").strip()
+        except Exception:
+            evaluation_llm = ""
+        if not evaluation_llm:
+            try:
+                evaluation_llm = str(details_data.get("summary") or "").strip()
+            except Exception:
+                evaluation_llm = ""
+
+        evaluation_admin = ""
+        try:
+            evaluation_admin = str(details_data.get("admin_evaluation") or "").strip()
+        except Exception:
+            evaluation_admin = ""
+
+        admin_evaluations: list[dict[str, str]] = []
+        try:
+            raw_list = details_data.get("admin_evaluations")
+        except Exception:
+            raw_list = None
+        if isinstance(raw_list, list):
+            for it in raw_list:
+                if not isinstance(it, dict):
+                    continue
+                text = str(it.get("text") or "").strip()
+                at = str(it.get("at") or "").strip()
+                if not text:
+                    continue
+                at_display = ""
+                if at:
+                    try:
+                        at_display = datetime.fromisoformat(at).astimezone().strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+                    except Exception:
+                        at_display = at
+                admin_evaluations.append({"text": text, "at": at, "at_display": at_display})
+        elif evaluation_admin:
+            # Backward-compat: previously stored as a single concatenated string.
+            blocks = [b.strip() for b in re.split(r"\n\s*\n", evaluation_admin) if b.strip()]
+            for b in blocks:
+                lines = [ln.rstrip() for ln in (b or "").splitlines()]
+                if not lines:
+                    continue
+                at = ""
+                text_lines = lines
+                m = re.match(r"^\[(.+?)\]\s*$", lines[0].strip())
+                if m:
+                    at = m.group(1).strip()
+                    text_lines = lines[1:]
+                text = "\n".join(text_lines).strip()
+                if not text:
+                    continue
+                admin_evaluations.append({"text": text, "at": at, "at_display": at})
+
+        # Attempt results: show only submitted + scored attempts from archives.
+        attempt_results: list[dict[str, str]] = []
+        try:
+            phone = str(c.get("phone") or "").strip()
+        except Exception:
+            phone = ""
+        archives_dir = STORAGE_DIR / "archives"
+
+        def _iso_to_local_str(v: str) -> str:
+            s = str(v or "").strip()
+            if not s:
+                return ""
+            try:
+                s2 = s.replace("Z", "+00:00")
+                return datetime.fromisoformat(s2).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                return s
+
+        if phone and archives_dir.exists():
+            files = [p for p in archives_dir.glob(f"*_{phone}_*.json") if p.is_file()]
+            rows: list[dict[str, object]] = []
+            for p in files:
+                try:
+                    a = read_json(p)
+                except Exception:
+                    continue
+                if not isinstance(a, dict):
+                    continue
+                timing = a.get("timing") or {}
+                if not isinstance(timing, dict):
+                    timing = {}
+                start_at = str(timing.get("start_at") or "").strip()
+                end_at = str(timing.get("end_at") or "").strip()
+                score = a.get("total_score")
+                if not end_at or score is None:
+                    continue
+                exam = a.get("exam") or {}
+                if not isinstance(exam, dict):
+                    exam = {}
+                title = str(exam.get("title") or "").strip()
+                exam_key = str(exam.get("exam_key") or "").strip()
+                exam_name = title or exam_key or "—"
+
+                sort_key = 0.0
+                try:
+                    sort_key = datetime.fromisoformat(end_at.replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    try:
+                        sort_key = float(p.stat().st_mtime)
+                    except Exception:
+                        sort_key = 0.0
+
+                rows.append(
+                    {
+                        "exam_name": exam_name,
+                        "score": str(score),
+                        "start_at": start_at,
+                        "end_at": end_at,
+                        "_sort_key": sort_key,
+                        "_archive_name": str(p.name),
+                    }
+                )
+
+            rows.sort(key=lambda x: float(x.get("_sort_key") or 0.0))
+            for i, r in enumerate(rows, start=1):
+                attempt_results.append(
+                    {
+                        "no": str(i),
+                        "exam_name": str(r.get("exam_name") or ""),
+                        "score": str(r.get("score") or ""),
+                        "start_at": _iso_to_local_str(str(r.get("start_at") or "")),
+                        "end_at": _iso_to_local_str(str(r.get("end_at") or "")),
+                        "attempt_href": url_for(
+                            "admin_candidate_attempt_by_archive",
+                            candidate_id=candidate_id,
+                            archive_name=str(r.get("_archive_name") or ""),
+                        ),
+                    }
+                )
+
+        return render_template(
+            "admin_candidate_profile.html",
+            c=c,
+            gender=str(details_data.get("gender") or "").strip(),
+            email=email,
+            highest_education=str(details_data.get("highest_education") or "").strip(),
+            educations=edu_show,
+            english=english,
+            projects=projects,
+            projects_raw=projects_raw,
+            projects_raw_blocks=projects_raw_blocks,
+            attempt_results=attempt_results,
+            evaluation_llm=evaluation_llm,
+            evaluation_admin=evaluation_admin,
+            admin_evaluations=admin_evaluations,
+            details_status=details_status,
+            details_error=str(details.get("error") or ""),
+        )
+
+    @app.post("/admin/candidates/<int:candidate_id>/evaluation/update")
+    @admin_required
+    def admin_candidate_evaluation_update(candidate_id: int):
+        c = get_candidate(candidate_id)
+        if not c:
+            abort(404)
+
+        evaluation = str(request.form.get("evaluation") or "").strip()
+        if not evaluation:
+            flash("请输入评价内容")
+            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+
+        parsed = c.get("resume_parsed") or {}
+        if not isinstance(parsed, dict):
+            parsed = {}
+        details = parsed.get("details") or {}
+        if not isinstance(details, dict):
+            details = {}
+        details_data = details.get("data") or {}
+        if not isinstance(details_data, dict):
+            details_data = {}
+
+        try:
+            existing = details_data.get("admin_evaluations")
+        except Exception:
+            existing = None
+        items: list[dict[str, str]] = []
+        if isinstance(existing, list):
+            for it in existing:
+                if not isinstance(it, dict):
+                    continue
+                text = str(it.get("text") or "").strip()
+                at = str(it.get("at") or "").strip()
+                if not text:
+                    continue
+                items.append({"text": text, "at": at})
+        else:
+            # Backward-compat: migrate old string blob into list on first append.
+            try:
+                prev_blob = str(details_data.get("admin_evaluation") or "").strip()
+            except Exception:
+                prev_blob = ""
+            if prev_blob:
+                blocks = [b.strip() for b in re.split(r"\n\s*\n", prev_blob) if b.strip()]
+                for b in blocks:
+                    lines = [ln.rstrip() for ln in (b or "").splitlines()]
+                    if not lines:
+                        continue
+                    at = ""
+                    text_lines = lines
+                    m = re.match(r"^\[(.+?)\]\s*$", lines[0].strip())
+                    if m:
+                        at = m.group(1).strip()
+                        text_lines = lines[1:]
+                    text = "\n".join(text_lines).strip()
+                    if not text:
+                        continue
+                    items.append({"text": text, "at": at})
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        items.append({"text": evaluation, "at": now_iso})
+        details_data["admin_evaluations"] = items
+        # Keep legacy key for compatibility with older pages/records.
+        details_data["admin_evaluation"] = ""
+
+        details["data"] = details_data
+        parsed["details"] = details
+
+        try:
+            # Do NOT touch resume_parsed_at here: it represents the LLM parse time,
+            # and must not be tied to admin evaluation save time.
+            update_candidate_resume_parsed(
+                candidate_id, resume_parsed=parsed, touch_resume_parsed_at=False
+            )
+        except Exception:
+            logger.exception("Update candidate evaluation failed (cid=%s)", candidate_id)
+            flash("保存失败：评价写入失败")
+            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+
+        flash("评价已保存")
+        return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+
+    @app.get("/admin/candidates/<int:candidate_id>/resume/download")
+    @admin_required
+    def admin_candidate_resume_download(candidate_id: int):
+        c = get_candidate(candidate_id)
+        if not c:
+            abort(404)
+
+        r = get_candidate_resume(candidate_id)
+        if not r:
+            abort(404)
+        data = r.get("resume_bytes") or b""
+        if not isinstance(data, (bytes, bytearray)) or len(data) <= 0:
+            abort(404)
+
+        raw_name = str(r.get("resume_filename") or "").strip()
+        name = os.path.basename(raw_name) if raw_name else ""
+        if not name:
+            ext = ""
+            mime = str(r.get("resume_mime") or "").lower().strip()
+            if "pdf" in mime:
+                ext = ".pdf"
+            elif "word" in mime or "docx" in mime:
+                ext = ".docx"
+            elif "markdown" in mime or mime.endswith("/md"):
+                ext = ".md"
+            elif "text" in mime:
+                ext = ".txt"
+            name = f"candidate_{candidate_id}_resume{ext or '.bin'}"
+
+        mime = str(r.get("resume_mime") or "").strip() or "application/octet-stream"
+        return send_file(
+            BytesIO(data),
+            mimetype=mime,
+            as_attachment=True,
+            download_name=name,
+        )
+
+    @app.post("/admin/candidates/<int:candidate_id>/resume/reparse")
+    @admin_required
+    def admin_candidate_resume_reparse(candidate_id: int):
+        c = get_candidate(candidate_id)
+        if not c:
+            abort(404)
+
+        file = request.files.get("file")
+        if not file or not getattr(file, "filename", ""):
+            flash("请选择简历文件")
+            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+
+        try:
+            data = file.read() or b""
+        except Exception:
+            flash("简历文件读取失败")
+            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+
+        if len(data) > 10 * 1024 * 1024:
+            flash("简历文件过大（需小于等于 10MB）")
+            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+
+        filename = str(file.filename or "")
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in {".pdf", ".docx", ".txt", ".md"}:
+            flash("暂不支持该文件类型（仅支持 PDF/DOCX/TXT/MD）")
+            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+
+        try:
+            text = extract_resume_text(data, filename)
+        except Exception as e:
+            logger.exception("Resume extract failed")
+            flash(f"简历解析失败：{type(e).__name__}({e})")
+            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+
+        mime = str(getattr(file, "mimetype", "") or "")
+
+        # Keep behavior aligned with /admin/candidates/resume/upload:
+        # - Parse identity from resume, but DO NOT change candidate phone.
+        # - If extracted phone conflicts with current candidate phone, reject to avoid accidental overwrite.
+        # - If candidate name is unknown, fill it from resume.
+        parsed_name = ""
+        parsed_phone = ""
+        name_conf = 0
+        phone_conf = 0
+        method: dict[str, str] = {"identity": "fast", "name": "fast"}
+        try:
+            fast = parse_resume_identity_fast(text or "") or {}
+            parsed_name = str(fast.get("name") or "").strip()
+            parsed_phone = _normalize_phone(str(fast.get("phone") or "").strip())
+            conf = fast.get("confidence") or {}
+            phone_conf = _safe_int((conf.get("phone") if isinstance(conf, dict) else 0) or 0, 0)
+            name_conf = _safe_int((conf.get("name") if isinstance(conf, dict) else 0) or 0, 0)
+        except Exception:
+            parsed_name = ""
+            parsed_phone = ""
+
+        # If phone is missing/invalid, fallback to LLM (blocking), same as upload.
+        if not _is_valid_phone(parsed_phone):
+            try:
+                ident = parse_resume_identity_llm(text or "") or {}
+                parsed_name = str(ident.get("name") or "").strip()
+                parsed_phone = _normalize_phone(str(ident.get("phone") or "").strip())
+                conf2 = ident.get("confidence") or {}
+                phone_conf = _safe_int((conf2.get("phone") if isinstance(conf2, dict) else 0) or 0, 0)
+                name_conf = _safe_int((conf2.get("name") if isinstance(conf2, dict) else 0) or 0, 0)
+                method["identity"] = "llm"
+                method["name"] = "llm"
+            except Exception:
+                pass
+
+        # If we have phone but name is missing, do a small LLM call to fill name.
+        if _is_valid_phone(parsed_phone) and not _is_valid_name(parsed_name):
+            try:
+                nm = parse_resume_name_llm(text or "") or {}
+                n2 = str(nm.get("name") or "").strip()
+                n2_conf = _safe_int(nm.get("confidence") or 0, 0)
+                if _is_valid_name(n2):
+                    parsed_name = n2
+                    name_conf = max(_safe_int(name_conf, 0), _safe_int(n2_conf, 0))
+                    method["name"] = "llm"
+            except Exception:
+                pass
+
+        phone_conf = max(0, min(100, _safe_int(phone_conf, 0)))
+        name_conf = max(0, min(100, _safe_int(name_conf, 0)))
+
+        try:
+            current_phone = _normalize_phone(str(c.get("phone") or ""))
+        except Exception:
+            current_phone = ""
+        if _is_valid_phone(parsed_phone) and current_phone and parsed_phone != current_phone:
+            flash("重新上传的简历手机号与当前候选人不一致，已阻止覆盖（请确认文件是否选错）。")
+            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+
+        try:
+            current_name = str(c.get("name") or "").strip()
+        except Exception:
+            current_name = ""
+        if current_name in {"", "未知"} and _is_valid_name(parsed_name):
+            try:
+                update_candidate(candidate_id, name=parsed_name, phone=current_phone or parsed_phone)
+            except Exception:
+                pass
+
+        details: dict[str, Any] = {}
+        details_error = ""
+        try:
+            parsed_details = parse_resume_details_llm(text or "")
+            if isinstance(parsed_details, dict):
+                details = parsed_details
+        except Exception as e:
+            logger.exception("Resume details parse failed (cid=%s)", candidate_id)
+            details_error = f"{type(e).__name__}: {e}"
+
+        try:
+            projects_raw = extract_resume_section(
+                text or "",
+                section_keywords=["项目经历", "项目经验", "科研项目", "课程设计", "毕业设计", "比赛项目"],
+                stop_keywords=[
+                    "教育",
+                    "教育经历",
+                    "教育背景",
+                    "学习经历",
+                    "实习",
+                    "实习经历",
+                    "工作经历",
+                    "技能",
+                    "专业技能",
+                    "证书",
+                    "获奖",
+                    "荣誉",
+                    "自我评价",
+                    "个人总结",
+                ],
+                max_chars=6500,
+            )
+            if projects_raw:
+                details["projects_raw"] = _clean_projects_raw(projects_raw)
+        except Exception:
+            pass
+
+        details_status = "done" if details else ("failed" if details_error else "empty")
+        details_block: dict[str, Any] = {
+            "status": details_status,
+            "data": details,
+            "parsed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if details_error:
+            details_block["error"] = details_error
+
+        parsed = c.get("resume_parsed") or {}
+        if not isinstance(parsed, dict):
+            parsed = {}
+        parsed["extracted"] = {"name": parsed_name, "phone": parsed_phone}
+        parsed["confidence"] = {"name": name_conf, "phone": phone_conf}
+        parsed["method"] = method
+        parsed["source_filename"] = filename
+        parsed["source_mime"] = mime
+        parsed["details"] = details_block
+
+        try:
+            update_candidate_resume(
+                candidate_id,
+                resume_bytes=data,
+                resume_filename=filename,
+                resume_mime=mime,
+                resume_size=len(data),
+                resume_parsed=parsed,
+            )
+        except Exception:
+            logger.exception("Update candidate resume failed (cid=%s)", candidate_id)
+            flash("重新解析失败（数据库写入失败）")
+            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+
+        flash("重新上传成功")
+        return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
     # 添加候选者信息，采用post
     @app.post("/admin/candidates")
@@ -962,18 +1711,13 @@ def create_app() -> Flask:
             flash("手机号格式不正确（需为 11 位中国大陆手机号）")
             return redirect(url_for("admin_candidates"))
 
-        # Requirement:
-        # - if same (name, phone) exists within 6 months: block
-        # - if older than 6 months: overwrite that record and reset it "as new"
         existed = get_candidate_by_phone(phone)
-        if existed and str(existed.get("name") or "") == name:
-            if has_recent_created_by_phone(phone, months=6):
-                flash("候选者6个月以内已参加笔试")
-                return redirect(url_for("admin_candidates"))
+        if existed:
             try:
                 now = datetime.now(timezone.utc)
-                update_candidate(int(existed["id"]), name=name, phone=phone, created_at=now)
-                reset_candidate_exam_state(int(existed["id"]))
+                cid = int(existed["id"])
+                update_candidate(cid, name=name, phone=phone, created_at=now)
+                reset_candidate_exam_state(cid)
             except Exception:
                 flash("更新失败")
                 return redirect(url_for("admin_candidates"))
@@ -981,108 +1725,210 @@ def create_app() -> Flask:
             return redirect(url_for("admin_candidates"))
 
         try:
-            create_candidate(name=name, phone=phone)
+            cid = create_candidate(name=name, phone=phone)
         except Exception:
             flash("手机号已存在或写入失败")
             return redirect(url_for("admin_candidates"))
         flash("候选人创建成功")
         return redirect(url_for("admin_candidates"))
 
-    @app.post("/admin/candidates/upload")
+    @app.post("/admin/candidates/resume/upload")
     @admin_required
-    def admin_candidates_upload():
+    def admin_candidates_resume_upload():
         file = request.files.get("file")
-        if not file or not file.filename:
-            flash("请选择 Excel .xlsx 文件")
+        if not file or not getattr(file, "filename", ""):
+            flash("请选择简历文件")
             return redirect(url_for("admin_candidates"))
 
         try:
-            wb = openpyxl.load_workbook(BytesIO(file.read()), data_only=True)
+            data = file.read() or b""
         except Exception:
-            flash("Excel 读取失败，请确认文件格式为 .xlsx")
+            flash("简历文件读取失败")
             return redirect(url_for("admin_candidates"))
 
-        ws = wb.active
-        rows = list(ws.iter_rows(values_only=True))
-        if not rows:
-            flash("文件为空")
+        if len(data) > 10 * 1024 * 1024:
+            flash("简历文件过大（需小于等于 10MB）")
             return redirect(url_for("admin_candidates"))
 
-        def _norm_header(v):
-            return str(v or "").strip().lower()
-
-        header = [_norm_header(x) for x in (rows[0] or [])]
-        header_map = {}
-        header_like = any(h in {"name", "phone", "exam_key", "姓名", "手机号", "试卷"} for h in header)
-        start_idx = 1 if header_like else 0
-        if header_like:
-            for i, h in enumerate(header):
-                if h in {"name", "姓名"}:
-                    header_map["name"] = i
-                if h in {"phone", "手机号"}:
-                    header_map["phone"] = i
-                if h in {"exam_key", "试卷"}:
-                    header_map["exam_key"] = i
-        else:
-            header_map = {"name": 0, "phone": 1, "exam_key": 2}
-
-        records = []
-        phones_in_file: set[str] = set()
-        for r in rows[start_idx:]:
-            if not r:
-                continue
-            name = str(r[header_map["name"]] or "").strip() if header_map.get("name") is not None else ""
-            phone_raw = str(r[header_map["phone"]] or "").strip() if header_map.get("phone") is not None else ""
-            exam_key = ""
-            if header_map.get("exam_key") is not None and header_map["exam_key"] < len(r):
-                exam_key = str(r[header_map["exam_key"]] or "").strip()
-            phone = _normalize_phone(phone_raw)
-
-            if not name and not phone:
-                continue
-            if not _is_valid_name(name) or not _is_valid_phone(phone):
-                flash("文件中存在姓名/手机号格式不正确的行，请修正后重新上传")
-                return redirect(url_for("admin_candidates"))
-            if phone in phones_in_file:
-                flash("文件中存在重复手机号，请修正后重新上传")
-                return redirect(url_for("admin_candidates"))
-            phones_in_file.add(phone)
-            records.append({"name": name, "phone": phone, "exam_key": exam_key})
-
-        if not records:
-            flash("文件中未读取到有效数据")
+        filename = str(file.filename or "")
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in {".pdf", ".docx", ".txt", ".md"}:
+            flash("暂不支持该文件类型（仅支持 PDF/DOCX/TXT/MD）")
             return redirect(url_for("admin_candidates"))
-
-        # Gate: if any phone is within 6 months (by created_at), reject the whole file.
-        for r in records:
-            if has_recent_created_by_phone(r["phone"], months=6):
-                flash("文件中有候选者6个月内已参加笔试，请重新上传文件")
-                return redirect(url_for("admin_candidates"))
 
         try:
-            created, updated = bulk_import_candidates(records, overwrite_after_months=6)
+            text = extract_resume_text(data, filename)
+        except ValueError:
+            flash("暂不支持该文件类型（仅支持 PDF/DOCX/TXT/MD）")
+            return redirect(url_for("admin_candidates"))
         except RuntimeError as e:
-            if str(e) == "recent_candidate_in_file":
-                flash("文件中有候选者6个月内已参加笔试，请重新上传文件")
-                return redirect(url_for("admin_candidates"))
-            flash("导入失败")
+            flash(f"简历解析失败：{e}")
             return redirect(url_for("admin_candidates"))
-        except Exception:
-            flash("导入失败")
+        except Exception as e:
+            logger.exception("Resume extract failed")
+            flash(f"简历解析失败：{type(e).__name__}({e})")
             return redirect(url_for("admin_candidates"))
 
-        flash(f"导入成功：新增 {created} 条，覆盖更新 {updated} 条")
+        mime = str(getattr(file, "mimetype", "") or "")
+
+        def _parse_identity(t: str) -> tuple[str, str, int, int, dict[str, str]]:
+            fast = parse_resume_identity_fast(t or "") or {}
+            parsed_name = str(fast.get("name") or "").strip()
+            phone = _normalize_phone(str(fast.get("phone") or "").strip())
+            conf = fast.get("confidence") or {}
+            phone_conf = _safe_int((conf.get("phone") if isinstance(conf, dict) else 0) or 0, 0)
+            name_conf = _safe_int((conf.get("name") if isinstance(conf, dict) else 0) or 0, 0)
+            method: dict[str, str] = {"identity": "fast", "name": "fast"}
+
+            # Phone is required to locate candidate; if fast parse fails, fallback to LLM (blocking).
+            if not _is_valid_phone(phone):
+                ident = parse_resume_identity_llm(t or "") or {}
+                parsed_name = str(ident.get("name") or "").strip()
+                phone = _normalize_phone(str(ident.get("phone") or "").strip())
+                conf2 = ident.get("confidence") or {}
+                phone_conf = _safe_int((conf2.get("phone") if isinstance(conf2, dict) else 0) or 0, 0)
+                name_conf = _safe_int((conf2.get("name") if isinstance(conf2, dict) else 0) or 0, 0)
+                method["identity"] = "llm"
+                method["name"] = "llm"
+
+            # If we have phone but name is missing, do a small LLM call to fill name (still stage 1).
+            if _is_valid_phone(phone) and not _is_valid_name(parsed_name):
+                nm = parse_resume_name_llm(t or "") or {}
+                n2 = str(nm.get("name") or "").strip()
+                n2_conf = _safe_int(nm.get("confidence") or 0, 0)
+                if _is_valid_name(n2):
+                    parsed_name = n2
+                    name_conf = max(_safe_int(name_conf, 0), _safe_int(n2_conf, 0))
+                    method["name"] = "llm"
+
+            phone_conf = max(0, min(100, _safe_int(phone_conf, 0)))
+            name_conf = max(0, min(100, _safe_int(name_conf, 0)))
+            return parsed_name, phone, name_conf, phone_conf, method
+
+        parsed_name, phone, name_conf, phone_conf, method = _parse_identity(text or "")
+
+        if not _is_valid_phone(phone):
+            flash("未识别到有效手机号，无法入库（请检查简历内容或换可复制文本）")
+            return redirect(url_for("admin_candidates"))
+
+        name = parsed_name if _is_valid_name(parsed_name) else "未知"
+
+        meta = {
+            "extracted": {"name": parsed_name, "phone": phone},
+            "confidence": {"name": name_conf, "phone": phone_conf},
+            "source_filename": filename,
+            "source_mime": mime,
+            "method": method,
+            "details": {"status": "pending"},
+        }
+
+        def _upsert_candidate_by_phone(*, phone: str, name: str) -> tuple[int, bool]:
+            existed = get_candidate_by_phone(phone)
+            if existed:
+                cid = _safe_int(existed.get("id") or 0, 0)
+                try:
+                    old_name = str(existed.get("name") or "").strip()
+                except Exception:
+                    old_name = ""
+                if cid > 0 and old_name in {"", "未知"} and name != "未知":
+                    try:
+                        update_candidate(cid, name=name, phone=phone)
+                    except Exception:
+                        pass
+                return cid, False
+
+            try:
+                cid = create_candidate(name=name, phone=phone)
+                return _safe_int(cid, 0), True
+            except Exception:
+                existed2 = get_candidate_by_phone(phone) or {}
+                cid = _safe_int(existed2.get("id") or 0, 0)
+                return cid, False
+
+        cid, created = _upsert_candidate_by_phone(phone=phone, name=name)
+
+        if cid <= 0:
+            flash("简历入库失败：无法定位候选人记录（手机号可能已存在且异常）")
+            return redirect(url_for("admin_candidates"))
+
+        # Parse full details synchronously so profile page doesn't need to wait.
+        details: dict[str, Any] = {}
+        details_error = ""
+        try:
+            parsed_details = parse_resume_details_llm(text or "")
+            if isinstance(parsed_details, dict):
+                details = parsed_details
+        except Exception as e:
+            logger.exception("Resume details parse failed (cid=%s)", cid)
+            details_error = f"{type(e).__name__}: {e}"
+
+        try:
+            projects_raw = extract_resume_section(
+                text or "",
+                section_keywords=["项目经历", "项目经验", "科研项目", "课程设计", "毕业设计", "比赛项目"],
+                stop_keywords=[
+                    "教育",
+                    "教育经历",
+                    "教育背景",
+                    "学习经历",
+                    "实习",
+                    "实习经历",
+                    "工作经历",
+                    "技能",
+                    "专业技能",
+                    "证书",
+                    "获奖",
+                    "荣誉",
+                    "自我评价",
+                    "个人总结",
+                ],
+                max_chars=6500,
+            )
+            if projects_raw:
+                details["projects_raw"] = _clean_projects_raw(projects_raw)
+        except Exception:
+            pass
+
+        details_status = "done" if details else ("failed" if details_error else "empty")
+        details_block: dict[str, Any] = {
+            "status": details_status,
+            "data": details,
+            "parsed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if details_error:
+            details_block["error"] = details_error
+        meta["details"] = details_block
+
+        try:
+            update_candidate_resume(
+                cid,
+                resume_bytes=data,
+                resume_filename=filename,
+                resume_mime=mime,
+                resume_size=len(data),
+                resume_parsed=meta,
+            )
+        except Exception:
+            logger.exception("Update candidate resume failed (cid=%s)", cid)
+            flash("简历保存失败（数据库写入失败）")
+            return redirect(url_for("admin_candidates"))
+
+        msg = "简历上传成功，候选人已创建" if created else "简历上传成功，已更新候选人简历"
+        if name == "未知":
+            msg += "（提示：姓名未识别成功，请手动编辑或换可复制文本简历）"
+        if phone_conf and phone_conf < 60:
+            msg += f"（提示：手机号提取置信度较低 {phone_conf}/100，请核对）"
+        if name_conf and name_conf < 60:
+            msg += f"（提示：姓名提取置信度较低 {name_conf}/100，请核对）"
+        flash(msg)
         return redirect(url_for("admin_candidates"))
 
     # 修改候选者身份信息
     @app.get("/admin/candidates/<int:candidate_id>/edit")
     @admin_required
     def admin_candidates_edit(candidate_id: int):
-        c = get_candidate(candidate_id)
-        if not c:
-            flash("候选人不存在")
-            return redirect(url_for("admin_candidates"))
-        return render_template("admin_candidate_edit.html", c=c)
+        # Deprecated: inline editing is now done on the profile page.
+        return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
     @app.get("/admin/candidates/<int:candidate_id>/attempt")
     @admin_required
@@ -1109,41 +1955,53 @@ def create_app() -> Flask:
             pass
         return render_template("admin_candidate_attempt.html", archive=archive)
 
-    # 修改候选人信息
-    @app.post("/admin/candidates/<int:candidate_id>/edit")
+    @app.get("/admin/candidates/<int:candidate_id>/attempts/<path:archive_name>")
     @admin_required
-    def admin_candidates_edit_post(candidate_id: int):
+    def admin_candidate_attempt_by_archive(candidate_id: int, archive_name: str):
         c = get_candidate(candidate_id)
         if not c:
             flash("候选人不存在")
             return redirect(url_for("admin_candidates"))
 
-        created_at_raw = (request.form.get("created_at") or "").strip()
-        name = (request.form.get("name") or "").strip()
-        phone = _normalize_phone(request.form.get("phone") or "")
-        if not _is_valid_name(name):
-            flash("姓名格式不正确（2-20位中文/英文，可含空格/·）")
-            return redirect(url_for("admin_candidates_edit", candidate_id=candidate_id))
-        if not _is_valid_phone(phone):
-            flash("手机号格式不正确（需为 11 位中国大陆手机号）")
-            return redirect(url_for("admin_candidates_edit", candidate_id=candidate_id))
+        phone = str(c.get("phone") or "").strip()
+        name = os.path.basename(str(archive_name or "").strip())
+        if not name or name != archive_name or "/" in name or "\\" in name:
+            abort(404)
+        if not phone or f"_{phone}_" not in name:
+            abort(404)
 
-        created_at = None
-        if created_at_raw:
-            try:
-                # datetime-local has no timezone; interpret as UTC for consistency.
-                created_at = datetime.fromisoformat(created_at_raw).replace(tzinfo=timezone.utc)
-            except Exception:
-                flash("创建时间格式不正确")
-                return redirect(url_for("admin_candidates_edit", candidate_id=candidate_id))
+        p = STORAGE_DIR / "archives" / name
+        try:
+            if not p.exists() or not p.is_file():
+                abort(404)
+        except Exception:
+            abort(404)
 
         try:
-            update_candidate(candidate_id, name=name, phone=phone, created_at=created_at)
+            archive = read_json(p)
         except Exception:
-            flash("更新失败：手机号可能已存在")
-            return redirect(url_for("admin_candidates_edit", candidate_id=candidate_id))
-        flash("候选人已更新")
-        return redirect(url_for("admin_candidates"))
+            flash("答题归档读取失败")
+            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+        try:
+            # Extra safety: ensure archive belongs to the same candidate.
+            cand = archive.get("candidate") or {}
+            if str(cand.get("phone") or "").strip() != phone:
+                abort(404)
+        except Exception:
+            abort(404)
+
+        try:
+            archive = _augment_archive_with_spec(archive)
+        except Exception:
+            pass
+        return render_template("admin_candidate_attempt.html", archive=archive)
+
+    # 修改候选人信息
+    @app.post("/admin/candidates/<int:candidate_id>/edit")
+    @admin_required
+    def admin_candidates_edit_post(candidate_id: int):
+        # Deprecated: inline editing is now done on the profile page.
+        return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
     # 删除候选者身份信息
     @app.post("/admin/candidates/<int:candidate_id>/delete")

@@ -16,10 +16,6 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
-      .q { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 14px; padding: 12px; margin: 12px 0; background: rgba(15, 23, 42, 0.02); }
-      .muted { color: var(--muted); }
-      .opt { display:block; margin: 8px 0; }
-      .opt input { width: auto; margin-right: 8px; }
       .md { white-space: normal; }
       .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
 
@@ -90,31 +86,50 @@
           <form id="examForm">
             <input type="hidden" name="token" value="{{ token }}" />
             {% for q in spec.questions %}
-              <div class="q" data-qid="{{ q.qid }}">
-                <div class="flex">
-                  <div><b>{{ q.label or q.qid }}</b></div>
-                  <div class="muted">({{ q.max_points }}分)</div>
-                </div>
-                <div class="md" style="margin: 8px 0 0;">{{ q.stem_md | md }}</div>
+              <div class="exam-q" data-qid="{{ q.qid }}">
+                <div class="exam-q__inner">
+                  <div class="exam-q__head">
+                    <div class="exam-q__head-left">
+                      <span class="exam-q__qid">{{ q.label or q.qid }}</span>
+                      {% set type_label_map = {'single':'单选','multiple':'多选','short':'简答','unknown':'其他'} %}
+                      <span class="exam-tag type">{{ type_label_map.get(q.type, q.type) }}</span>
+                    </div>
+                    <span class="exam-tag points">{{ q.max_points }}分</span>
+                  </div>
 
-                {% if q.type == 'single' %}
-                  {% for o in q.options %}
-                    <label class="opt">
-                      <input type="radio" name="{{ q.qid }}" value="{{ o.key }}" {% if answers.get(q.qid)==o.key %}checked{% endif %} />
-                      {{ o.key }}) {{ o.text }}
-                    </label>
-                  {% endfor %}
-                {% elif q.type == 'multiple' %}
-                  {% set chosen = answers.get(q.qid) or [] %}
-                  {% for o in q.options %}
-                    <label class="opt">
-                      <input type="checkbox" name="{{ q.qid }}[]" value="{{ o.key }}" {% if o.key in chosen %}checked{% endif %} />
-                      {{ o.key }}) {{ o.text }}
-                    </label>
-                  {% endfor %}
-                {% else %}
-                  <textarea name="{{ q.qid }}" class="input">{{ answers.get(q.qid) or "" }}</textarea>
-                {% endif %}
+                  <div class="exam-q__body">
+                    <div class="md">{{ q.stem_md | md }}</div>
+
+                    {% if q.type == 'single' %}
+                      <div class="exam-options" aria-label="选项">
+                        {% for o in q.options %}
+                          <label class="exam-opt">
+                            <input type="radio" name="{{ q.qid }}" value="{{ o.key }}" {% if answers.get(q.qid)==o.key %}checked{% endif %} />
+                            <div class="exam-opt__box">
+                              <div class="exam-opt__key">{{ o.key }}</div>
+                              <div class="exam-opt__text">{{ o.text }}</div>
+                            </div>
+                          </label>
+                        {% endfor %}
+                      </div>
+                    {% elif q.type == 'multiple' %}
+                      {% set chosen = answers.get(q.qid) or [] %}
+                      <div class="exam-options" aria-label="选项">
+                        {% for o in q.options %}
+                          <label class="exam-opt">
+                            <input type="checkbox" name="{{ q.qid }}[]" value="{{ o.key }}" {% if o.key in chosen %}checked{% endif %} />
+                            <div class="exam-opt__box">
+                              <div class="exam-opt__key">{{ o.key }}</div>
+                              <div class="exam-opt__text">{{ o.text }}</div>
+                            </div>
+                          </label>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <textarea name="{{ q.qid }}" class="exam-short" placeholder="请输入你的回答">{{ answers.get(q.qid) or "" }}</textarea>
+                    {% endif %}
+                  </div>
+                </div>
               </div>
             {% endfor %}
           </form>
@@ -206,7 +221,7 @@
       const examFormEl = document.getElementById('examForm');
 
       examFormEl.addEventListener('change', (e) => {
-        const qBox = e.target.closest('.q');
+        const qBox = e.target.closest('.exam-q');
         if (!qBox) return;
         const token = "{{ token }}";
         const { qid, fd } = collectAnswerForQBox(qBox);
@@ -217,7 +232,7 @@
       const debounceByQid = new Map();
       examFormEl.addEventListener('input', (e) => {
         if (!e.target || e.target.tagName !== 'TEXTAREA') return;
-        const qBox = e.target.closest('.q');
+        const qBox = e.target.closest('.exam-q');
         if (!qBox) return;
         const token = "{{ token }}";
         const { qid } = collectAnswerForQBox(qBox);
@@ -231,7 +246,7 @@
       });
 
       function collectAllAnswersObject() {
-        const qBoxes = Array.from(document.querySelectorAll('.q[data-qid]'));
+        const qBoxes = Array.from(document.querySelectorAll('.exam-q[data-qid]'));
         const out = {};
         for (const qBox of qBoxes) {
           const qid = qBox.dataset.qid;

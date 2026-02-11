@@ -36,9 +36,13 @@
         background: rgba(255, 255, 255, 0.92);
       }
 
-      .exam-search { margin: 0; display: flex; gap: 10px; align-items: flex-end; flex: 1; min-width: 280px; }
-      .exam-search { flex: 0 1 420px; max-width: 420px; min-width: 260px; }
-      .exam-search .field { margin: 0; flex: 1; min-width: 240px; }
+      .exam-search { margin: 0; display: flex; gap: 10px; align-items: flex-end; flex: 1; min-width: 280px; flex-wrap: wrap; }
+      .exam-search { max-width: 100%; }
+      /* Make the search box about quarter-width (while staying responsive). */
+      .exam-search .field { margin: 0; flex: 0 1 360px; min-width: 220px; max-width: 25%; }
+      @media (max-width: 980px) { .exam-search .field { max-width: 100%; } }
+
+      /* NOTE: Standard pager + fixed-height surface are defined in static/ui.css */
 
       tr.row-link { cursor: pointer; }
       tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
@@ -49,11 +53,15 @@
       table.exam-table { table-layout: fixed; width: 100%; }
       table.exam-table th, table.exam-table td { vertical-align: middle; }
       table.exam-table th { white-space: nowrap; }
+      table.exam-table th, table.exam-table td { padding-left: 12px; padding-right: 12px; }
+      /* Tighten spacing between ID and EXAM_KEY (keep other columns unchanged). */
+      th.col-id, td.col-id { padding-right: 8px; }
+      th.col-exam-key, td.col-key { text-align: left; padding-left: 8px; padding-right: 12px; }
       td.col-key, td.col-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      td.col-key code { white-space: nowrap; }
+      td.col-key .exam-key { white-space: nowrap; display: block; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
       th.col-count, td.col-count { text-align: center; white-space: nowrap; }
-      th.col-title, td.col-title { padding-left: 3cm; }
-      .td-action { text-align: right; }
+      th.col-updated, td.col-updated { text-align: center; white-space: nowrap; }
+      th.col-actions, td.col-actions { white-space: nowrap; text-align: right; min-width: 160px; }
       .btn-icon {
         min-width: 64px;
         padding: 9px 12px;
@@ -61,10 +69,20 @@
         font-size: 18px;
         line-height: 1;
       }
+      .exam-actions { display: inline-flex; gap: 12px; align-items: center; justify-content: flex-end; }
+      .exam-actions .btn { padding: 7px 10px; font-weight: 800; }
+      .exam-actions .btn-icon { min-width: 44px; padding: 7px 0; }
 
       .assign-form { max-width: 100%; margin: 0; }
       #tab-assign .assign-form { margin-top: 10px; }
-      .assign-attempts { max-width: 100%; margin: 14px 0 0; }
+      .assign-attempts {
+        max-width: 100%;
+        margin: 14px 0 0;
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
       .table-scroll { overflow-x: auto; }
       .attempt-table { width: 100%; min-width: 980px; font-size: 16px; }
       .attempt-table th, .attempt-table td { vertical-align: middle; }
@@ -105,7 +123,7 @@
       <div class="flash">{{ m }}</div>
       {% endfor %}
 
-      <div class="surface" role="region" aria-label="后台内容">
+      <div class="surface admin-surface" role="region" aria-label="后台内容">
         <section id="tab-exams" class="panel active" role="tabpanel" aria-label="试卷管理">
           <div class="panel-head">
             <div>
@@ -126,52 +144,122 @@
             <form class="exam-search" method="get" action="/admin">
               <div class="field">
                 <label for="exam_q">搜索试卷</label>
-                <input id="exam_q" class="input" name="exam_q" value="{{ exam_q or '' }}" placeholder="exam_key/标题" autocomplete="off" />
+                <input id="exam_q" class="input" name="exam_q" value="{{ exam_q or '' }}" placeholder="id / exam_key / 标题" autocomplete="off" />
               </div>
             </form>
           </div>
 
-          <table class="exam-table" aria-label="试卷列表">
-            <thead>
-              <tr>
-                <th style="width: 70px;">id</th>
-                <th style="width: 220px;">exam_key</th>
-                <th class="col-title">标题</th>
-                <th class="col-count" style="width: 90px;">题数</th>
-                <th style="width: 160px;"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for e in exams_page %}
-              <tr class="row-link" data-href="/admin/exams/{{ e.id }}">
-                <td>{{ e.id }}</td>
-                <td class="col-key"><code>{{ e.exam_key }}</code></td>
-                <td class="col-title">{{ e.title }}</td>
-                <td class="col-count">{{ e.count }}</td>
-                <td class="td-action" style="white-space: nowrap;">
-                  <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该试卷？删除后候选人关联试卷将显示为“已删除”，但已归档答题仍可查看。');">
-                    <button class="btn btn-danger" type="submit">删除</button>
-                  </form>
-                  <a class="btn btn-primary btn-icon" href="/admin?assign_exam_key={{ e.exam_key }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+          <div class="table-scroll">
+            <table class="exam-table" aria-label="试卷列表">
+              <colgroup>
+                <col style="width: 70px;" />
+                <col style="width: 220px;" />
+                <col style="width: 260px;" />
+                <col style="width: 80px;" />
+                <col style="width: 200px;" />
+                <col />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th class="col-id">ID</th>
+                  <th class="col-exam-key">EXAM_KEY</th>
+                  <th>标题</th>
+                  <th class="col-count">题数</th>
+                  <th class="col-updated">更新时间</th>
+                  <th class="col-actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for e in exams_page %}
+                <tr class="row-link" data-href="/admin/exams/{{ e.id }}">
+                  <td class="col-id">{{ e.id }}</td>
+                  <td class="col-key"><span class="exam-key">{{ e.exam_key }}</span></td>
+                  <td class="col-title">{{ e.title }}</td>
+                  <td class="col-count">{{ e.count }}</td>
+                  <td class="col-updated">{{ e.updated_at.strftime("%Y-%m-%d %H:%M:%S") if e.updated_at else "" }}</td>
+                  <td class="col-actions">
+                    <div class="exam-actions">
+                      <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该试卷？删除后候选人关联试卷将显示为“已删除”，但已归档答题仍可查看。');">
+                        <button class="btn btn-danger" type="submit">删除</button>
+                      </form>
+                      <a class="btn btn-primary btn-icon" href="/admin?assign_exam_key={{ e.exam_key }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
 
-          {% if total_exam_pages and total_exam_pages > 1 %}
-          <div class="flex" style="justify-content: space-between; margin-top: 12px;">
-            <div class="sub" style="margin:0;">共 {{ total_exams }} 个 · 第 {{ exam_page }} / {{ total_exam_pages }} 页</div>
-            <div class="flex">
+          {% set exams_qs_extra = "" %}
+          {% if exam_q %}{% set exams_qs_extra = exams_qs_extra ~ "&exam_q=" ~ (exam_q|urlencode) %}{% endif %}
+          {% set total_exam_pages_display = total_exam_pages if total_exam_pages and total_exam_pages > 0 else 1 %}
+          <div class="std-pager" aria-label="试卷分页">
+            <div class="per-page">
+              <span>20条/页</span>
+            </div>
+
+            <div class="pages" aria-label="页码">
               {% if exam_page > 1 %}
-                <a class="btn" href="/admin?exam_page={{ exam_page - 1 }}#tab-exams">上一页</a>
+                <a class="page-btn" href="/admin?exam_page={{ exam_page - 1 }}{{ exams_qs_extra }}#tab-exams" aria-label="上一页">‹</a>
+              {% else %}
+                <span class="page-btn" style="opacity:.45; pointer-events:none;">‹</span>
               {% endif %}
-              {% if exam_page < total_exam_pages %}
-                <a class="btn" href="/admin?exam_page={{ exam_page + 1 }}#tab-exams">下一页</a>
+
+              {% set total = total_exam_pages_display %}
+              {% set cur = exam_page %}
+              {% if total <= 9 %}
+                {% for p in range(1, total + 1) %}
+                  {% if p == cur %}
+                    <span class="page-btn active">{{ p }}</span>
+                  {% else %}
+                    <a class="page-btn" href="/admin?exam_page={{ p }}{{ exams_qs_extra }}#tab-exams">{{ p }}</a>
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                {% set start = cur - 2 %}
+                {% set end = cur + 2 %}
+                {% if start < 2 %}{% set start = 2 %}{% endif %}
+                {% if end > total - 1 %}{% set end = total - 1 %}{% endif %}
+                {% if cur <= 4 %}{% set start = 2 %}{% set end = 6 %}{% endif %}
+                {% if cur >= total - 3 %}{% set start = total - 5 %}{% set end = total - 1 %}{% endif %}
+
+                {% if 1 == cur %}
+                  <span class="page-btn active">1</span>
+                {% else %}
+                  <a class="page-btn" href="/admin?exam_page=1{{ exams_qs_extra }}#tab-exams">1</a>
+                {% endif %}
+
+                {% if start > 2 %}<span class="dots">…</span>{% endif %}
+                {% for p in range(start, end + 1) %}
+                  {% if p == cur %}
+                    <span class="page-btn active">{{ p }}</span>
+                  {% else %}
+                    <a class="page-btn" href="/admin?exam_page={{ p }}{{ exams_qs_extra }}#tab-exams">{{ p }}</a>
+                  {% endif %}
+                {% endfor %}
+                {% if end < total - 1 %}<span class="dots">…</span>{% endif %}
+
+                {% if total == cur %}
+                  <span class="page-btn active">{{ total }}</span>
+                {% else %}
+                  <a class="page-btn" href="/admin?exam_page={{ total }}{{ exams_qs_extra }}#tab-exams">{{ total }}</a>
+                {% endif %}
+              {% endif %}
+
+              {% if exam_page < total_exam_pages_display %}
+                <a class="page-btn" href="/admin?exam_page={{ exam_page + 1 }}{{ exams_qs_extra }}#tab-exams" aria-label="下一页">›</a>
+              {% else %}
+                <span class="page-btn" style="opacity:.45; pointer-events:none;">›</span>
               {% endif %}
             </div>
+
+            <div class="jump" aria-label="跳转页">
+              <span>跳转至</span>
+              <input id="exam_page_jump" type="number" min="1" max="{{ total_exam_pages_display }}" placeholder="{{ exam_page }}" inputmode="numeric" />
+              <button class="btn" type="button" id="exam_page_go">前往</button>
+            </div>
           </div>
-          {% endif %}
         </section>
 
         <section id="tab-assign" class="panel" role="tabpanel" aria-label="答题邀请">
@@ -223,20 +311,14 @@
 
           <div class="assign-attempts" role="region" aria-label="候选人答题情况">
             <div class="section-head" style="margin: 0 0 10px;">
-              <div>
+              <div style="display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap;">
                 <h3 class="title" style="font-size:16px; margin:0;">候选人答题情况</h3>
-              </div>
-              <form class="exam-search" method="get" action="/admin#tab-assign" style="margin:0;">
-                <div class="field">
-                  <label for="attempt_q">查询</label>
-                  <input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷" />
+                <div class="exam-search" style="margin:0; flex: 0 1 420px; max-width: 420px; min-width: 260px;">
+                  <div class="field" style="margin:0;">
+                    <input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷" autocomplete="off" aria-label="查询（姓名/电话/试卷）" />
+                  </div>
                 </div>
-                {% if exam_q %}<input type="hidden" name="exam_q" value="{{ exam_q }}" />{% endif %}
-                {% if exam_page %}<input type="hidden" name="exam_page" value="{{ exam_page }}" />{% endif %}
-                {% if assign_exam_key %}<input type="hidden" name="assign_exam_key" value="{{ assign_exam_key }}" />{% endif %}
-                {% if assign_candidate_id %}<input type="hidden" name="assign_candidate_id" value="{{ assign_candidate_id }}" />{% endif %}
-                <button class="btn" type="submit">搜索</button>
-              </form>
+              </div>
             </div>
 
             <div class="table-scroll">
@@ -266,6 +348,79 @@
                   {% endfor %}
                 </tbody>
               </table>
+            </div>
+
+            {% set attempt_qs_extra = "" %}
+            {% if exam_q %}{% set attempt_qs_extra = attempt_qs_extra ~ "&exam_q=" ~ (exam_q|urlencode) %}{% endif %}
+            {% if exam_page %}{% set attempt_qs_extra = attempt_qs_extra ~ "&exam_page=" ~ exam_page %}{% endif %}
+            {% if attempt_q %}{% set attempt_qs_extra = attempt_qs_extra ~ "&attempt_q=" ~ (attempt_q|urlencode) %}{% endif %}
+
+            {% set total_attempt_pages_display = total_attempt_pages if total_attempt_pages and total_attempt_pages > 0 else 1 %}
+            <div class="std-pager" aria-label="答题情况分页">
+              <div class="per-page">
+                <span>20条/页</span>
+              </div>
+
+              <div class="pages" aria-label="页码">
+                {% if attempt_page > 1 %}
+                  <a class="page-btn" href="/admin?attempt_page={{ attempt_page - 1 }}{{ attempt_qs_extra }}#tab-assign" aria-label="上一页">‹</a>
+                {% else %}
+                  <span class="page-btn" style="opacity:.45; pointer-events:none;">‹</span>
+                {% endif %}
+
+                {% set totalp = total_attempt_pages_display %}
+                {% set cur = attempt_page %}
+                {% if totalp <= 9 %}
+                  {% for p in range(1, totalp + 1) %}
+                    {% if p == cur %}
+                      <span class="page-btn active">{{ p }}</span>
+                    {% else %}
+                      <a class="page-btn" href="/admin?attempt_page={{ p }}{{ attempt_qs_extra }}#tab-assign">{{ p }}</a>
+                    {% endif %}
+                  {% endfor %}
+                {% else %}
+                  {% set start = cur - 2 %}
+                  {% set end = cur + 2 %}
+                  {% if start < 2 %}{% set start = 2 %}{% endif %}
+                  {% if end > totalp - 1 %}{% set end = totalp - 1 %}{% endif %}
+                  {% if cur <= 4 %}{% set start = 2 %}{% set end = 6 %}{% endif %}
+                  {% if cur >= totalp - 3 %}{% set start = totalp - 5 %}{% set end = totalp - 1 %}{% endif %}
+
+                  {% if 1 == cur %}
+                    <span class="page-btn active">1</span>
+                  {% else %}
+                    <a class="page-btn" href="/admin?attempt_page=1{{ attempt_qs_extra }}#tab-assign">1</a>
+                  {% endif %}
+
+                  {% if start > 2 %}<span class="dots">…</span>{% endif %}
+                  {% for p in range(start, end + 1) %}
+                    {% if p == cur %}
+                      <span class="page-btn active">{{ p }}</span>
+                    {% else %}
+                      <a class="page-btn" href="/admin?attempt_page={{ p }}{{ attempt_qs_extra }}#tab-assign">{{ p }}</a>
+                    {% endif %}
+                  {% endfor %}
+                  {% if end < totalp - 1 %}<span class="dots">…</span>{% endif %}
+
+                  {% if totalp == cur %}
+                    <span class="page-btn active">{{ totalp }}</span>
+                  {% else %}
+                    <a class="page-btn" href="/admin?attempt_page={{ totalp }}{{ attempt_qs_extra }}#tab-assign">{{ totalp }}</a>
+                  {% endif %}
+                {% endif %}
+
+                {% if attempt_page < total_attempt_pages_display %}
+                  <a class="page-btn" href="/admin?attempt_page={{ attempt_page + 1 }}{{ attempt_qs_extra }}#tab-assign" aria-label="下一页">›</a>
+                {% else %}
+                  <span class="page-btn" style="opacity:.45; pointer-events:none;">›</span>
+                {% endif %}
+              </div>
+
+              <div class="jump" aria-label="跳转页">
+                <span>跳转至</span>
+                <input id="attempt_page_jump" type="number" min="1" max="{{ total_attempt_pages_display }}" placeholder="{{ attempt_page }}" inputmode="numeric" />
+                <button class="btn" type="button" id="attempt_page_go">前往</button>
+              </div>
             </div>
           </div>
         </section>
@@ -318,6 +473,8 @@
 
       // Live fuzzy search (debounced) for exams.
       const examQ = document.getElementById("exam_q");
+      const examJump = document.getElementById("exam_page_jump");
+      const examGo = document.getElementById("exam_page_go");
       if (examQ && examQ.form) {
         let t = null;
         examQ.addEventListener("input", () => {
@@ -331,6 +488,56 @@
             u.hash = "#tab-exams";
             window.location.href = u.toString();
           }, 300);
+        });
+      }
+      if (examGo && examJump) {
+        const go = () => {
+          const raw = (examJump.value || "").trim();
+          const n = parseInt(raw, 10);
+          if (!Number.isFinite(n) || n <= 0) return;
+          const u = new URL(window.location.href);
+          u.searchParams.set("exam_page", String(n));
+          u.hash = "#tab-exams";
+          window.location.href = u.toString();
+        };
+        examGo.addEventListener("click", go);
+        examJump.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") go();
+        });
+      }
+
+      // Live fuzzy search (debounced) for attempt table (name/phone/exam).
+      const attemptQ = document.getElementById("attempt_q");
+      const attemptJump = document.getElementById("attempt_page_jump");
+      const attemptGo = document.getElementById("attempt_page_go");
+      if (attemptQ) {
+        let t3 = null;
+        attemptQ.addEventListener("input", () => {
+          if (t3) window.clearTimeout(t3);
+          t3 = window.setTimeout(() => {
+            const v = (attemptQ.value || "").trim();
+            const u = new URL(window.location.href);
+            if (v) u.searchParams.set("attempt_q", v);
+            else u.searchParams.delete("attempt_q");
+            u.searchParams.delete("attempt_page");
+            u.hash = "#tab-assign";
+            window.location.href = u.toString();
+          }, 260);
+        });
+      }
+      if (attemptGo && attemptJump) {
+        const go2 = () => {
+          const raw = (attemptJump.value || "").trim();
+          const n = parseInt(raw, 10);
+          if (!Number.isFinite(n) || n <= 0) return;
+          const u = new URL(window.location.href);
+          u.searchParams.set("attempt_page", String(n));
+          u.hash = "#tab-assign";
+          window.location.href = u.toString();
+        };
+        attemptGo.addEventListener("click", go2);
+        attemptJump.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") go2();
         });
       }
 

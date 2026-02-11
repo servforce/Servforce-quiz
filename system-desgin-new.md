@@ -432,7 +432,10 @@ CREATE INDEX IF NOT EXISTS idx_candidate_status ON candidate(status);
 - `ADMIN_USERNAME=...`
 - `ADMIN_PASSWORD_HASH=...`
 - `STORAGE_DIR=.../storage`
-- `LLM_PROVIDER=openai|azure|mock`
+- 豆包（火山方舟 / OpenAI 兼容 HTTP）：
+  - `DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3`
+  - `DOUBAO_API_KEY=...`（或 `ARK_API_KEY=...`）
+  - `DOUBAO_MODEL=...`
 - `OPENAI_API_KEY=...`
 
 ### 11.2 进程

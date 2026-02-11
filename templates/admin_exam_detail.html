@@ -16,13 +16,9 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
-      .q { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 14px; padding: 12px; margin: 10px 0; background: rgba(15, 23, 42, 0.02); }
-      .muted { color: var(--muted); }
       pre { white-space: pre-wrap; margin: 8px 0 0; }
       .md { white-space: normal; }
       .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
-      .q ul { list-style: none; padding-left: 0; margin: 8px 0 0; }
-      .q li { margin: 2px 0; }
       .exam-tabs {
         display: inline-flex;
         gap: 6px;
@@ -31,6 +27,9 @@
         background: transparent;
       }
       .exam-tabs a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
         padding: 10px 12px;
         border-radius: 12px;
         font-weight: 700;
@@ -40,6 +39,7 @@
         border: 1px solid transparent;
         background: transparent;
       }
+      .exam-tabs .ico { font-size: 14px; line-height: 1; opacity: 0.9; }
       .exam-tabs a.active {
         background: rgba(37, 99, 235, 0.10);
         border-color: rgba(37, 99, 235, 0.22);
@@ -57,12 +57,14 @@
       .exam-head .left { min-width: 0; }
       .exam-head .center { justify-self: center; }
       .exam-head .right { justify-self: end; }
+      .head-actions { display: inline-flex; align-items: center; gap: 10px; }
+      .head-actions .btn-eq { min-width: 64px; text-align: center; }
 
       .section.compact { padding-bottom: 8px; }
       .section.compact .section-head { margin-bottom: 0; }
 
       .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-      .exam-meta-title h2 { margin: 0; font-size: 18px; }
+      .exam-meta-title h2 { margin: 0; font-size: 30px; font-weight: 950; letter-spacing: -0.3px; line-height: 1.12; }
       .exam-meta-desc { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
       .exam-meta { text-align: center; }
       .exam-meta-title { justify-content: center; }
@@ -85,7 +87,7 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="container topbar-inner">
+      <div class="container topbar-inner exam-frame">
         <div class="brand" aria-label="Servforce Quiz 管理后台">
           <span class="brand-badge" aria-hidden="true"></span>
           <span>Servforce Quiz</span>
@@ -101,7 +103,7 @@
       </div>
     </header>
 
-    <main class="container page">
+    <main class="container page exam-frame">
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
       <div class="surface" role="region" aria-label="试卷详情">
         <section class="section compact">
@@ -110,13 +112,16 @@
               <div class="left"></div>
               <div class="center">
                 <div class="exam-tabs" aria-label="试卷页签">
-                  <a href="/admin/exams/{{ exam_href_id }}/edit">修改试卷</a>
-                  <a class="active" href="/admin/exams/{{ exam_href_id }}">试卷详情</a>
-                  <a href="/admin/exams/{{ exam_href_id }}/paper">答题试卷</a>
+                  <a class="active" href="/admin/exams/{{ exam_href_id }}"><span class="ico" aria-hidden="true">👁</span>预览</a>
+                  <a href="/admin/exams/{{ exam_href_id }}/paper"><span class="ico" aria-hidden="true">👥</span>候选者视图</a>
+                  <a href="/admin/exams/{{ exam_href_id }}/edit"><span class="ico" aria-hidden="true">✎</span>编辑</a>
                 </div>
               </div>
               <div class="right">
-                <a class="btn btn-primary" href="/admin#tab-exams">返回</a>
+                <div class="head-actions">
+                  <a class="btn btn-primary btn-eq" href="/admin?assign_exam_key={{ exam_key }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
+                  <a class="btn btn-primary btn-eq" href="/admin#tab-exams">返回</a>
+                </div>
               </div>
             </div>
           </div>
@@ -143,26 +148,43 @@
           </div>
 
           <h3 class="title" style="font-size:16px; margin-bottom: 10px;">题目</h3>
-          {% for q in spec.questions %}
-            <div class="q">
-              <div class="flex">
-                <div><b>{{ q.label or q.qid }}</b></div>
-                <div><code>{{ q.type }}</code></div>
-                <div class="muted">{{ q.max_points }}分</div>
+          {% set type_label_map = {'single':'单选','multiple':'多选','short':'简答','unknown':'其他'} %}
+          <div class="exam-question-list">
+            {% for q in spec.questions %}
+              <div class="exam-q" data-qid="{{ q.qid }}">
+                <div class="exam-q__inner">
+                  <div class="exam-q__head">
+                    <div class="exam-q__head-left">
+                      <span class="exam-q__qid">{{ q.label or q.qid }}</span>
+                      <span class="exam-tag type">{{ type_label_map.get(q.type, q.type) }}</span>
+                    </div>
+                    <span class="exam-tag points">{{ q.max_points }}分</span>
+                  </div>
+
+                  <div class="exam-q__body">
+                    <div class="md">{{ q.stem_md | md }}</div>
+                    {% if q.options %}
+                      <div class="exam-options" aria-label="选项">
+                        {% for o in q.options %}
+                          <div class="exam-opt__box {% if o.correct %}correct{% endif %}">
+                            <div class="exam-opt__key">{{ o.key }}</div>
+                            <div class="exam-opt__text">{{ o.text }}</div>
+                            {% if o.correct %}<div class="exam-opt__mark">正确</div>{% endif %}
+                          </div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                    {% if q.rubric %}
+                      <details class="exam-rubric">
+                        <summary>评分标准</summary>
+                        <pre>{{ q.rubric }}</pre>
+                      </details>
+                    {% endif %}
+                  </div>
+                </div>
               </div>
-              <div class="md">{{ q.stem_md | md }}</div>
-              {% if q.options %}
-                <ul>
-                {% for o in q.options %}
-                  <li>{{ o.key }}) {{ o.text }} {% if o.correct %}<b>（正确）</b>{% endif %}</li>
-                {% endfor %}
-                </ul>
-              {% endif %}
-              {% if q.rubric %}
-                <details><summary>rubric</summary><pre>{{ q.rubric }}</pre></details>
-              {% endif %}
-            </div>
-          {% endfor %}
+            {% endfor %}
+          </div>
         </section>
       </div>
     </main>

@@ -23,13 +23,18 @@ html {
     radial-gradient(900px 500px at 90% 20%, rgba(124, 58, 237, 0.5), transparent 55%),
     linear-gradient(180deg, var(--bg1), var(--bg2));
   background-attachment: fixed, fixed, fixed;
+  /* Keep layout width stable across pages (avoid "narrower" pages when scrollbars appear). */
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
 }
 body {
-  min-height: 100%;
+  min-height: 100vh;
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei";
   color: var(--text);
   background: transparent;
+  display: flex;
+  flex-direction: column;
 }
 
 a { color: var(--brand); text-decoration: none; }
@@ -41,8 +46,57 @@ code {
   border-radius: 10px;
 }
 
-.container { max-width: 1200px; margin: 0 auto; padding: 0 18px; }
-.page { padding: 18px 0 36px; }
+/* Make the main white surface closer to the red-frame size in screenshots. */
+.container { max-width: 1040px; margin: 0 auto; padding: 0 18px; }
+.page {
+  padding: 18px 0 36px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.page > .surface {
+  flex: 1;
+  /* Fill the viewport by default, but allow growing with content. */
+  min-height: calc(100vh - 58px - 18px - 36px);
+}
+.container.exam-frame {
+  /* Fixed "red-frame" width for exam pages (edit/detail/paper). */
+  max-width: 1080px;
+  width: min(1080px, 100%);
+}
+.admin-surface {
+  /* Fill the viewport height, but allow the page to scroll when content grows. */
+  display: flex;
+  flex-direction: column;
+}
+.admin-surface > .section {
+  flex: 0 0 auto;
+}
+.admin-surface > .section:last-child {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.admin-surface .table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+.js .admin-surface .panel { display: none; }
+.js .admin-surface .panel.active {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: visible;
+  flex-direction: column;
+}
+.admin-surface .std-pager {
+  /* Keep pager pinned to the bottom-right while scrolling the page. */
+  position: sticky;
+  bottom: 12px;
+}
 
 /* Topbar */
 .topbar {
@@ -108,6 +162,15 @@ code {
   box-shadow: var(--shadow);
   overflow: hidden;
 }
+.page > .surface {
+  display: flex;
+  flex-direction: column;
+}
+.page > .surface > .section:last-child {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
 .section { padding: 16px; border-bottom: 1px solid rgba(15, 23, 42, 0.10); }
 .section:last-child { border-bottom: 0; }
 .section-head {
@@ -119,6 +182,181 @@ code {
 }
 .title { margin: 0; font-size: 18px; }
 .sub { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.muted { color: var(--muted); }
+
+/* Exam question UI (admin preview / candidate view / public exam). */
+.exam-question-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 14px;
+}
+.exam-q {
+  position: relative;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+.exam-q::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: rgba(37, 99, 235, 0.55);
+}
+.exam-q:hover { border-color: rgba(37, 99, 235, 0.22); }
+.exam-q__inner { padding: 14px 14px 16px; }
+.exam-q__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+.exam-q__head-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.exam-q__qid {
+  font-weight: 950;
+  font-size: 18px;
+  letter-spacing: -0.2px;
+}
+.exam-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.02);
+  font-weight: 900;
+  font-size: 12px;
+  white-space: nowrap;
+  color: rgba(15, 23, 42, 0.82);
+}
+.exam-tag.type {
+  border-color: rgba(37, 99, 235, 0.26);
+  background: rgba(37, 99, 235, 0.10);
+  color: #1d4ed8;
+}
+.exam-tag.points {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.03);
+  font-size: 16px;
+  padding: 7px 16px;
+}
+.exam-q__body { padding-top: 12px; }
+.exam-q__body .md { line-height: 1.75; }
+
+.exam-options {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+.exam-opt {
+  position: relative;
+  display: block;
+}
+.exam-opt > input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.exam-opt__box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.92);
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.exam-opt__box:hover { background: rgba(255, 255, 255, 0.98); }
+.exam-opt__key {
+  flex: 0 0 auto;
+  min-width: 34px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(15, 23, 42, 0.03);
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.86);
+}
+.exam-opt__text { flex: 1 1 auto; min-width: 0; line-height: 1.65; }
+.exam-opt__mark {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(22, 163, 74, 0.22);
+  background: rgba(22, 163, 74, 0.10);
+  color: #166534;
+  font-weight: 950;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.exam-opt__box.correct {
+  border-color: rgba(22, 163, 74, 0.26);
+  background: rgba(22, 163, 74, 0.06);
+}
+.exam-opt > input:checked + .exam-opt__box {
+  border-color: rgba(37, 99, 235, 0.30);
+  background: rgba(37, 99, 235, 0.08);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.12);
+}
+.exam-opt > input:focus-visible + .exam-opt__box {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 2px;
+}
+.exam-opt > input:disabled + .exam-opt__box { opacity: 0.95; }
+
+.exam-short {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  font: inherit;
+  line-height: 1.7;
+}
+.exam-short:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.22);
+  outline-offset: 2px;
+}
+
+.exam-rubric {
+  margin-top: 14px;
+  border: 1px dashed rgba(15, 23, 42, 0.16);
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.02);
+}
+.exam-rubric summary {
+  cursor: pointer;
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.72);
+}
+.exam-rubric pre {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.7;
+  color: rgba(15, 23, 42, 0.88);
+}
 
 /* Tabs */
 .tabs {
@@ -259,4 +497,88 @@ tbody tr:hover { background: rgba(15, 23, 42, 0.02); }
   .nav { justify-content: flex-start; overflow: auto; }
   .grid-3 { grid-template-columns: 1fr; }
   .grid-2 { grid-template-columns: 1fr; }
+}
+
+/* Standard pager (used by admin lists). */
+.std-pager {
+  margin-top: auto;
+  position: sticky;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  width: fit-content;
+  max-width: 100%;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.std-pager .per-page {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.std-pager .per-page select {
+  width: auto;
+  padding: 6px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.std-pager .pages {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.std-pager .page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 9px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 12px;
+  text-decoration: none;
+  user-select: none;
+}
+.std-pager .page-btn:hover { background: rgba(15, 23, 42, 0.04); text-decoration: none; }
+.std-pager .page-btn.active {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.10);
+  color: var(--brand);
+}
+.std-pager .dots { padding: 0 4px; color: var(--muted); font-weight: 900; }
+.std-pager .jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.std-pager .jump input {
+  width: 64px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+}
+.std-pager .btn {
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
 }

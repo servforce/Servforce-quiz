@@ -163,6 +163,63 @@ class TestGradingServiceLLM(unittest.TestCase):
         finally:
             gs.call_llm_json = orig_json
 
+    def test_contradiction_string_false_does_not_force_zero(self):
+        import services.grading_service as gs
+
+        def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
+            # Some LLM gateways may serialize booleans as strings ("true"/"false").
+            return '{"score": 6, "reason": "命中主要要点，少量细节缺失", "relevance": 2, "contradiction": "false"}'
+
+        orig_json = gs.call_llm_json
+        gs.call_llm_json = fake_call_llm_json
+        try:
+            spec = {
+                "title": "demo",
+                "questions": [
+                    {
+                        "qid": "Q1",
+                        "type": "short",
+                        "max_points": 10,
+                        "stem_md": "用不超过150字解释过拟合的定义与危害。",
+                        "rubric": "定义+表现+危害",
+                    }
+                ],
+            }
+            assignment = {"answers": {"Q1": "训练集拟合很好，测试集表现差，泛化能力不足。"}, "pass_threshold": 70}
+            grading = gs.grade_attempt(spec, assignment)
+            self.assertEqual(grading["raw_scored"], 6)
+            self.assertEqual(grading["subjective"][0]["score"], 6)
+        finally:
+            gs.call_llm_json = orig_json
+
+    def test_contradiction_string_true_forces_zero(self):
+        import services.grading_service as gs
+
+        def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
+            return '{"score": 8, "reason": "关键结论说反了", "relevance": 2, "contradiction": "true"}'
+
+        orig_json = gs.call_llm_json
+        gs.call_llm_json = fake_call_llm_json
+        try:
+            spec = {
+                "title": "demo",
+                "questions": [
+                    {
+                        "qid": "Q1",
+                        "type": "short",
+                        "max_points": 10,
+                        "stem_md": "用不超过150字解释过拟合的定义与危害。",
+                        "rubric": "定义+表现+危害",
+                    }
+                ],
+            }
+            assignment = {"answers": {"Q1": "过拟合是训练损失过大，测试损失过低"}, "pass_threshold": 70}
+            grading = gs.grade_attempt(spec, assignment)
+            self.assertEqual(grading["raw_scored"], 0)
+            self.assertEqual(grading["subjective"][0]["score"], 0)
+        finally:
+            gs.call_llm_json = orig_json
+
     def test_integer_only_score_triggers_reason_generation(self):
         import services.grading_service as gs
 

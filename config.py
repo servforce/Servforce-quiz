@@ -74,16 +74,8 @@ DATABASE_URL = _get_database_url()
 # 没有设置环境变量，就选择根目录文件下的命令
 STORAGE_DIR = Path(os.getenv("STORAGE_DIR", str(BASE_DIR / "storage"))).resolve()
 
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-QWEN_MODEL = os.getenv("QWEN_MODEL", os.getenv("LLM_MODEL", "qwen3-32b"))
-LLM_BASE_URL = os.getenv(
-    "LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"
-)
-
-# LLM provider selection:
-# - "openai_compat": OpenAI-compatible HTTP endpoints (DashScope / 讯飞 MaaS / 自建网关等)
-# - "ollama": local Ollama server (free, no API key)
-# Default: use openai_compat when LLM_API_KEY is set; otherwise fallback to ollama.
-LLM_PROVIDER = (os.getenv("LLM_PROVIDER") or "").strip() or ("openai_compat" if LLM_API_KEY else "ollama")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", os.getenv("LLM_MODEL", "qwen2.5:7b-instruct"))
+# LLM (Doubao only)
+# Use Volcengine Ark OpenAI-compatible endpoint.
+DOUBAO_API_KEY = os.getenv("DOUBAO_API_KEY", os.getenv("ARK_API_KEY", ""))
+DOUBAO_BASE_URL = os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3").rstrip("/")
+DOUBAO_MODEL = os.getenv("DOUBAO_MODEL", os.getenv("LLM_MODEL", "doubao-seed-1-6-251015"))

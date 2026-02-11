@@ -7,26 +7,21 @@
 4) `services/`：
    - `services/assignment_service.py`：token 分发、assignment JSON 存取
    - `services/grading_service.py`：判卷（客观题 + 简答题调用大模型）
-   - `services/llm_client.py`：大模型调用封装（OpenAI 兼容/本地 Ollama）
+- `services/llm_client.py`：大模型调用封装（豆包 /responses）
 5) `qml/`：QML Markdown 解析（`qml/parser.py`）  
 6) `templates/` + `static/ui.css`：前端页面与统一 UI 风格
 
 ## 运行
 1) 安装依赖：`pip install -r requirements.txt`
-2) 配置环境变量（可写到 `.env`）：
-   - `DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/dbname`
-   - `ADMIN_USERNAME=admin` / `ADMIN_PASSWORD=admin`
-   - 简答题大模型（可选）：
-     - 讯飞 MaaS（OpenAI 兼容 HTTP）：
-       - `LLM_PROVIDER=openai_compat`
-       - `LLM_BASE_URL=https://maas-api.cn-huabei-1.xf-yun.com/v2`
-       - `LLM_API_KEY=...`
-       - `QWEN_MODEL=...`（modelId 或服务名）
-       - `LLM_RESPONSE_FORMAT_JSON=0`
-     - 或本地 Ollama（免费）：
-       - `LLM_PROVIDER=ollama`
-       - `OLLAMA_BASE_URL=http://127.0.0.1:11434`
-       - `OLLAMA_MODEL=qwen2.5:7b-instruct`
+   2) 配置环境变量（可写到 `.env`）：
+    - `DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/dbname`
+    - `ADMIN_USERNAME=admin` / `ADMIN_PASSWORD=admin`
+    - 简答题大模型（可选）：
+      - 豆包（火山方舟 / OpenAI 兼容 HTTP）：
+        - `DOUBAO_BASE_URL=https://ark.cn-beijing.volces.com/api/v3`
+        - `DOUBAO_API_KEY=...`（或 `ARK_API_KEY=...`）
+        - `DOUBAO_MODEL=...`（建议填火山方舟的 endpoint id 或模型名）
+        - `LLM_RESPONSE_FORMAT_JSON=0`
 3) 启动：`python app.py`
 4) 打开后台：`http://127.0.0.1:5000/admin`
 

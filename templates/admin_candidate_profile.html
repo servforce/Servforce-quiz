@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>候选人详情</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <style>
+      .container { max-width: 1040px; }
+      /* Force pure black text on this page. */
+      .surface[aria-label="候选人详情"],
+      .surface[aria-label="候选人详情"] * {
+        color: #000 !important;
+      }
+      .surface[aria-label="候选人详情"] .btn-purple { color: #fff !important; }
+      .head-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .head-row .title { margin: 0; line-height: 1.15; }
+      .head-meta {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+        border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(248, 250, 252, 0.75);
+        margin-left: 18px;
+        margin-right: auto;
+        font-weight: 900;
+        font-size: 15px;
+        color: rgba(15, 23, 42, 0.80);
+      }
+      .head-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      /* Make <button> and <a> look identical in the header actions. */
+      .head-actions .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 40px;
+        padding: 0 16px;
+        line-height: 1;
+        font-size: 14px;
+        border-radius: 14px;
+        text-decoration: none;
+      }
+      .btn-purple {
+        background: linear-gradient(135deg, var(--brand2), #5b21b6);
+        border-color: rgba(124, 58, 237, 0.45);
+        color: #fff !important;
+        font-weight: 1000;
+      }
+      .btn-purple:hover { filter: brightness(1.03); text-decoration: none; }
+      .btn-purple:active { transform: translateY(1px); }
+      /* Editing is removed on this page; keep view layout only. */
+      .input-sm {
+        width: 100%;
+        max-width: 380px;
+        padding: 9px 10px;
+        border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.16);
+        background: rgba(255, 255, 255, 0.92);
+        font-weight: 800;
+      }
+      textarea.input-sm { max-width: 100%; min-height: 140px; }
+      .table-mini {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+      }
+      .table-mini th, .table-mini td {
+        text-align: left;
+        padding: 8px 8px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        vertical-align: top;
+      }
+      .table-mini th { font-size: 12px; font-weight: 1000; background: rgba(248, 250, 252, 0.75); }
+      .row-actions { display:flex; gap:8px; }
+      .btn-mini { padding: 7px 10px; border-radius: 12px; font-weight: 1000; }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(248, 250, 252, 0.75);
+        font-weight: 800;
+        font-size: 12px;
+        color: rgba(15, 23, 42, 0.75);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .info-split {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 22px;
+        align-items: start;
+      }
+      .info-right {
+        padding-left: 22px;
+        border-left: 1px solid rgba(15, 23, 42, 0.10);
+      }
+      .card {
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+        overflow: hidden;
+      }
+      .card-head {
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: rgba(248, 250, 252, 0.75);
+      }
+      .card-title { font-weight: 1000; letter-spacing: 0.2px; }
+      .card-body { padding: 12px 14px; }
+      .kv {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 8px 12px;
+        align-items: start;
+      }
+      .k { font-weight: 800; font-size: 12px; }
+      .v { font-weight: 800; }
+      .mutedv { font-weight: 700; }
+      .info-kv { display: grid; grid-template-columns: 120px 1fr; gap: 10px 16px; align-items: start; }
+      .info-kv .k { font-size: 13px; white-space: nowrap; }
+      .info-kv .v { font-size: 16px; letter-spacing: 0.1px; }
+      .info-kv .v strong { font-weight: 1000; }
+      .eval {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(248, 250, 252, 0.85);
+      }
+      .eval-title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 8px; }
+      .eval-title .k { margin: 0; font-size: 12px; }
+      .eval-body { font-weight: 750; line-height: 1.8; }
+      .eng-title { color: rgba(15, 23, 42, 0.78); font-weight: 1000; margin-bottom: 10px; }
+      .eng-kv { display:grid; grid-template-columns: 120px 1fr; gap: 10px 14px; align-items: center; }
+      .eng-kv .k { font-size: 12px; }
+      .eng-kv .v { font-size: 14px; font-weight: 1000; }
+      .edu-item { padding: 10px 0; border-bottom: 1px dashed rgba(15, 23, 42, 0.12); }
+      .edu-item:last-child { border-bottom: 0; }
+      .edu-row {
+        display: grid;
+        grid-template-columns: 1fr max-content;
+        column-gap: 38px;
+        align-items: baseline;
+      }
+      .edu-main { min-width: 0; }
+      .edu-mainline {
+        display: inline-flex;
+        gap: 10px;
+        align-items: baseline;
+        flex-wrap: wrap;
+      }
+      .edu-degree { font-weight: 1000; }
+      .edu-school { font-weight: 900; }
+      .edu-major { font-weight: 800; }
+      .edu-time { font-weight: 900; font-size: 14px; white-space: nowrap; }
+      .uni-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 1000;
+        letter-spacing: 0.2px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: #fff;
+        white-space: nowrap;
+      }
+      .uni-badge--ivy {
+        border-color: rgba(124, 58, 237, 0.35);
+        background: rgba(124, 58, 237, 0.12);
+        color: rgb(88, 28, 135) !important;
+      }
+      .uni-badge--985 {
+        border-color: rgba(37, 99, 235, 0.35);
+        background: rgba(37, 99, 235, 0.12);
+        color: rgb(30, 64, 175) !important;
+      }
+      .uni-badge--211 {
+        border-color: rgba(16, 185, 129, 0.35);
+        background: rgba(16, 185, 129, 0.12);
+        color: rgb(6, 95, 70) !important;
+      }
+      .projects { display: grid; gap: 10px; }
+      .resume-raw {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: inherit;
+        font-weight: 800;
+        color: rgba(15, 23, 42, 0.90);
+        line-height: 1.75;
+        margin: 0;
+      }
+      .attempt-results-table { width: 100%; table-layout: fixed; }
+      .attempt-results-table th,
+      .attempt-results-table td { padding-left: 12px; padding-right: 12px; }
+      .attempt-results-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .attempt-results-table th:nth-child(2),
+      .attempt-results-table td:nth-child(2) { text-align: center; }
+      .attempt-results-table th:nth-child(3),
+      .attempt-results-table td:nth-child(3) { text-align: center; font-variant-numeric: tabular-nums; }
+      .attempt-results-table th:nth-child(4),
+      .attempt-results-table td:nth-child(4) { text-align: center; font-variant-numeric: tabular-nums; }
+      .attempt-results-table th:nth-child(5),
+      .attempt-results-table td:nth-child(5) { text-align: center; font-variant-numeric: tabular-nums; }
+      .attempt-results-table tr.row-link { cursor: pointer; }
+      .attempt-results-table tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
+      .proj {
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        border-radius: 14px;
+        background: rgba(248, 250, 252, 0.6);
+        padding: 12px 12px;
+      }
+      .proj.eval-item { display: flex; flex-direction: column; }
+      .proj-head { display:flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+      .proj-head--meta-only { justify-content: flex-end; }
+      .proj-name { font-weight: 1000; }
+      .proj-meta { font-weight: 900; font-size: 14px; white-space: nowrap; }
+      .eval-foot {
+        margin-top: auto;
+        padding-top: 10px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        align-items: center;
+      }
+      .eval-time {
+        text-align: right;
+        font-weight: 900;
+        font-size: 14px;
+        white-space: nowrap;
+        color: rgba(15, 23, 42, 0.72);
+      }
+      .proj-role { margin-top: 6px; font-weight: 900; font-size: 13px; }
+      .proj-desc { margin: 8px 0 0; padding-left: 18px; }
+      .proj-desc li { margin: 6px 0; }
+      .span2 { grid-column: 1 / -1; }
+      @media (max-width: 980px) {
+        .grid { grid-template-columns: 1fr; }
+        .kv { grid-template-columns: 110px 1fr; }
+        .edu-row { grid-template-columns: 1fr; row-gap: 6px; }
+        .info-split { grid-template-columns: 1fr; }
+        .info-right { padding-left: 0; border-left: 0; border-top: 1px solid rgba(15, 23, 42, 0.10); padding-top: 12px; }
+        .info-kv { grid-template-columns: 120px 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand" aria-label="Servforce Quiz 管理后台">
+          <span class="brand-badge" aria-hidden="true"></span>
+          <span>Servforce Quiz</span>
+        </div>
+
+        <nav class="nav" aria-label="主导航">
+          <a class="nav-link" href="/admin#tab-exams">试卷管理</a>
+          <a class="nav-link active" href="/admin/candidates">候选人管理</a>
+          <a class="nav-link" href="/admin#tab-assign">答题邀请</a>
+        </nav>
+
+        <form method="post" action="/admin/logout" style="margin:0;">
+          <button class="btn btn-danger" type="submit">退出</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="container page">
+      {% for m in get_flashed_messages() %}
+      <div class="flash">{{ m }}</div>
+      {% endfor %}
+
+      <div class="surface admin-surface" role="region" aria-label="候选人详情" id="candidateProfileSurface">
+        <section class="section">
+          <div class="head-row">
+            <div>
+              <h2 class="title">候选人详情</h2>
+            </div>
+            {% if c.created_at %}
+              <div class="head-meta">ID：#{{ c.id }}　创建时间：{{ c.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</div>
+            {% endif %}
+            <div class="head-actions">
+              <form id="reparseForm" method="post" action="/admin/candidates/{{ c.id }}/resume/reparse" enctype="multipart/form-data" style="margin:0;">
+                <input id="reparseFile" type="file" name="file" accept=".pdf,.docx,.txt,.md" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+                <button type="button" id="reparseBtn" class="btn btn-purple">重新上传</button>
+              </form>
+              {% if c.resume_size %}
+                <a class="btn btn-purple" href="/admin/candidates/{{ c.id }}/resume/download" title="下载简历" aria-label="下载简历">下载</a>
+              {% else %}
+                <span class="btn btn-purple" style="opacity:.55; pointer-events:none;">下载</span>
+              {% endif %}
+              <a class="btn btn-purple" href="/admin/candidates" id="backBtn">返回</a>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="grid">
+            <div class="card span2">
+              <div class="card-head">
+                <div class="card-title">基本信息</div>
+              </div>
+              <div class="card-body">
+                <div class="info-split">
+                  <div>
+                    <div class="info-kv">
+                      <div class="k">姓名</div>
+                      <div class="v">
+                        <span class="view-only"><strong>{{ c.name }}</strong></span>
+                      </div>
+                      <div class="k">性别</div>
+                      <div class="{{ 'mutedv' if not gender else 'v' }}">
+                        <span class="view-only"><strong>{{ gender or '—' }}</strong></span>
+                      </div>
+                      <div class="k">电话</div>
+                      <div class="v">
+                        <span class="view-only"><strong>{{ c.phone }}</strong></span>
+                      </div>
+                      <div class="k">邮箱</div>
+                      <div class="{{ 'mutedv' if not email else 'v' }}">
+                        <span class="view-only">{{ email or '—' }}</span>
+                      </div>
+                    </div>
+                    {% if details_status == 'failed' and details_error %}
+                      <div style="margin-top:12px;">
+                        <div class="k" style="margin-bottom:6px;">解析失败原因</div>
+                        <div class="mutedv">{{ details_error }}</div>
+                      </div>
+                    {% endif %}
+                  </div>
+
+                  <div class="info-right">
+                    <div class="info-kv">
+                      <div class="k">最高学历</div>
+                      <div class="{{ 'mutedv' if not highest_education else 'v' }}">
+                        <span class="view-only"><strong>{{ highest_education or '—' }}</strong></span>
+                      </div>
+                      <div class="k">四级（CET-4）</div>
+                      <div class="{{ 'mutedv' if not (english.cet4 and english.cet4.score) else 'v' }}">
+                        <span class="view-only">{{ english.cet4.score if english.cet4 and english.cet4.score is not none else '—' }}</span>
+                      </div>
+                      <div class="k">六级（CET-6）</div>
+                      <div class="{{ 'mutedv' if not (english.cet6 and english.cet6.score) else 'v' }}">
+                        <span class="view-only">{{ english.cet6.score if english.cet6 and english.cet6.score is not none else '—' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card span2">
+              <div class="card-head">
+                <div class="card-title">教育经历</div>
+              </div>
+              <div class="card-body">
+                {% if educations and educations|length > 0 %}
+                  {% for e in educations %}
+                    <div class="edu-item">
+                      <div class="edu-row">
+                        <div class="edu-main">
+                          <div class="edu-mainline">
+                            <span class="edu-degree">{{ e.degree or '未知' }}</span>
+                            <span class="edu-school">{{ e.school or '—' }}</span>
+                            {% if e.school_tag %}
+                              <span class="uni-badge uni-badge--{{ e.school_tag }}">{{ e.school_tag_label }}</span>
+                            {% endif %}
+                            {% if e.major %}<span class="edu-major">{{ e.major }}</span>{% endif %}
+                          </div>
+                        </div>
+                        <div class="edu-time">
+                          {{ (e.start or '—') }} ~ {{ (e.end or '—') }}
+                        </div>
+                      </div>
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="mutedv">暂无教育经历信息（可能仍在解析中，或简历为扫描版无法抽取文本）。</div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="card span2">
+              <div class="card-head">
+                <div class="card-title">项目经历</div>
+              </div>
+              <div class="card-body">
+                {% if projects_raw_blocks and projects_raw_blocks|length > 0 %}
+                  <div class="projects">
+                    {% for p in projects_raw_blocks %}
+                      <div class="proj">
+                        <div class="proj-head">
+                          <div class="proj-name">{{ p.title }}</div>
+                          <div class="proj-meta">{{ p.period }}</div>
+                        </div>
+                        {% if p.body %}
+                          <pre class="resume-raw" style="margin-top:10px;">{{ p.body }}</pre>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% elif projects_raw %}
+                  <pre class="resume-raw">{{ projects_raw }}</pre>
+                {% elif projects and projects|length > 0 %}
+                  <div class="projects">
+                    {% for p in projects %}
+                      <div class="proj">
+                        <div class="proj-head">
+                          <div class="proj-name">{{ p.name or '未命名项目' }}</div>
+                          <div class="proj-meta">{{ p.period or '—' }}</div>
+                        </div>
+                        {% if p.role %}
+                          <div class="proj-role">{{ p.role }}</div>
+                        {% endif %}
+                        {% if p.description and p.description|length > 0 %}
+                          <ul class="proj-desc">
+                            {% for d in p.description %}
+                              <li>{{ d }}</li>
+                            {% endfor %}
+                          </ul>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="mutedv">暂无项目经历信息（可能仍在解析中）。</div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="card span2">
+              <div class="card-head">
+                <div class="card-title">答题结果</div>
+              </div>
+              <div class="card-body">
+                {% if attempt_results and attempt_results|length > 0 %}
+                  <div class="table-scroll">
+                    <table class="attempt-results-table" aria-label="答题结果列表">
+                      <colgroup>
+                        <col style="width: 8%;" />
+                        <col style="width: 28%;" />
+                        <col style="width: 10%;" />
+                        <col style="width: 27%;" />
+                        <col style="width: 27%;" />
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>试卷</th>
+                          <th>成绩</th>
+                          <th>进入时间</th>
+                          <th>提交时间</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {% for r in attempt_results %}
+                        <tr class="row-link" data-href="{{ r.attempt_href }}">
+                          <td>{{ r.no }}</td>
+                          <td class="ellipsis">{{ r.exam_name }}</td>
+                          <td>{{ r.score }}</td>
+                          <td class="nowrap">{{ r.start_at }}</td>
+                          <td class="nowrap">{{ r.end_at }}</td>
+                        </tr>
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% else %}
+                  <div class="mutedv">暂无答题结果。</div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="card span2">
+              <div class="card-head">
+                <div class="card-title">评价</div>
+              </div>
+              <div class="card-body">
+                <div class="projects">
+                  <div class="proj eval-item">
+                    {% if evaluation_llm %}
+                      <pre class="resume-raw" style="margin-top:10px;">{{ evaluation_llm }}</pre>
+                    {% else %}
+                      <div class="mutedv">暂无大模型评价信息（可能仍在解析中）。</div>
+                    {% endif %}
+                    {% if c.resume_parsed_at %}
+                      <div class="eval-foot">
+                        <div class="eval-time">{{ c.resume_parsed_at.strftime("%Y-%m-%d %H:%M:%S") }}</div>
+                      </div>
+                    {% endif %}
+                  </div>
+
+                  {% if admin_evaluations and admin_evaluations|length > 0 %}
+                    {% for it in admin_evaluations %}
+                      <div class="proj eval-item" style="background: rgba(255, 255, 255, 0.75);">
+                        <pre class="resume-raw" style="margin-top:10px;">{{ it.text }}</pre>
+                        <div class="eval-foot">
+                          {% if (it.at_display or it.at) %}
+                            <div class="eval-time">{{ it.at_display or it.at }}</div>
+                          {% endif %}
+                        </div>
+                      </div>
+                    {% endfor %}
+                  {% endif %}
+
+                  <div class="proj" style="background: rgba(255, 255, 255, 0.75);">
+                    <form method="post" action="/admin/candidates/{{ c.id }}/evaluation/update" style="margin:0;">
+                      <textarea class="input-sm" name="evaluation" placeholder="评价内容"></textarea>
+                      <div style="margin-top:10px; display:flex; justify-content:flex-end;">
+                        <button class="btn btn-purple" type="submit">保存</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script>
+      (function () {
+        const reparseBtn = document.getElementById('reparseBtn');
+        const reparseFile = document.getElementById('reparseFile');
+        const reparseForm = document.getElementById('reparseForm');
+
+        if (reparseBtn && reparseFile && reparseForm) {
+          reparseBtn.addEventListener('click', () => reparseFile.click());
+          reparseFile.addEventListener('change', () => {
+            if (!reparseFile.files || reparseFile.files.length <= 0) return;
+            reparseBtn.disabled = true;
+            reparseBtn.textContent = '解析中…';
+            reparseForm.submit();
+          });
+        }
+
+        // Navigate to attempt detail when clicking an attempt row.
+        document.querySelectorAll('.attempt-results-table tr.row-link').forEach((row) => {
+          const href = row.getAttribute('data-href');
+          if (!href) return;
+          row.addEventListener('click', () => {
+            const sel = window.getSelection ? String(window.getSelection().toString() || '') : '';
+            if (sel && sel.trim()) return;
+            window.location.href = href;
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>

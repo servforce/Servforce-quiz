@@ -9,6 +9,37 @@ from config import logger
 from services.llm_client import call_llm_json, call_llm_text
 
 
+def _parse_boolish(v: Any) -> bool:
+    if isinstance(v, bool):
+        return v
+    if v is None:
+        return False
+    if isinstance(v, (int, float)):
+        return float(v) != 0.0
+    s = str(v).strip().lower()
+    if s in {"true", "1", "yes", "y", "是", "对"}:
+        return True
+    if s in {"false", "0", "no", "n", "否", "不", ""}:
+        return False
+    return False
+
+
+def _parse_intish(v: Any) -> int | None:
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return int(v)
+    if isinstance(v, (int, float)):
+        return int(v)
+    m = re.search(r"-?\d+", str(v).strip())
+    if not m:
+        return None
+    try:
+        return int(m.group(0))
+    except Exception:
+        return None
+
+
 def grade_attempt(spec: dict[str, Any], assignment: dict[str, Any]) -> dict[str, Any]:
     answers = assignment.get("answers") or {}
     objective_details = []
@@ -186,13 +217,11 @@ def _grade_short(
         else:
             m = re.search(r"-?\d+(?:\.\d+)?", str(raw_score))
             score = int(round(float(m.group(0)))) if m else 0
-        contradiction = bool(obj.get("contradiction", False))
-        relevance_raw = obj.get("relevance", None)
-        try:
-            relevance = int(relevance_raw) if relevance_raw is not None else None
-        except Exception:
-            relevance = None
-        reason = str(obj.get("reason", "")).strip() or "???????"
+        contradiction = _parse_boolish(obj.get("contradiction", False))
+        relevance = _parse_intish(obj.get("relevance", None))
+        if relevance is not None:
+            relevance = max(0, min(3, int(relevance)))
+        reason = str(obj.get("reason", "")).strip() or "模型未返回原因"
     except Exception:
         try:
             m = re.search(r"-?\d+(?:\.\d+)?", str(raw).strip())
@@ -205,12 +234,17 @@ def _grade_short(
             return 0, "模型返回无法解析"
     score = max(0, min(max_points, score))
     # Guard rails: contradictions and totally irrelevant answers should be 0.
-    if contradiction or relevance == 0:
+    forced_reason = None
+    if contradiction:
+        forced_reason = "检测到与评分标准关键事实矛盾/说反，按规则记 0 分"
+    elif relevance == 0:
+        forced_reason = "答案与题目/评分标准完全无关，按规则记 0 分"
+    if forced_reason:
         score = 0
         if not reason:
-            reason = "???????????????? 0 ?"
-        elif "0" not in reason and "? 0" not in reason:
-            reason = f"{reason}???? 0 ??"
+            reason = forced_reason
+        elif "0" not in reason:
+            reason = f"{reason}（{forced_reason}）"
     if (not reason or reason in {"模型未返回原因", "模型仅返回分数"}) and rubric:
         reason = _grade_short_reason(question=question, rubric=rubric, answer=answer, score=score, max_points=max_points)
     return score, reason
@@ -221,7 +255,7 @@ def _grade_short_reason(*, question: str, rubric: str, answer: str, score: int, 
         "你是严格的阅卷老师。请根据评分标准解释该答案的得分依据。\n"
         "要求：\n"
         "1) 输出纯文本，不要 JSON，不要 Markdown。\n"
-        "2) 1-2 句话，<= 80 字。\n"
+        "2) 1-2 句话，<= 100 字。\n"
         "3) 只描述得分点/失分点，不要泄露标准答案原文。\n"
         f"【题目】{question}\n"
         f"【评分标准】{rubric}\n"

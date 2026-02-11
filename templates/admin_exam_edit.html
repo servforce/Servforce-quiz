@@ -5,19 +5,49 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>修改试卷</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/codemirror/lib/codemirror.css') }}" />
     <style>
+      /* Show textarea only when CodeMirror is not ready (fallback). */
+      body.cm-ready textarea.editor { display: none; }
       textarea.editor {
         width: 100%;
-        min-height: 62vh;
-        resize: vertical;
+        flex: 1 1 auto;
+        min-height: 0;
+        resize: none;
         padding: 12px 14px;
         border-radius: 14px;
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(255, 255, 255, 0.92);
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 13px;
-        line-height: 1.55;
+        font-size: 18px;
+        line-height: 1.12;
       }
+      .editor-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+      .editor-area { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+      .editor-area .CodeMirror {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 18px;
+        color: var(--text);
+        border-radius: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.92);
+      }
+      .editor-area .CodeMirror pre { line-height: 1.12; font-family: inherit; }
+      .editor-area .CodeMirror-lines { padding: 0; }
+      .editor-area .CodeMirror-gutters {
+        border-right: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(15, 23, 42, 0.02);
+      }
+      .editor-area .CodeMirror-linenumber { color: rgba(100, 116, 139, 0.9); }
+      .editor-area .CodeMirror-activeline-background { background: rgba(37, 99, 235, 0.06); }
+      /* Make question headings stand out in the editor (e.g. "## Q1 ..."). */
+      .editor-area .CodeMirror .cm-header { color: #dc2626; }
+      /* Color rubric blocks ([rubric]...[/rubric]) in light green. */
+      .editor-area .CodeMirror .cm-rubric { color: #86efac !important; }
+      .editor-area .CodeMirror .cm-rubric-tag { color: #86efac !important; }
       .exam-tabs {
         display: inline-flex;
         gap: 6px;
@@ -26,6 +56,9 @@
         background: transparent;
       }
       .exam-tabs a {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
         padding: 10px 12px;
         border-radius: 12px;
         font-weight: 700;
@@ -35,6 +68,7 @@
         border: 1px solid transparent;
         background: transparent;
       }
+      .exam-tabs .ico { font-size: 14px; line-height: 1; opacity: 0.9; }
       .exam-tabs a:hover { background: rgba(15, 23, 42, 0.04); text-decoration: none; }
       .exam-tabs a.active { background: rgba(37, 99, 235, 0.10); border-color: rgba(37, 99, 235, 0.22); color: #1d4ed8; }
 
@@ -51,11 +85,12 @@
 
       .section.compact { padding-bottom: 8px; }
       .section.compact .section-head { margin-bottom: 0; }
+      .head-actions { display: inline-flex; align-items: center; gap: 10px; }
     </style>
   </head>
   <body>
     <header class="topbar">
-      <div class="container topbar-inner">
+      <div class="container topbar-inner exam-frame">
         <div class="brand" aria-label="Servforce Quiz 管理后台">
           <span class="brand-badge" aria-hidden="true"></span>
           <span>Servforce Quiz</span>
@@ -71,7 +106,7 @@
       </div>
     </header>
 
-    <main class="container page">
+    <main class="container page exam-frame">
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
       {% for m in get_flashed_messages() %}
       <div class="flash">{{ m }}</div>
@@ -84,30 +119,108 @@
               <div class="left"></div>
               <div class="center">
                 <div class="exam-tabs" aria-label="试卷页签">
-                  <a class="active" href="/admin/exams/{{ exam_href_id }}/edit">修改试卷</a>
-                  <a href="/admin/exams/{{ exam_href_id }}">试卷详情</a>
-                  <a href="/admin/exams/{{ exam_href_id }}/paper">答题试卷</a>
+                  <a href="/admin/exams/{{ exam_href_id }}"><span class="ico" aria-hidden="true">👁</span>预览</a>
+                  <a href="/admin/exams/{{ exam_href_id }}/paper"><span class="ico" aria-hidden="true">👥</span>候选者视图</a>
+                  <a class="active" href="/admin/exams/{{ exam_href_id }}/edit"><span class="ico" aria-hidden="true">✎</span>编辑</a>
                 </div>
               </div>
               <div class="right">
-                <a class="btn btn-primary" href="/admin#tab-exams">返回</a>
+                <div class="head-actions">
+                  <button class="btn btn-primary" type="submit" form="editForm">保存并重新解析</button>
+                  <a class="btn" href="/admin#tab-exams">返回</a>
+                </div>
               </div>
             </div>
           </div>
         </section>
 
         <section class="section">
-          <form method="post" action="/admin/exams/{{ exam_href_id }}/edit">
-            <div class="field">
-              <label for="source_md">Markdown 内容</label>
+          <form id="editForm" class="editor-form" method="post" action="/admin/exams/{{ exam_href_id }}/edit">
+            <div class="editor-area">
               <textarea id="source_md" name="source_md" class="editor" spellcheck="false" required>{{ source_md }}</textarea>
-            </div>
-            <div class="flex" style="justify-content:flex-end; gap:10px;">
-              <button class="btn btn-primary" type="submit">保存并重新解析</button>
             </div>
           </form>
         </section>
       </div>
     </main>
+
+    <script src="{{ url_for('static', filename='vendor/codemirror/lib/codemirror.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/codemirror/addon/mode/overlay.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/codemirror/addon/edit/matchbrackets.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/codemirror/addon/edit/closebrackets.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/codemirror/addon/selection/active-line.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/codemirror/mode/markdown/markdown.js') }}"></script>
+    <script>
+      (function () {
+        var textarea = document.getElementById("source_md");
+        if (!textarea || !window.CodeMirror) return;
+
+        var cm = null;
+        try {
+          cm = window.CodeMirror.fromTextArea(textarea, {
+            mode: "markdown",
+            lineNumbers: true,
+            lineWrapping: true,
+            styleActiveLine: true,
+            matchBrackets: true,
+            autoCloseBrackets: true,
+            indentUnit: 2,
+            tabSize: 2,
+          });
+
+          // Hide the fallback textarea as soon as CodeMirror is created.
+          // Even if later enhancements (overlays, sizing) fail, we still prefer the highlighted editor UI.
+          textarea.style.display = "none";
+          document.body.classList.add("cm-ready");
+
+          try {
+            cm.addOverlay({
+              startState: function () {
+                return { inRubric: false };
+              },
+              token: function (stream, state) {
+                if (state.inRubric) {
+                  if (stream.match("[/rubric]")) {
+                    state.inRubric = false;
+                    return "rubric-tag";
+                  }
+
+                  // Consume at least one character, and keep coloring until closing tag.
+                  stream.next();
+                  stream.eatWhile(/[^[]/);
+                  return "rubric";
+                }
+
+                if (stream.match("[rubric]")) {
+                  state.inRubric = true;
+                  return "rubric-tag";
+                }
+
+                if (stream.skipTo("[")) {
+                  stream.next();
+                } else {
+                  stream.skipToEnd();
+                }
+                return null;
+              },
+            });
+          } catch (e) {
+            console.warn("[editor] CodeMirror overlay init failed, continuing without overlay", e);
+          }
+
+          try {
+            var wrapper = cm.getWrapperElement();
+            wrapper.style.flex = "1 1 auto";
+            wrapper.style.minHeight = "0";
+            cm.setSize(null, "100%");
+          } catch (e) {
+            console.warn("[editor] CodeMirror sizing failed, continuing with defaults", e);
+          }
+        } catch (e) {
+          console.error("[editor] CodeMirror init failed, falling back to textarea", e);
+          textarea.style.display = "block";
+        }
+      })();
+    </script>
   </body>
 </html>
