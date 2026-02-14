@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>链接不可用</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <style>
+      body { min-height: 100vh; display: grid; place-items: center; padding: 22px; }
+      .card { width: min(720px, 100%); }
+      .hint { color: var(--muted); font-size: 13px; line-height: 1.6; }
+      .kvs { margin-top: 10px; display: grid; gap: 8px; }
+      .kv { display:flex; justify-content: space-between; gap: 12px; }
+      .k { color: var(--muted); font-weight: 900; }
+      .v { font-weight: 900; font-variant-numeric: tabular-nums; }
+    </style>
+  </head>
+  <body>
+    <div class="surface card" role="region" aria-label="链接不可用">
+      <div class="section">
+        <h2 class="title">{{ title }}</h2>
+        <p class="hint">{{ message }}</p>
+
+        {% if start_date or end_date %}
+        <div class="kvs" aria-label="邀约时间范围">
+          {% if start_date %}
+          <div class="kv"><div class="k">开始日期</div><div class="v">{{ start_date }}</div></div>
+          {% endif %}
+          {% if end_date %}
+          <div class="kv"><div class="k">结束日期</div><div class="v">{{ end_date }}</div></div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>
+

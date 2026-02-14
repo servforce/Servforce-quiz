@@ -50,6 +50,89 @@
       a.row-a code { color: inherit; }
       a.row-a:hover { text-decoration: underline; }
 
+      /* Date proxy (same UX as candidate list: yyyy/mm/dd + calendar button). */
+      .assign-grid-2 .date-proxy { position: relative; width: 100%; }
+      .assign-grid-2 .date-proxy .date-display { padding-right: 42px; cursor: pointer; }
+      .assign-grid-2 .date-proxy .date-native {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .assign-grid-2 .date-proxy .date-btn {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.95);
+        color: rgba(15, 23, 42, 0.72);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+      }
+      .assign-grid-2 .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
+
+      /* Attempt list date range filter (scoped to #tab-assign only). */
+      #tab-assign .assign-attempts .attempt-head { display:flex; flex-direction: column; align-items: stretch; gap: 10px; margin: 0 0 10px; padding: 0; }
+      #tab-assign .assign-attempts .attempt-head .title { margin: 0; font-size: 16px; }
+      /* Keep filter row "top-aligned" and put actions on the right of the query. */
+      #tab-assign .assign-attempts .attempt-filter { display:flex; flex-wrap: nowrap; align-items: flex-end; gap: 10px; margin: 0; width: 100%; }
+      #tab-assign .assign-attempts .attempt-filter .field { margin: 0; }
+      #tab-assign .assign-attempts .attempt-filter .field.field-q label { font-size: 18px; font-weight: 800; }
+      #tab-assign .assign-attempts .attempt-filter .field.field-q { flex: 0 1 420px; max-width: 420px; min-width: 260px; }
+      #tab-assign .assign-attempts .attempt-filter .field.field-sm { flex: 0 0 190px; }
+      #tab-assign .assign-attempts .attempt-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 38px; font-size: 17px; }
+      #tab-assign .assign-attempts .range-group { display: flex; align-items: flex-end; gap: 10px; }
+      #tab-assign .assign-attempts .range-group .field { flex: 1 1 190px; }
+      #tab-assign .assign-attempts .attempt-actions { display: inline-flex; gap: 10px; margin-left: auto; align-items: flex-end; }
+      #tab-assign .assign-attempts .range-sep {
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 2px;
+        color: rgba(15, 23, 42, 0.55);
+        font-weight: 900;
+        user-select: none;
+      }
+      #tab-assign .assign-attempts .date-proxy { position: relative; width: 100%; }
+      #tab-assign .assign-attempts .date-proxy .date-display { padding-right: 42px; cursor: pointer; }
+      #tab-assign .assign-attempts .date-proxy .date-native {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      #tab-assign .assign-attempts .date-proxy .date-btn {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.92);
+        cursor: pointer;
+        padding: 0;
+      }
+      #tab-assign .assign-attempts .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
+      #tab-assign .assign-attempts .attempt-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: 16px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+      @media (max-width: 1100px) {
+        #tab-assign .assign-attempts .attempt-filter { flex-wrap: wrap; }
+        #tab-assign .assign-attempts .attempt-actions { margin-left: 0; }
+      }
+
       table.exam-table { table-layout: fixed; width: 100%; }
       table.exam-table th, table.exam-table td { vertical-align: middle; }
       table.exam-table th { white-space: nowrap; }
@@ -58,10 +141,21 @@
       th.col-id, td.col-id { padding-right: 8px; }
       th.col-exam-key, td.col-key { text-align: left; padding-left: 8px; padding-right: 12px; }
       td.col-key, td.col-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      /* "答题邀请" tab: fit all columns without horizontal scrolling (no font-size changes). */
+      .assign-attempts .table-scroll { overflow-x: visible; padding-left: 0; padding-right: 0; }
+      table.attempt-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+      table.attempt-table th, table.attempt-table td { padding-left: 1px; padding-right: 1px; vertical-align: middle; }
+      table.attempt-table th { white-space: normal; }
+      table.attempt-table td.nowrap { white-space: normal; }
+      table.attempt-table td.ellipsis { white-space: normal; overflow: visible; text-overflow: clip; }
+      table.attempt-table td code { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+      table.attempt-table td.nowrap > div { white-space: nowrap; }
       td.col-key .exam-key { white-space: nowrap; display: block; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
       th.col-count, td.col-count { text-align: center; white-space: nowrap; }
       th.col-updated, td.col-updated { text-align: center; white-space: nowrap; }
       th.col-actions, td.col-actions { white-space: nowrap; text-align: right; min-width: 160px; }
+      .shift-updated { display: inline-block; transform: translateX(2cm); }
       .btn-icon {
         min-width: 64px;
         padding: 9px 12px;
@@ -75,20 +169,112 @@
 
       .assign-form { max-width: 100%; margin: 0; }
       #tab-assign .assign-form { margin-top: 10px; }
+
+      /* Make "试卷管理" font scale match "答题邀请" (readable/consistent). */
+      #tab-exams { font-size: 16px; }
+      #tab-exams .panel-head .title { font-size: 22px; letter-spacing: 0.2px; }
+      #tab-exams .panel-head .sub { display: none; }
+      #tab-exams .field label { font-size: 16px; font-weight: 800; color: rgba(15, 23, 42, 0.78); }
+      #tab-exams .input,
+      #tab-exams select,
+      #tab-exams input[type="file"].file-input {
+        height: 40px;
+        padding-top: 0;
+        padding-bottom: 0;
+        line-height: 38px;
+        font-size: 17px;
+      }
+      #tab-exams input[type="file"].file-input { padding: 6px 10px; line-height: 1.2; }
+      #tab-exams .btn { height: 40px; font-size: 16px; border-radius: 14px; }
+      #tab-exams table.exam-table { font-size: 18px; }
+      #tab-exams table.exam-table th { font-size: 16px; }
+
+      /* Invite form visual polish (scoped to "答题邀请" only). */
+      #tab-assign { font-size: 16px; }
+      #tab-assign .panel-head .title { font-size: 22px; letter-spacing: 0.2px; }
+      #tab-assign .panel-head .sub { font-size: 16px; line-height: 1.6; color: rgba(15, 23, 42, 0.70); }
+      #tab-assign .assign-form {
+        max-width: 1060px;
+        margin: 10px auto 0;
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        border-radius: 18px;
+        padding: 12px 12px 10px;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+        backdrop-filter: blur(6px);
+      }
+      /* Stable, compact grid (avoid layout "jumping" when resizing). */
+      #tab-assign .assign-form .assign-grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(320px, 420px));
+        gap: 12px 14px;
+        align-items: end;
+        justify-content: start;
+      }
+      #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: repeat(3, minmax(220px, 260px)); justify-content: start; }
+      #tab-assign .assign-form .field { margin: 0; }
+      #tab-assign .assign-form .field.field-mid { max-width: 420px; width: 100%; justify-self: start; }
+      #tab-assign .assign-form .field.field-narrow { max-width: 260px; width: 100%; justify-self: start; }
+      #tab-assign .assign-form .field label {
+        font-size: 16px;
+        font-weight: 800;
+        color: rgba(15, 23, 42, 0.78);
+        margin-bottom: 6px;
+      }
+      #tab-assign .assign-form .input,
+      #tab-assign .assign-form select {
+        height: 40px;
+        font-size: 17px;
+        padding-top: 0;
+        padding-bottom: 0;
+        line-height: 38px;
+      }
+      #tab-assign .assign-form .field { max-width: none; }
+      #tab-assign .assign-form select { font-weight: 700; }
+      #tab-assign .assign-form input::placeholder { color: rgba(15, 23, 42, 0.42); }
+      #tab-assign .assign-form .input:focus,
+      #tab-assign .assign-form select:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.20);
+        border-color: rgba(37, 99, 235, 0.55);
+      }
+      #tab-assign .assign-form .assign-divider {
+        height: 1px;
+        background: rgba(15, 23, 42, 0.10);
+        margin: 10px 0;
+      }
+      #tab-assign .assign-form .assign-grid-params { margin-top: 0; }
+      #tab-assign .assign-form .field.field-narrow .input,
+      #tab-assign .assign-form .field.field-narrow select { max-width: 260px; }
+      #tab-assign .assign-form .field.field-narrow select { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #tab-assign .assign-form .assign-actions { margin-top: 10px; display:flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+      #tab-assign .assign-form .assign-actions .btn { height: 40px; padding: 0 18px; border-radius: 14px; }
+      @media (max-width: 1100px) {
+        #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: repeat(2, minmax(220px, 260px)); }
+      }
+      @media (max-width: 980px) {
+        #tab-assign .assign-form { max-width: 100%; margin-left: 0; margin-right: 0; }
+        #tab-assign .assign-form .assign-grid-2 { grid-template-columns: 1fr; }
+        #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: 1fr; }
+        #tab-assign .assign-form .field.field-mid,
+        #tab-assign .assign-form .field.field-narrow { max-width: 100%; }
+        #tab-assign .assign-form .field.field-narrow .input,
+        #tab-assign .assign-form .field.field-narrow select { max-width: 100%; }
+      }
       .assign-attempts {
         max-width: 100%;
-        margin: 14px 0 0;
+        margin: 30px 0 0;
         display: flex;
         flex-direction: column;
         flex: 1 1 auto;
         min-height: 0;
       }
       .table-scroll { overflow-x: auto; }
-      .attempt-table { width: 100%; min-width: 980px; font-size: 16px; }
+      .attempt-table { width: 100%; min-width: 1280px; font-size: 18px; }
       .attempt-table th, .attempt-table td { vertical-align: middle; }
       .attempt-table th {
         white-space: nowrap;
-        font-size: 14px;
+        font-size: 16px;
         text-transform: none;
         letter-spacing: 0;
       }
@@ -96,6 +282,25 @@
       .attempt-table th.center, .attempt-table td.center { text-align: center; }
       .attempt-table td.nowrap { white-space: nowrap; }
       .attempt-table td.center { font-variant-numeric: tabular-nums; }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-weight: 900;
+        font-size: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(15, 23, 42, 0.03);
+        color: rgba(15, 23, 42, 0.86);
+        white-space: nowrap;
+      }
+      .status-pill.invited { border-color: rgba(37, 99, 235, 0.28); background: rgba(37, 99, 235, 0.10); color: #1d4ed8; }
+      .status-pill.distributed { border-color: rgba(37, 99, 235, 0.28); background: rgba(37, 99, 235, 0.10); color: #1d4ed8; }
+      .status-pill.verified { border-color: rgba(16, 185, 129, 0.28); background: rgba(16, 185, 129, 0.10); color: #047857; }
+      .status-pill.in_exam { border-color: rgba(249, 115, 22, 0.30); background: rgba(249, 115, 22, 0.10); color: #9a3412; }
+      .status-pill.grading { border-color: rgba(124, 58, 237, 0.30); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
+      .status-pill.finished { border-color: rgba(22, 163, 74, 0.30); background: rgba(22, 163, 74, 0.10); color: #166534; }
+      .status-pill.expired { border-color: rgba(220, 38, 38, 0.30); background: rgba(220, 38, 38, 0.08); color: #b91c1c; }
     </style>
   </head>
   <body>
@@ -151,34 +356,34 @@
 
           <div class="table-scroll">
             <table class="exam-table" aria-label="试卷列表">
-              <colgroup>
-                <col style="width: 70px;" />
-                <col style="width: 220px;" />
-                <col style="width: 260px;" />
-                <col style="width: 80px;" />
-                <col style="width: 200px;" />
-                <col />
-              </colgroup>
+			              <colgroup>
+			                <col style="width: 70px;" />
+			                <col style="width: 220px;" />
+			                <col style="width: 220px;" />
+			                <col style="width: 60px;" />
+			                <col style="width: 200px;" />
+			                <col />
+			              </colgroup>
               <thead>
-                <tr>
-                  <th class="col-id">ID</th>
-                  <th class="col-exam-key">EXAM_KEY</th>
-                  <th>标题</th>
-                  <th class="col-count">题数</th>
-                  <th class="col-updated">更新时间</th>
-                  <th class="col-actions"></th>
-                </tr>
-              </thead>
+		                <tr>
+		                  <th class="col-id">ID</th>
+		                  <th class="col-exam-key">EXAM_KEY</th>
+		                  <th>标题</th>
+		                  <th class="col-count">题数</th>
+		                  <th class="col-updated"><span class="shift-updated">更新时间</span></th>
+		                  <th class="col-actions"></th>
+		                </tr>
+	              </thead>
               <tbody>
                 {% for e in exams_page %}
                 <tr class="row-link" data-href="/admin/exams/{{ e.id }}">
                   <td class="col-id">{{ e.id }}</td>
-                  <td class="col-key"><span class="exam-key">{{ e.exam_key }}</span></td>
-                  <td class="col-title">{{ e.title }}</td>
-                  <td class="col-count">{{ e.count }}</td>
-                  <td class="col-updated">{{ e.updated_at.strftime("%Y-%m-%d %H:%M:%S") if e.updated_at else "" }}</td>
-                  <td class="col-actions">
-                    <div class="exam-actions">
+	                  <td class="col-key"><span class="exam-key">{{ e.exam_key }}</span></td>
+		                  <td class="col-title">{{ e.title }}</td>
+		                  <td class="col-count">{{ e.count }}</td>
+		                  <td class="col-updated"><span class="shift-updated">{{ e.updated_at.strftime("%Y-%m-%d %H:%M:%S") if e.updated_at else "" }}</span></td>
+		                  <td class="col-actions">
+	                    <div class="exam-actions">
                       <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该试卷？删除后候选人关联试卷将显示为“已删除”，但已归档答题仍可查看。');">
                         <button class="btn btn-danger" type="submit">删除</button>
                       </form>
@@ -266,13 +471,12 @@
           <div class="panel-head">
             <div>
               <h2 class="title">答题邀请</h2>
-              <p class="sub">选择试卷与候选人，生成 token/链接/二维码并发送。</p>
             </div>
           </div>
-
+ 
           <form class="assign-form" method="post" action="/admin/assignments">
             <div class="assign-grid-2">
-              <div class="field">
+              <div class="field field-mid">
                 <label for="exam_key">试卷</label>
                 <select id="exam_key" name="exam_key" required>
                   {% for e in exams_all %}
@@ -281,69 +485,152 @@
                 </select>
               </div>
 
-              <div class="field">
+              <div class="field field-mid">
                 <label for="candidate_id">候选人</label>
                 <select id="candidate_id" name="candidate_id" required>
                   {% for c in candidates %}
-                    {% set status_map = {'created':'已创建','distributed':'已分发','verified':'已验证','finished':'已完成'} %}
-                    <option value="{{ c.id }}" {% if assign_candidate_id and (assign_candidate_id|int) == c.id %}selected{% endif %}>#{{ c.id }} {{ c.name }} {{ c.phone }} ({{ status_map.get(c.status, c.status) }})</option>
+                    <option value="{{ c.id }}" {% if assign_candidate_id and (assign_candidate_id|int) == c.id %}selected{% endif %}>#{{ c.id }} {{ c.name }} {{ c.phone }}</option>
                   {% endfor %}
                 </select>
               </div>
             </div>
 
-            <input type="hidden" name="pass_threshold" value="60" />
-            <div class="assign-grid-2" style="margin-top: 10px;">
-              <div class="field">
-                <label for="time_limit_seconds">限时（时:分:秒）</label>
-                <input id="time_limit_seconds" class="input" name="time_limit_seconds" value="02:00:00" placeholder="02:00:00" />
-              </div>
-              <div class="field">
-                <label for="verify_max_attempts">验证次数</label>
-                <input id="verify_max_attempts" class="input" name="verify_max_attempts" value="3" inputmode="numeric" />
-              </div>
-            </div>
+            <div class="assign-divider" aria-hidden="true"></div>
 
-            <div style="margin-top: 12px; display:flex; gap:10px; justify-content:flex-end; flex-wrap: wrap;">
+              <input type="hidden" name="pass_threshold" value="60" />
+              <div class="assign-grid-2 assign-grid-params">
+                <div class="field field-narrow">
+                  <label for="invite_start_date">答题开始日期（可选）</label>
+                  <div class="date-proxy">
+                    <input id="invite_start_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
+                    <input id="invite_start_date" class="input date-native" type="date" name="invite_start_date" value="" tabindex="-1" aria-hidden="true" />
+                    <button class="date-btn" type="button" data-for="invite_start_date" aria-label="选择答题开始日期">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="field field-narrow">
+                  <label for="invite_end_date">答题结束日期（可选）</label>
+                  <div class="date-proxy">
+                    <input id="invite_end_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
+                    <input id="invite_end_date" class="input date-native" type="date" name="invite_end_date" value="" tabindex="-1" aria-hidden="true" />
+                    <button class="date-btn" type="button" data-for="invite_end_date" aria-label="选择答题结束日期">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="field field-narrow">
+                  <label for="time_limit_seconds">限时（时:分:秒）</label>
+                  <input id="time_limit_seconds" class="input" name="time_limit_seconds" value="02:00:00" placeholder="02:00:00" />
+                </div>
+              </div>
+
+            <div class="assign-actions">
               <button class="btn btn-primary" type="submit">生成邀请链接/二维码</button>
             </div>
           </form>
 
           <div class="assign-attempts" role="region" aria-label="候选人答题情况">
-            <div class="section-head" style="margin: 0 0 10px;">
-              <div style="display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap;">
-                <h3 class="title" style="font-size:16px; margin:0;">候选人答题情况</h3>
-                <div class="exam-search" style="margin:0; flex: 0 1 420px; max-width: 420px; min-width: 260px;">
-                  <div class="field" style="margin:0;">
-                    <input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷" autocomplete="off" aria-label="查询（姓名/电话/试卷）" />
+            <div class="section-head attempt-head">
+              <form class="attempt-filter" method="get" action="/admin#tab-assign" aria-label="按试卷开始时间筛选">
+                <input type="hidden" name="exam_q" value="{{ exam_q or '' }}" />
+                <input type="hidden" name="exam_page" value="{{ exam_page or '' }}" />
+
+                <div class="field field-q">
+                  <label for="attempt_q">候选人答题情况</label>
+                  <input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷/Token" autocomplete="off" aria-label="查询（姓名/电话/试卷/Token）" />
+                </div>
+
+                <div class="range-group" aria-label="开始时间范围">
+                  <div class="field field-sm">
+                    <label for="attempt_start_from">开始时间(起)</label>
+                    <div class="date-proxy">
+                      <input id="attempt_start_from_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
+                      <input id="attempt_start_from" class="input date-native" type="date" name="attempt_start_from" value="{{ attempt_start_from or '' }}" tabindex="-1" aria-hidden="true" />
+                      <button class="date-btn" type="button" data-for="attempt_start_from" aria-label="选择开始时间(起)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="range-sep" aria-hidden="true">—</div>
+                  <div class="field field-sm">
+                    <label for="attempt_start_to">开始时间(止)</label>
+                    <div class="date-proxy">
+                      <input id="attempt_start_to_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
+                      <input id="attempt_start_to" class="input date-native" type="date" name="attempt_start_to" value="{{ attempt_start_to or '' }}" tabindex="-1" aria-hidden="true" />
+                      <button class="date-btn" type="button" data-for="attempt_start_to" aria-label="选择开始时间(止)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+
+                <div class="attempt-actions" aria-label="筛选操作">
+                  <button class="btn btn-primary" type="submit">查询</button>
+                  {% set attempt_reset_qs = "" %}
+                  {% if exam_q %}{% set attempt_reset_qs = attempt_reset_qs ~ "exam_q=" ~ (exam_q|urlencode) %}{% endif %}
+                  {% if exam_page %}{% set attempt_reset_qs = attempt_reset_qs ~ ("&" if attempt_reset_qs else "") ~ "exam_page=" ~ exam_page %}{% endif %}
+                  <a class="btn btn-primary" href="/admin{% if attempt_reset_qs %}?{{ attempt_reset_qs }}{% endif %}#tab-assign" aria-label="重置筛选">重置</a>
+                </div>
+              </form>
             </div>
 
             <div class="table-scroll">
               <table class="attempt-table" aria-label="候选人答题情况列表">
                 <thead>
                   <tr>
-                    <th style="width:60px;">ID</th>
-                    <th style="width:120px;">姓名</th>
-                    <th style="width:140px;">电话</th>
-                    <th style="width:150px;">试卷</th>
-                    <th class="center" style="width:90px;">成绩</th>
-                    <th style="width:180px;">进入时间</th>
-                    <th style="width:180px;">提交时间</th>
+                    <th style="width:32px;">ID</th>
+                    <th style="width:56px;">姓名</th>
+                    <th style="width:96px;">电话</th>
+                    <th style="width:110px;">试卷</th>
+                    <th style="width:92px;">Token</th>
+                    <th class="center" style="width:68px;">状态</th>
+                    <th class="center" style="width:40px;">成绩</th>
+                    <th style="width:300px;">时间</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for c in attempt_candidates %}
-                  <tr class="row-link" data-href="{{ c.attempt_href }}">
-                    <td>{{ c.id }}</td>
-                    <td class="ellipsis">{{ c.name }}</td>
+                  <tr
+                    {% if c.attempt_href or c.attempt_msg %}class="row-link"{% endif %}
+                    {% if c.attempt_href %}data-href="{{ c.attempt_href }}"{% endif %}
+                    {% if c.attempt_msg %}data-msg="{{ c.attempt_msg }}"{% endif %}
+                  >
+                    <td>{{ c.attempt_id }}</td>
+                    <td class="ellipsis">
+                      {% if c.candidate_id %}
+                        <a class="row-a" href="{{ url_for('admin_candidate_profile', candidate_id=c.candidate_id) }}">{{ c.name }}</a>
+                      {% else %}
+                        {{ c.name }}
+                      {% endif %}
+                    </td>
                     <td class="ellipsis">{{ c.phone }}</td>
-                    <td class="ellipsis"><code>{{ c.exam_key }}</code></td>
+                    <td class="ellipsis">
+                      {% if c.exam_key %}
+                        <a class="row-a" href="{{ url_for('admin_exam_detail', exam_key=c.exam_key) }}"><code>{{ c.exam_key }}</code></a>
+                      {% else %}
+                        <code>{{ c.exam_key }}</code>
+                      {% endif %}
+                    </td>
+                    <td class="ellipsis"><code title="{{ c.token }}">{{ c.token }}</code></td>
+                    <td class="center"><span class="status-pill {{ c.status }}">{{ c.status_label }}</span></td>
                     <td class="center">{{ c.score if c.score is not none else "" }}</td>
-                    <td class="nowrap">{{ c.exam_started_at.strftime("%Y-%m-%d %H:%M:%S") if c.exam_started_at else "" }}</td>
-                    <td class="nowrap">{{ c.exam_submitted_at.strftime("%Y-%m-%d %H:%M:%S") if c.exam_submitted_at else "" }}</td>
+                    <td class="nowrap">
+                      {% if c.invite_start_date %}<div>开始：{{ c.invite_start_date.replace("-", "/") }}</div>{% endif %}
+                      {% if c.invite_end_date %}<div>结束：{{ c.invite_end_date.replace("-", "/") }}</div>{% endif %}
+                    </td>
                   </tr>
                   {% endfor %}
                 </tbody>
@@ -354,6 +641,8 @@
             {% if exam_q %}{% set attempt_qs_extra = attempt_qs_extra ~ "&exam_q=" ~ (exam_q|urlencode) %}{% endif %}
             {% if exam_page %}{% set attempt_qs_extra = attempt_qs_extra ~ "&exam_page=" ~ exam_page %}{% endif %}
             {% if attempt_q %}{% set attempt_qs_extra = attempt_qs_extra ~ "&attempt_q=" ~ (attempt_q|urlencode) %}{% endif %}
+            {% if attempt_start_from %}{% set attempt_qs_extra = attempt_qs_extra ~ "&attempt_start_from=" ~ (attempt_start_from|urlencode) %}{% endif %}
+            {% if attempt_start_to %}{% set attempt_qs_extra = attempt_qs_extra ~ "&attempt_start_to=" ~ (attempt_start_to|urlencode) %}{% endif %}
 
             {% set total_attempt_pages_display = total_attempt_pages if total_attempt_pages and total_attempt_pages > 0 else 1 %}
             <div class="std-pager" aria-label="答题情况分页">
@@ -541,15 +830,82 @@
         });
       }
 
+      const toast = (msg) => {
+        const m = String(msg || "").trim();
+        if (!m) return;
+        const div = document.createElement("div");
+        div.className = "flash";
+        div.textContent = m;
+        document.body.appendChild(div);
+        window.setTimeout(() => {
+          try { div.remove(); } catch (_) {}
+        }, 5200);
+      };
+
       // Clickable rows (except clicking buttons/links in the action column).
-      for (const tr of document.querySelectorAll("tr[data-href]")) {
+      for (const tr of document.querySelectorAll("tr[data-href], tr[data-msg]")) {
         tr.addEventListener("click", (ev) => {
           const el = ev.target;
           if (el && (el.closest("a") || el.closest("button") || el.closest("form"))) return;
           const href = tr.getAttribute("data-href");
           if (href) window.location.href = href;
+          else {
+            const msg = tr.getAttribute("data-msg");
+            if (msg) toast(msg);
+          }
         });
       }
+
+      // Date proxy for invite window (yyyy/mm/dd).
+      const initDateProxy = (id) => {
+        const native = document.getElementById(id);
+        const display = document.getElementById(id + "_display");
+        if (!native || !display) return;
+        const fmt = (v) => (v ? String(v).replaceAll("-", "/") : "");
+        const open = () => {
+          try {
+            if (native.showPicker) native.showPicker();
+            else {
+              native.focus();
+              native.click();
+            }
+          } catch (_) {
+            try { native.focus(); } catch (_) {}
+          }
+        };
+        display.value = fmt(native.value);
+        display.addEventListener("click", open);
+        display.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            open();
+          }
+        });
+        native.addEventListener("change", () => {
+          display.value = fmt(native.value);
+        });
+      };
+      initDateProxy("invite_start_date");
+      initDateProxy("invite_end_date");
+      initDateProxy("attempt_start_from");
+      initDateProxy("attempt_start_to");
+      document.querySelectorAll("button.date-btn[data-for]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const id = btn.getAttribute("data-for");
+          const native = id ? document.getElementById(id) : null;
+          if (!native) return;
+          try {
+            if (native.showPicker) native.showPicker();
+            else {
+              native.focus();
+              native.click();
+            }
+          } catch (_) {
+            try { native.focus(); } catch (_) {}
+          }
+        });
+      });
+
     </script>
   </body>
 </html>

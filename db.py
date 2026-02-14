@@ -46,9 +46,50 @@ def conn_scope() -> Iterator[psycopg2.extensions.connection]:
         conn.close()        # 操作完成后，关闭数据库连接
 
 
+def _candidate_query_where_clause(query: str | None) -> tuple[str, list[Any]]:
+    """
+    Build a WHERE clause + params for candidate search.
+
+    Behavior:
+    - If the user enters a pure-number query, treat it as:
+        phone prefix match (phone LIKE '{q}%') OR exact ID match (id = q).
+      This matches the UI expectation that entering "13" shows phones starting with 13
+      (and also candidate ID 13 if exists).
+    - Supports optional ID prefixes like "#3" or "id:3".
+    """
+    qraw = str(query or "").strip()
+    if not qraw:
+        return "", []
+
+    qid = qraw
+    if qid.startswith("#"):
+        qid = qid[1:].strip()
+    if qid.lower().startswith("id:"):
+        qid = qid[3:].strip()
+
+    if qid.isdigit():
+        params: list[Any] = [f"{qid}%"]
+        try:
+            qnum = int(qid)
+        except Exception:
+            qnum = None
+        if qnum is None:
+            return " WHERE (phone LIKE %s)", params
+        params.append(qnum)
+        return " WHERE (phone LIKE %s OR id = %s)", params
+
+    q = f"%{qraw}%"
+    return " WHERE (name ILIKE %s OR phone LIKE %s)", [q, q]
+
+
 def init_db() -> None:
     """
-    Create required DB objects (only candidate table + enum).
+    Create/upgrade required DB objects.
+
+    Notes:
+    - candidate no longer stores exam status/entered/submitted timestamps.
+    - Per-token exam attempts are stored in exam_paper so one candidate can take the same paper multiple times
+      with different tokens.
     """
     enum_ddl = """
 DO $$
@@ -122,6 +163,34 @@ BEGIN
       SELECT 1
       FROM pg_enum e
       JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'candidate_status' AND e.enumlabel = 'in_exam'
+    ) THEN
+      BEGIN
+        ALTER TYPE candidate_status ADD VALUE 'in_exam';
+      EXCEPTION
+        WHEN OTHERS THEN
+          NULL;
+      END;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'candidate_status' AND e.enumlabel = 'grading'
+    ) THEN
+      BEGIN
+        ALTER TYPE candidate_status ADD VALUE 'grading';
+      EXCEPTION
+        WHEN OTHERS THEN
+          NULL;
+      END;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
       WHERE t.typname = 'candidate_status' AND e.enumlabel = 'finished'
     ) THEN
       BEGIN
@@ -135,19 +204,81 @@ BEGIN
 END$$;
 """
 
+    exam_paper_enum_ddl = """
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'exam_paper_status') THEN
+    CREATE TYPE exam_paper_status AS ENUM ('invited', 'verified', 'in_exam', 'grading', 'finished');
+  ELSE
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'exam_paper_status' AND e.enumlabel = 'invited'
+    ) THEN
+      BEGIN
+        ALTER TYPE exam_paper_status ADD VALUE 'invited';
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'exam_paper_status' AND e.enumlabel = 'verified'
+    ) THEN
+      BEGIN
+        ALTER TYPE exam_paper_status ADD VALUE 'verified';
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'exam_paper_status' AND e.enumlabel = 'in_exam'
+    ) THEN
+      BEGIN
+        ALTER TYPE exam_paper_status ADD VALUE 'in_exam';
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'exam_paper_status' AND e.enumlabel = 'grading'
+    ) THEN
+      BEGIN
+        ALTER TYPE exam_paper_status ADD VALUE 'grading';
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'exam_paper_status' AND e.enumlabel = 'finished'
+    ) THEN
+      BEGIN
+        ALTER TYPE exam_paper_status ADD VALUE 'finished';
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+  END IF;
+END$$;
+"""
+
     schema_ddl = """
  CREATE TABLE IF NOT EXISTS candidate (
    id               BIGSERIAL PRIMARY KEY,
    name             TEXT NOT NULL,
    phone            TEXT NOT NULL,
    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-   status           candidate_status NOT NULL DEFAULT 'created',
-   exam_key         TEXT NULL,
-   score            INT NOT NULL DEFAULT 0 CHECK (score BETWEEN 0 AND 100),
-   exam_started_at  TIMESTAMPTZ NULL,
-   exam_submitted_at TIMESTAMPTZ NULL,
-  duration_seconds INT NULL CHECK (duration_seconds IS NULL OR duration_seconds >= 0),
   resume_bytes     BYTEA NULL,
   resume_filename  TEXT NULL,
   resume_mime      TEXT NULL,
@@ -174,18 +305,15 @@ UPDATE candidate SET created_at = NOW() WHERE created_at IS NULL;
 ALTER TABLE candidate ALTER COLUMN created_at SET DEFAULT NOW();
 ALTER TABLE candidate ALTER COLUMN created_at SET NOT NULL;
 
-ALTER TABLE candidate ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
-UPDATE candidate SET updated_at = NOW() WHERE updated_at IS NULL;
-ALTER TABLE candidate ALTER COLUMN updated_at SET DEFAULT NOW();
-ALTER TABLE candidate ALTER COLUMN updated_at SET NOT NULL;
+ALTER TABLE candidate DROP COLUMN IF EXISTS updated_at;
 
--- Ensure status default is "created" even when the table already existed (CREATE TABLE IF NOT EXISTS won't update defaults).
-ALTER TABLE candidate ALTER COLUMN status SET DEFAULT 'created'::candidate_status;
-
- ALTER TABLE candidate ADD COLUMN IF NOT EXISTS exam_key TEXT NULL;
- ALTER TABLE candidate ADD COLUMN IF NOT EXISTS exam_started_at TIMESTAMPTZ NULL;
- ALTER TABLE candidate ADD COLUMN IF NOT EXISTS exam_submitted_at TIMESTAMPTZ NULL;
- ALTER TABLE candidate ADD COLUMN IF NOT EXISTS duration_seconds INT NULL;
+-- Drop deprecated columns (status/exam fields moved to exam_paper).
+ALTER TABLE candidate DROP COLUMN IF EXISTS status;
+ALTER TABLE candidate DROP COLUMN IF EXISTS exam_key;
+ALTER TABLE candidate DROP COLUMN IF EXISTS score;
+ALTER TABLE candidate DROP COLUMN IF EXISTS exam_started_at;
+ALTER TABLE candidate DROP COLUMN IF EXISTS exam_submitted_at;
+ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
  ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_bytes BYTEA NULL;
  ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_filename TEXT NULL;
  ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_mime TEXT NULL;
@@ -193,51 +321,59 @@ ALTER TABLE candidate ALTER COLUMN status SET DEFAULT 'created'::candidate_statu
  ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_parsed JSONB NULL;
  ALTER TABLE candidate ADD COLUMN IF NOT EXISTS resume_parsed_at TIMESTAMPTZ NULL;
 
+  -- Drop deprecated columns (we no longer use them).
+  ALTER TABLE candidate DROP COLUMN IF EXISTS interview;
+  ALTER TABLE candidate DROP COLUMN IF EXISTS remark;
+
+ CREATE INDEX IF NOT EXISTS idx_candidate_phone ON candidate(phone);
+ CREATE INDEX IF NOT EXISTS idx_candidate_created_at ON candidate(created_at);
+
+  CREATE TABLE IF NOT EXISTS exam_paper (
+    id BIGSERIAL PRIMARY KEY,
+    candidate_id BIGINT NOT NULL REFERENCES candidate(id),
+    phone TEXT NOT NULL,
+    exam_key TEXT NOT NULL,
+    token TEXT NOT NULL,
+    invite_start_date DATE NULL,
+    invite_end_date DATE NULL,
+    status exam_paper_status NOT NULL DEFAULT 'invited',
+    entered_at TIMESTAMPTZ NULL,
+    finished_at TIMESTAMPTZ NULL,
+    score INT NULL CHECK (score IS NULL OR score BETWEEN 0 AND 100),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ );
+
+ ALTER TABLE exam_paper DROP COLUMN IF EXISTS duration_seconds;
+
  DO $$
  BEGIN
-   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'candidate_duration_seconds_check') THEN
+   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'exam_paper_token_key') THEN
      BEGIN
-       ALTER TABLE candidate
-         ADD CONSTRAINT candidate_duration_seconds_check
-         CHECK (duration_seconds IS NULL OR duration_seconds >= 0);
-     EXCEPTION
-       WHEN OTHERS THEN
-         NULL;
+       ALTER TABLE exam_paper ADD CONSTRAINT exam_paper_token_key UNIQUE (token);
+     EXCEPTION WHEN OTHERS THEN NULL;
      END;
    END IF;
  END$$;
 
-  -- Drop deprecated columns (we no longer use them).
-  ALTER TABLE candidate DROP COLUMN IF EXISTS interview;
-  ALTER TABLE candidate DROP COLUMN IF EXISTS remark;
-  
-  -- Migrate legacy status values to the new lifecycle (best-effort).
-  UPDATE candidate
- SET status = CASE
-  WHEN status::text = 'distributed' THEN 'distributed'::candidate_status
-  WHEN status::text = 'verified' THEN 'verified'::candidate_status
-  WHEN status::text = 'finished' THEN 'finished'::candidate_status
-  WHEN status::text = 'send' AND exam_key IS NOT NULL THEN 'distributed'::candidate_status
-  WHEN status::text = 'send' AND exam_key IS NULL THEN 'created'::candidate_status
-  ELSE 'created'::candidate_status
-END
-WHERE status::text IN ('send', 'distributed', 'verified', 'finished');
-
--- If a record is marked distributed but has no exam assigned, treat it as created.
-UPDATE candidate
-SET status = 'created'::candidate_status
-WHERE status = 'distributed'::candidate_status AND exam_key IS NULL;
-
- CREATE INDEX IF NOT EXISTS idx_candidate_phone ON candidate(phone);
- CREATE INDEX IF NOT EXISTS idx_candidate_status ON candidate(status);
- CREATE INDEX IF NOT EXISTS idx_candidate_created_at ON candidate(created_at);
- """
+  CREATE INDEX IF NOT EXISTS idx_exam_paper_candidate_id ON exam_paper(candidate_id);
+  CREATE INDEX IF NOT EXISTS idx_exam_paper_phone ON exam_paper(phone);
+  CREATE INDEX IF NOT EXISTS idx_exam_paper_exam_key ON exam_paper(exam_key);
+  CREATE INDEX IF NOT EXISTS idx_exam_paper_status ON exam_paper(status);
+  CREATE INDEX IF NOT EXISTS idx_exam_paper_created_at ON exam_paper(created_at);
+  ALTER TABLE exam_paper ADD COLUMN IF NOT EXISTS invite_start_date DATE NULL;
+  ALTER TABLE exam_paper ADD COLUMN IF NOT EXISTS invite_end_date DATE NULL;
+  CREATE INDEX IF NOT EXISTS idx_exam_paper_invite_start_date ON exam_paper(invite_start_date);
+  """
     try:
         # PostgreSQL requires committing enum value changes before using them in
         # defaults/updates within the same session. Execute enum DDL separately.
         with conn_scope() as conn:
             with conn.cursor() as cur:
                 cur.execute(enum_ddl)
+        with conn_scope() as conn:
+            with conn.cursor() as cur:
+                cur.execute(exam_paper_enum_ddl)
         with conn_scope() as conn:
             with conn.cursor() as cur:
                 cur.execute(schema_ddl)
@@ -264,27 +400,14 @@ def list_candidates(
    name,
    phone,
    created_at,
-   status,
-   exam_key,
-   score,
-   exam_started_at,
-   exam_submitted_at,
-   duration_seconds,
    (resume_bytes IS NOT NULL) AS has_resume
   FROM candidate
   """
     params: list[Any] = []      # 最多返回多少条
-    if query:   # 搜索关键字
-        qraw = str(query or "").strip()
-        q = f"%{qraw}%"  # 包含query这个内容就可以
-        where_parts: list[str] = []
-        if qraw.isdigit():
-            where_parts.append("id = %s")
-            params.append(int(qraw))
-        where_parts.append("name ILIKE %s")  # 不区分大小写的模糊查询
-        where_parts.append("phone LIKE %s")
-        params.extend([q, q])  # 一个给name，一个给phone
-        sql += " WHERE " + " OR ".join(where_parts)
+    where_sql, where_params = _candidate_query_where_clause(query)
+    if where_sql:
+        sql += where_sql
+        params.extend(where_params)
 
     if created_from is not None:
         if " WHERE " in sql:
@@ -315,60 +438,19 @@ def list_candidates(
 def count_candidates(*, query: str | None = None) -> int:
     sql = "SELECT COUNT(*) FROM candidate"
     params: list[Any] = []
-    if query:
-        qraw = str(query or "").strip()
-        q = f"%{qraw}%"
-        where_parts: list[str] = []
-        if qraw.isdigit():
-            where_parts.append("id = %s")
-            params.append(int(qraw))
-        where_parts.append("name ILIKE %s")
-        where_parts.append("phone LIKE %s")
-        params.extend([q, q])
-        sql += " WHERE " + " OR ".join(where_parts)
+    where_sql, where_params = _candidate_query_where_clause(query)
+    if where_sql:
+        sql += where_sql
+        params.extend(where_params)
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, tuple(params))
             return int(cur.fetchone()[0])
 
 
-def has_recent_exam_submission(name: str, phone: str, *, months: int = 6) -> bool:
-    if months <= 0:
-        return False
-    sql = """
-SELECT 1
-FROM candidate
-WHERE name=%s AND phone=%s
-  AND exam_submitted_at IS NOT NULL
-  AND exam_submitted_at >= (NOW() - (%s || ' months')::interval)
-LIMIT 1
-"""
-    with conn_scope() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (name, phone, int(months)))
-            return cur.fetchone() is not None
-
-
-def has_recent_exam_submission_by_phone(phone: str, *, months: int = 6) -> bool:
-    if months <= 0:
-        return False
-    sql = """
-SELECT 1
-FROM candidate
-WHERE phone=%s
-  AND exam_submitted_at IS NOT NULL
-  AND exam_submitted_at >= (NOW() - (%s || ' months')::interval)
-LIMIT 1
-"""
-    with conn_scope() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (str(phone or ""), int(months)))
-            return cur.fetchone() is not None
-
-
 def get_candidate_by_phone(phone: str) -> dict[str, Any] | None:
     sql = """
- SELECT id, name, phone, created_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds
+ SELECT id, name, phone, created_at
  FROM candidate
 WHERE phone = %s
 ORDER BY id DESC
@@ -396,7 +478,7 @@ def create_candidate(name: str, phone: str) -> int:
 # 候选人（考生）的 id查找到候选者的身份信息
 def get_candidate(candidate_id: int) -> dict[str, Any] | None:
     sql = """
- SELECT id, name, phone, created_at, updated_at, status, exam_key, score, exam_started_at, exam_submitted_at, duration_seconds,
+ SELECT id, name, phone, created_at,
         resume_filename, resume_mime, resume_size, resume_parsed, resume_parsed_at
   FROM candidate
   WHERE id = %s
@@ -437,17 +519,16 @@ def update_candidate_resume(
     resume_parsed: dict[str, Any] | None = None,
 ) -> None:
     sql = """
-UPDATE candidate
-SET
-  resume_bytes=%s,
-  resume_filename=%s,
-  resume_mime=%s,
-  resume_size=%s,
-  resume_parsed=%s,
-  resume_parsed_at=NOW(),
-  updated_at=NOW()
-WHERE id=%s
-"""
+ UPDATE candidate
+ SET
+   resume_bytes=%s,
+   resume_filename=%s,
+   resume_mime=%s,
+   resume_size=%s,
+   resume_parsed=%s,
+   resume_parsed_at=NOW()
+ WHERE id=%s
+ """
     parsed_param = None
     if resume_parsed is not None:
         parsed_param = psycopg2.extras.Json(
@@ -476,21 +557,19 @@ def update_candidate_resume_parsed(
 ) -> None:
     if touch_resume_parsed_at:
         sql = """
- UPDATE candidate
- SET
-   resume_parsed=%s,
-   resume_parsed_at=NOW(),
-   updated_at=NOW()
- WHERE id=%s
- """
+  UPDATE candidate
+  SET
+    resume_parsed=%s,
+    resume_parsed_at=NOW()
+  WHERE id=%s
+  """
     else:
         sql = """
- UPDATE candidate
- SET
-   resume_parsed=%s,
-   updated_at=NOW()
- WHERE id=%s
- """
+  UPDATE candidate
+  SET
+    resume_parsed=%s
+  WHERE id=%s
+  """
     parsed_param = None
     if resume_parsed is not None:
         parsed_param = psycopg2.extras.Json(resume_parsed, dumps=lambda x: json.dumps(x, ensure_ascii=False))
@@ -499,27 +578,12 @@ def update_candidate_resume_parsed(
             cur.execute(sql, (parsed_param, int(candidate_id)))
 
 
-# 设置id值候选者的状态
-def set_candidate_status(candidate_id: int, status: str) -> None:
-    sql = "UPDATE candidate SET status = %s, updated_at=NOW() WHERE id = %s"
-    with conn_scope() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (status, int(candidate_id)))
-
-# 根据id值设置试卷id值
-def set_candidate_exam_key(candidate_id: int, exam_key: str) -> None:
-    sql = "UPDATE candidate SET exam_key=%s, updated_at=NOW() WHERE id=%s"
-    with conn_scope() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (str(exam_key or ""), int(candidate_id)))
-
-
 def mark_exam_deleted(exam_key: str, *, marker: str = "已删除") -> int:
     """
-    When an exam is deleted, preserve candidate history but mark the exam reference.
+    When an exam is deleted, preserve history but mark the exam reference in exam_paper.
     Returns number of affected rows.
     """
-    sql = "UPDATE candidate SET exam_key=%s WHERE exam_key=%s"
+    sql = "UPDATE exam_paper SET exam_key=%s WHERE exam_key=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (str(marker), str(exam_key or "")))
@@ -528,10 +592,10 @@ def mark_exam_deleted(exam_key: str, *, marker: str = "已删除") -> int:
 
 def rename_exam_key(old_exam_key: str, new_exam_key: str) -> int:
     """
-    Rename exam_key references in candidate table.
+    Rename exam_key references in exam_paper table.
     Returns number of affected rows.
     """
-    sql = "UPDATE candidate SET exam_key=%s WHERE exam_key=%s"
+    sql = "UPDATE exam_paper SET exam_key=%s WHERE exam_key=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (str(new_exam_key or ""), str(old_exam_key or "")))
@@ -540,52 +604,27 @@ def rename_exam_key(old_exam_key: str, new_exam_key: str) -> int:
 # 根据id修改候选者姓名和手机号
 def update_candidate(candidate_id: int, *, name: str, phone: str, created_at=None) -> None:
     if created_at is None:
-        sql = "UPDATE candidate SET name=%s, phone=%s, updated_at=NOW() WHERE id=%s"
+        sql = "UPDATE candidate SET name=%s, phone=%s WHERE id=%s"
         params = (name, phone, int(candidate_id))
     else:
-        sql = "UPDATE candidate SET name=%s, phone=%s, created_at=%s, updated_at=NOW() WHERE id=%s"
+        sql = "UPDATE candidate SET name=%s, phone=%s, created_at=%s WHERE id=%s"
         params = (name, phone, created_at, int(candidate_id))
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, params)
 
 
-def reset_candidate_exam_state(candidate_id: int) -> None:
-    sql = """
- UPDATE candidate
- SET
-   status='created',
-   exam_key=NULL,
-   score=0,
-   exam_started_at=NULL,
-   exam_submitted_at=NULL,
-   duration_seconds=NULL,
-   updated_at=NOW()
- WHERE id=%s
- """
-    with conn_scope() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (int(candidate_id),))
-
-
 # 根据id号删除候选者id
 def delete_candidate(candidate_id: int) -> None:
+    # Preserve exam history: candidates with exam_paper records cannot be deleted.
+    sql_check = "SELECT 1 FROM exam_paper WHERE candidate_id=%s LIMIT 1"
     sql = "DELETE FROM candidate WHERE id=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
+            cur.execute(sql_check, (int(candidate_id),))
+            if cur.fetchone() is not None:
+                raise RuntimeError("candidate has exam_paper records; deletion is not allowed")
             cur.execute(sql, (int(candidate_id),))
-
-
-# 根据id值创建候选者开始试卷时间
-def set_candidate_exam_started_at(candidate_id: int, started_at) -> None:
-    sql = """
-UPDATE candidate
-SET exam_started_at = COALESCE(exam_started_at, %s)
-WHERE id = %s
-"""
-    with conn_scope() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (started_at, int(candidate_id)))
 
 
 # 通过姓名和电话验证候选者
@@ -597,35 +636,239 @@ def verify_candidate(candidate_id: int, *, name: str, phone: str) -> bool:
             return cur.fetchone() is not None
 
 
-# 更新候选者数据表
-def update_candidate_result(
-    candidate_id: int,
+def create_exam_paper(
     *,
-    status: str,
-    score: int,
-    exam_started_at=None,
-    exam_submitted_at=None,
-    duration_seconds: int | None,
-) -> None:
+    candidate_id: int,
+    phone: str,
+    exam_key: str,
+    token: str,
+    invite_start_date: str | None = None,
+    invite_end_date: str | None = None,
+    status: str = "invited",
+) -> int:
     sql = """
-UPDATE candidate
-SET status=%s,
-    score=%s,
-    exam_started_at=COALESCE(exam_started_at, %s),
-    exam_submitted_at=%s,
-    duration_seconds=%s
-WHERE id=%s
-"""
+ INSERT INTO exam_paper(candidate_id, phone, exam_key, token, invite_start_date, invite_end_date, status)
+ VALUES (%s, %s, %s, %s, %s::date, %s::date, %s::exam_paper_status)
+ RETURNING id
+ """
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 sql,
                 (
-                    status,
-                    int(score),
-                    exam_started_at,
-                    exam_submitted_at,
-                    duration_seconds,
                     int(candidate_id),
+                    str(phone or ""),
+                    str(exam_key or ""),
+                    str(token or ""),
+                    (str(invite_start_date).strip() if invite_start_date else None),
+                    (str(invite_end_date).strip() if invite_end_date else None),
+                    str(status or "invited"),
                 ),
             )
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
+
+
+def get_exam_paper_by_token(token: str) -> dict[str, Any] | None:
+    sql = """
+ SELECT
+    id,
+    candidate_id,
+    phone,
+    exam_key,
+    token,
+    invite_start_date,
+    invite_end_date,
+    status,
+    entered_at,
+    finished_at,
+    score,
+    created_at,
+    updated_at
+ FROM exam_paper
+ WHERE token=%s
+ LIMIT 1
+ """
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(token or ""),))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+
+def set_exam_paper_status(token: str, status: str) -> None:
+    sql = "UPDATE exam_paper SET status=%s::exam_paper_status, updated_at=NOW() WHERE token=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(status or ""), str(token or "")))
+
+
+def set_exam_paper_entered_at(token: str, entered_at) -> None:
+    sql = """
+ UPDATE exam_paper
+ SET entered_at=COALESCE(entered_at, %s),
+     updated_at=NOW()
+ WHERE token=%s
+ """
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (entered_at, str(token or "")))
+
+
+def set_exam_paper_finished_at(token: str, finished_at) -> None:
+    sql = """
+ UPDATE exam_paper
+ SET finished_at=COALESCE(finished_at, %s),
+     updated_at=NOW()
+ WHERE token=%s
+ """
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (finished_at, str(token or "")))
+
+
+def set_exam_paper_invite_window_if_missing(
+    token: str,
+    *,
+    invite_start_date: str | None = None,
+    invite_end_date: str | None = None,
+) -> None:
+    """
+    Backfill invite window dates onto exam_paper without overwriting existing values.
+    """
+    sql = """
+ UPDATE exam_paper
+ SET
+   invite_start_date = COALESCE(invite_start_date, %s::date),
+   invite_end_date = COALESCE(invite_end_date, %s::date),
+   updated_at = NOW()
+ WHERE token=%s
+ """
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    (str(invite_start_date).strip() if invite_start_date else None),
+                    (str(invite_end_date).strip() if invite_end_date else None),
+                    str(token or ""),
+                ),
+            )
+
+
+def update_exam_paper_result(
+    token: str,
+    *,
+    status: str,
+    score: int | None,
+    entered_at=None,
+    finished_at=None,
+) -> None:
+    sql = """
+ UPDATE exam_paper
+ SET
+   status=%s::exam_paper_status,
+   score=%s,
+   entered_at=COALESCE(entered_at, %s),
+   finished_at=%s,
+   updated_at=NOW()
+ WHERE token=%s
+ """
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    str(status or ""),
+                    (int(score) if score is not None else None),
+                    entered_at,
+                    finished_at,
+                    str(token or ""),
+                ),
+            )
+
+
+def list_exam_papers(
+    *,
+    query: str | None = None,
+    invite_start_from: str | None = None,
+    invite_start_to: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    sql = """
+ SELECT
+    ep.id AS attempt_id,
+    ep.candidate_id,
+    c.name,
+    ep.phone,
+    ep.exam_key,
+    ep.token,
+    ep.invite_start_date,
+    ep.invite_end_date,
+    ep.status,
+    ep.entered_at,
+    ep.finished_at,
+    ep.score,
+    ep.created_at
+ FROM exam_paper ep
+ JOIN candidate c ON c.id = ep.candidate_id
+ """
+    params: list[Any] = []
+    where: list[str] = []
+    q = str(query or "").strip()
+    if q:
+        ql = f"%{q}%"
+        where.append("(c.name ILIKE %s OR ep.phone LIKE %s OR ep.exam_key ILIKE %s OR ep.token ILIKE %s)")
+        params.extend([ql, ql, ql, ql])
+    if invite_start_from:
+        where.append("ep.invite_start_date >= %s::date")
+        params.append(str(invite_start_from).strip())
+    if invite_start_to:
+        where.append("ep.invite_start_date <= %s::date")
+        params.append(str(invite_start_to).strip())
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += "\n ORDER BY ep.id DESC\n"
+    if limit is not None:
+        sql += " LIMIT %s"
+        params.append(int(limit))
+    if offset:
+        sql += " OFFSET %s"
+        params.append(int(offset))
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def count_exam_papers(
+    *,
+    query: str | None = None,
+    invite_start_from: str | None = None,
+    invite_start_to: str | None = None,
+) -> int:
+    sql = """
+ SELECT COUNT(*)
+ FROM exam_paper ep
+ JOIN candidate c ON c.id = ep.candidate_id
+ """
+    params: list[Any] = []
+    where: list[str] = []
+    q = str(query or "").strip()
+    if q:
+        ql = f"%{q}%"
+        where.append("(c.name ILIKE %s OR ep.phone LIKE %s OR ep.exam_key ILIKE %s OR ep.token ILIKE %s)")
+        params.extend([ql, ql, ql, ql])
+    if invite_start_from:
+        where.append("ep.invite_start_date >= %s::date")
+        params.append(str(invite_start_from).strip())
+    if invite_start_to:
+        where.append("ep.invite_start_date <= %s::date")
+        params.append(str(invite_start_to).strip())
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            return int(cur.fetchone()[0])

@@ -18,8 +18,8 @@ class TestMinSubmitSeconds(unittest.TestCase):
         self.assertEqual(compute_min_submit_seconds(100, 10), 50)
         self.assertEqual(compute_min_submit_seconds(100, 50), 50)
         self.assertEqual(compute_min_submit_seconds(100, 80), 80)
+        self.assertEqual(compute_min_submit_seconds(100, 0), 0)
 
 
 if __name__ == "__main__":
     unittest.main()
-

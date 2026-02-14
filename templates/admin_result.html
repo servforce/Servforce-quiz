@@ -13,6 +13,18 @@
         overflow: auto;
         border: 1px solid rgba(15, 23, 42, 0.10);
       }
+      .msg {
+        position: static;
+        transform: none;
+        left: auto;
+        top: auto;
+        animation: none;
+        max-width: none;
+        width: 100%;
+        box-shadow: none;
+        border-color: rgba(37, 99, 235, 0.25);
+        background: rgba(37, 99, 235, 0.08);
+      }
     </style>
   </head>
   <body>
@@ -43,9 +55,21 @@
             </div>
             <a class="btn" href="/admin#tab-assign">返回答题邀请</a>
           </div>
-          <pre>{{ assignment | tojson(indent=2) }}</pre>
+
+          {% set st = (assignment.status or '') %}
+          {% if st != 'graded' %}
+            <div class="flash msg">
+              当前状态：{{ st or 'unknown' }}。判卷结束后才可查看答题结果。
+            </div>
+          {% else %}
+            <details open>
+              <summary class="muted" style="cursor:pointer; font-weight:700;">调试信息（JSON）</summary>
+              <pre style="margin-top:10px;">{{ assignment | tojson(indent=2) }}</pre>
+            </details>
+          {% endif %}
         </section>
       </div>
     </main>
   </body>
 </html>
+

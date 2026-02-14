@@ -10,6 +10,7 @@ import json
 import os
 import time
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from config import DOUBAO_API_KEY, DOUBAO_BASE_URL, DOUBAO_MODEL, logger
@@ -52,8 +53,70 @@ def _doubao_responses(
         },
         method="POST",
     )
-    with urlopen(req, timeout=timeout_seconds) as resp:
-        raw = resp.read().decode("utf-8", errors="replace")
+    # Retry on transient errors (rate limit / gateway / network).
+    try:
+        max_retries = int(os.getenv("LLM_RETRY_MAX", "2") or "2")
+    except Exception:
+        max_retries = 2
+    max_retries = max(0, min(6, max_retries))
+
+    try:
+        backoff = float(os.getenv("LLM_RETRY_BACKOFF", "0.9") or "0.9")
+    except Exception:
+        backoff = 0.9
+    backoff = max(0.2, min(5.0, backoff))
+
+    raw = ""
+    last_err: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            with urlopen(req, timeout=timeout_seconds) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+            last_err = None
+            break
+        except HTTPError as e:
+            last_err = e
+            code = int(getattr(e, "code", 0) or 0)
+            retryable = code in {429, 500, 502, 503, 504}
+            if attempt >= max_retries or not retryable:
+                raise
+            try:
+                body_txt = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                body_txt = ""
+            logger.warning(
+                "LLM HTTP %s (attempt %s/%s): %s",
+                code,
+                attempt + 1,
+                max_retries + 1,
+                (body_txt or str(e))[:240],
+            )
+            time.sleep(backoff * (attempt + 1))
+        except URLError as e:
+            last_err = e
+            if attempt >= max_retries:
+                raise
+            logger.warning(
+                "LLM network error (attempt %s/%s): %s",
+                attempt + 1,
+                max_retries + 1,
+                str(e)[:240],
+            )
+            time.sleep(backoff * (attempt + 1))
+        except Exception as e:
+            last_err = e
+            if attempt >= max_retries:
+                raise
+            logger.warning(
+                "LLM transient error (attempt %s/%s): %s",
+                attempt + 1,
+                max_retries + 1,
+                str(e)[:240],
+            )
+            time.sleep(backoff * (attempt + 1))
+
+    if last_err is not None:
+        raise last_err
     try:
         return json.loads(raw)
     except Exception as e:

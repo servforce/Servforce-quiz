@@ -122,6 +122,26 @@
       .cand-actions .btn { padding: 7px 10px; font-weight: 800; }
       .cand-actions .btn-icon { min-width: 44px; padding: 7px 0; }
 
+      /* Make Candidate Management font scale match Exams Management (admin dashboard). */
+      .admin-surface { font-size: 16px; }
+      .admin-surface .title { font-size: 22px; letter-spacing: 0.2px; }
+      .admin-surface .field label { font-size: 16px; font-weight: 800; color: rgba(15, 23, 42, 0.78); }
+      .admin-surface .input,
+      .admin-surface select {
+        height: 40px;
+        padding-top: 0;
+        padding-bottom: 0;
+        line-height: 38px;
+        font-size: 17px;
+      }
+      .form-grid #candidateCreateForm .btn.btn-primary,
+      .form-grid #resumePickBtn.btn.btn-primary { font-size: 16px; }
+      .search-inline .btn { font-size: 16px; }
+      .date-proxy .date-btn { width: 32px; height: 32px; right: 8px; }
+      table.cands-table { font-size: 18px; }
+      table.cands-table th { font-size: 16px; }
+      .resume-name { font-size: 14px; }
+
       /* Keep header/body columns perfectly aligned: use fixed table layout + colgroup widths. */
       table.cands-table { table-layout: fixed; }
       /* Center Resume header/value so they sit on the same vertical line (like “题数 / 62”). */
@@ -203,7 +223,7 @@
             <form class="search-inline" method="get" action="/admin/candidates">
               <div class="field field-q">
                 <label for="q">候选人列表</label>
-                <input id="q" class="input" name="q" value="{{ q or '' }}" placeholder="ID/姓名/手机号" autocomplete="off" />
+                 <input id="q" class="input" name="q" value="{{ q or '' }}" placeholder="ID/姓名/手机号" autocomplete="off" />
               </div>
               <div class="range-group">
                 <div class="field field-sm">
@@ -411,6 +431,15 @@
             resumeFileName.title = resumeFileName.textContent || "";
           }
           if (!f || !resumeUploadForm) return;
+          if (typeof f.size === "number" && f.size > 10 * 1024 * 1024) {
+            alert("文件超过10MB，请重新上传");
+            try { resumeFile.value = ""; } catch (e) {}
+            if (resumeFileName) {
+              resumeFileName.textContent = "";
+              resumeFileName.title = "";
+            }
+            return;
+          }
           try {
             resumePickBtn.disabled = true;
             resumePickBtn.textContent = "解析中…";

@@ -20,9 +20,95 @@
       .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
 
       .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: center; }
-      .exam-meta-title h2 { margin: 0; font-size: 18px; }
+      .exam-meta-title h2 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 950;
+        letter-spacing: -0.2px;
+        line-height: 1.2;
+      }
+      .exam-meta-title .muted { font-size: 14px; }
       .exam-meta-desc { max-width: 920px; margin: 6px auto 0; color: var(--muted); font-size: 13px; line-height: 1.6; text-align: center; }
       .exam-meta-stats { margin-top: 10px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+      .exam-surface { position: relative; }
+      .exam-submit-corner {
+        position: absolute;
+        right: 16px;
+        top: 16px;
+        z-index: 5;
+        display: grid;
+        justify-items: end;
+        gap: 6px;
+      }
+      .exam-submit-corner .btn {
+        padding: 12px 18px;
+        border-radius: 14px;
+        font-size: 16px;
+        font-weight: 900;
+        min-width: 120px;
+      }
+      .exam-submit-hint {
+        color: rgba(220, 38, 38, 0.92);
+        font-weight: 800;
+        font-size: 12px;
+        line-height: 1.35;
+        text-align: right;
+        max-width: 260px;
+      }
+
+      /* Floating time card (fixed to viewport, aligned to exam surface right edge). */
+      .floating-time-card {
+        position: fixed;
+        top: 120px; /* below topbar */
+        /* Default: align with exam surface left padding. */
+        left: max(18px, calc((100vw - 1080px) / 2 + 18px));
+        z-index: 12;
+        width: 260px;
+        max-width: calc(100vw - 36px);
+        padding: 10px 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 22px 56px rgba(2, 6, 23, 0.18);
+        backdrop-filter: blur(10px);
+        display: grid;
+        gap: 10px;
+      }
+      .floating-time-row {
+        display: grid;
+        grid-template-columns: 80px 1fr;
+        align-items: baseline;
+        column-gap: 5px;
+        font-variant-numeric: tabular-nums;
+      }
+      .floating-time-label { color: var(--muted); font-weight: 900; font-size: 13px; white-space: nowrap; }
+      .floating-time-value { font-weight: 950; font-size: 20px; letter-spacing: 0.2px; text-align: right; }
+      .floating-time-value b { font-size: 22px; }
+      .exam-time-item {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 10px;
+        font-weight: 950;
+        font-variant-numeric: tabular-nums;
+      }
+      .exam-time-label { color: var(--muted); font-weight: 850; font-size: 13px; }
+      .exam-time-value { font-weight: 950; font-size: 18px; }
+      .exam-time-value b { font-size: 20px; letter-spacing: 0.2px; }
+
+      @media (max-width: 860px) {
+        .floating-time-card {
+          left: 18px;
+          width: auto;
+          transform: none;
+        }
+      }
+      /* Wide screens: stick the card to the exam surface edge (in the left gutter). */
+      @media (min-width: 1500px) {
+        .floating-time-card {
+          left: calc((100vw - 1080px) / 2 - 12px);
+          transform: translateX(-100%);
+        }
+      }
       .pill {
         display: inline-flex;
         align-items: center;
@@ -45,25 +131,32 @@
           <span class="brand-badge" aria-hidden="true"></span>
           <span>Servforce Quiz</span>
         </div>
-        <div class="nav" aria-label="候选人端">
-          <span class="nav-link active">在线作答</span>
-        </div>
-        <div class="flex">
-          <span class="nav-link" style="cursor:default;">剩余：<b id="remain" data-seconds="{{ remaining_seconds }}">{{ remaining_seconds }}</b></span>
-          <span class="nav-link" id="submitHint" style="cursor:default; color: rgba(220,38,38,.9);"></span>
-          <form method="post" action="/api/public/submit/{{ token }}" style="margin:0;">
-            <button id="submitBtn" class="btn btn-primary" type="submit">提交试卷</button>
-          </form>
-        </div>
       </div>
     </header>
 
-    <main class="container page">
+    <main class="container exam-frame page">
       {% for m in get_flashed_messages() %}
       <div class="flash error">{{ m }}</div>
       {% endfor %}
 
-      <div class="surface" role="region" aria-label="试卷">
+      <div class="floating-time-card" role="region" aria-label="时间浮窗">
+        <div class="floating-time-row">
+          <span class="floating-time-label">剩余时间</span>
+          <span class="floating-time-value"><b id="remain" data-seconds="{{ remaining_seconds }}">{{ remaining_seconds }}</b></span>
+        </div>
+        <div class="floating-time-row">
+          <span class="floating-time-label">最小交卷</span>
+          <span class="floating-time-value"><b id="minRemain">--:--:--</b></span>
+        </div>
+      </div>
+
+      <div class="surface exam-surface" role="region" aria-label="试卷">
+        <div class="exam-submit-corner" aria-label="提交试卷">
+          <form method="post" action="/api/public/submit/{{ token }}" style="margin:0;">
+            <button id="submitBtn" class="btn btn-primary" type="submit">提交试卷</button>
+          </form>
+        </div>
+
         <section class="section">
           <div class="exam-meta-title">
             <h2>{{ spec.title }}</h2>
@@ -145,6 +238,7 @@
 
       const submitBtn = document.getElementById('submitBtn');
       const submitHint = document.getElementById('submitHint');
+      const minRemainEl = document.getElementById('minRemain');
 
       function pad2(n) { return String(n).padStart(2, '0'); }
       function formatSeconds(s) {
@@ -159,22 +253,30 @@
         remainEl.textContent = formatSeconds(remain);
       }
 
+      function updateMinRemain() {
+        if (!minRemainEl) return;
+        const elapsed = timeLimit ? Math.max(0, timeLimit - remain) : 0;
+        const left = Math.max(0, minSubmit - elapsed);
+        minRemainEl.textContent = formatSeconds(left);
+      }
+
       function updateSubmitState() {
         if (!submitBtn) return;
         const elapsed = timeLimit ? Math.max(0, timeLimit - remain) : 0;
         const canSubmit = minSubmit <= 0 || remain <= 0 || elapsed >= minSubmit;
         submitBtn.disabled = !canSubmit;
+        updateMinRemain();
         if (!submitHint) return;
         if (canSubmit) {
           submitHint.textContent = '';
           return;
         }
         const wait = Math.max(0, minSubmit - elapsed);
-        const mins = Math.ceil(minSubmit / 60);
-        submitHint.textContent = `需考试开始后满 ${mins} 分钟才可交卷（还需等待 ${formatSeconds(wait)}）`;
+        submitHint.textContent = `还需等待 ${formatSeconds(wait)} 才可交卷`;
       }
 
       updateRemain();
+      updateMinRemain();
       updateSubmitState();
 
       setInterval(() => {

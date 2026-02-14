@@ -8,6 +8,7 @@ import threading
 import time
 import zipfile
 from datetime import datetime, timezone
+from datetime import date, time
 from io import BytesIO
 from pathlib import Path
 
@@ -27,23 +28,26 @@ from markupsafe import Markup
 from config import ADMIN_PASSWORD, ADMIN_USERNAME, BASE_DIR, SECRET_KEY, STORAGE_DIR, logger
 from db import (
     create_candidate,
+    create_exam_paper,
+    count_exam_papers,
     delete_candidate,
+    get_exam_paper_by_token,
     get_candidate,
     get_candidate_by_phone,
     get_candidate_resume,
-    has_recent_exam_submission_by_phone,
     init_db,
     list_candidates,
-    reset_candidate_exam_state,
-    set_candidate_exam_started_at,
-    set_candidate_exam_key,
-    set_candidate_status,
+    list_exam_papers,
     mark_exam_deleted,
     rename_exam_key,
+    set_exam_paper_entered_at,
+    set_exam_paper_finished_at,
+    set_exam_paper_invite_window_if_missing,
+    set_exam_paper_status,
     update_candidate,
     update_candidate_resume,
     update_candidate_resume_parsed,
-    update_candidate_result,
+    update_exam_paper_result,
     verify_candidate,
 )
 import markdown as mdlib
@@ -57,12 +61,15 @@ from services.assignment_service import (
 )
 from services.grading_service import generate_candidate_remark, grade_attempt
 from services.resume_service import (
+    clean_projects_raw_for_display,
     extract_resume_text,
     extract_resume_section,
+    extract_experience_raw,
     parse_resume_details_llm,
     parse_resume_identity_fast,
     parse_resume_identity_llm,
     parse_resume_name_llm,
+    split_projects_raw_into_blocks,
 )
 from services.university_tags import classify_university
 from storage.json_store import ensure_dirs, read_json, write_json
@@ -108,98 +115,11 @@ def _normalize_phone(value: str) -> str:
 
 
 def _clean_projects_raw(text: str) -> str:
-    """
-    Best-effort cleanup for displaying the raw "项目经历" section:
-    - remove the leading section label ("项目经历/项目经验") if it is glued to content
-    - add line breaks before common field labels for readability
-    """
-    s = str(text or "").strip()
-    if not s:
-        return ""
-
-    # Remove leading label.
-    s = re.sub(r"^\s*(项目经历|项目经验)\s*[:：\-—]*\s*", "", s)
-    # Sometimes PDF extraction glues the label to the next token without spaces/punctuation.
-    if s.startswith("项目经历") or s.startswith("项目经验"):
-        s = s[4:].lstrip()
-
-    # Add line breaks before common labels when they appear inline.
-    labels = ["内容：", "工作：", "职责：", "项目成果：", "项目结果：", "项目描述："]
-    for lab in labels:
-        s = re.sub(rf"(?<!\n){re.escape(lab)}", "\n" + lab, s)
-
-    # Normalize excessive blank lines.
-    s = re.sub(r"\n{3,}", "\n\n", s).strip()
-    return s
-
-
-_PROJECT_PERIOD_RE = re.compile(
-    r"(?P<period>(?:19|20)\d{2}年\d{1,2}月\s*-\s*(?:19|20)\d{2}年\d{1,2}月)"
-)
+    return clean_projects_raw_for_display(text)
 
 
 def _split_projects_raw(text: str) -> list[dict[str, str]]:
-    """
-    Split projects_raw into blocks and render in a "title | period" layout without rewriting content.
-    Returns: [{"title":..., "period":..., "body":...}, ...]
-    """
-    s = str(text or "").strip()
-    if not s:
-        return []
-
-    # Match "title + period" even if it appears mid-line (PDF glue).
-    head_re = re.compile(
-        r"(?P<title>[^\n]{2,120}?)\s*(?P<period>(?:19|20)\d{2}年\d{1,2}月\s*-\s*(?:19|20)\d{2}年\d{1,2}月)"
-    )
-    matches = list(head_re.finditer(s))
-    if not matches:
-        return []
-
-    out: list[dict[str, str]] = []
-    for i, m in enumerate(matches):
-        start = m.start()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(s)
-
-        full_title = str(m.group("title") or "").strip()
-        # Keep only the last line as title (avoid swallowing previous content when glued).
-        if "\n" in full_title:
-            full_title = full_title.splitlines()[-1].strip()
-        full_title = re.sub(r"^\s*(项目经历|项目经验)\s*[:：\-—]*\s*", "", full_title).strip()
-
-        period = str(m.group("period") or "").strip()
-
-        # If the extracted "title" accidentally contains a previous project's tail such as "项目成果：...论文基于...基于XXX",
-        # move the prefix back to the previous block and keep only the actual project name for this block.
-        title = full_title
-        if any(k in full_title for k in ("项目成果", "项目结果", "成果")) and "基于" in full_title:
-            split_pos = full_title.rfind("基于")
-            if split_pos > 0:
-                prefix = full_title[:split_pos].strip()
-                candidate = full_title[split_pos:].strip()
-                if prefix and out:
-                    prev = out[-1]
-                    prev_body = (prev.get("body") or "").rstrip()
-                    if prev_body:
-                        prev_body += "\n"
-                    prev["body"] = (prev_body + prefix).strip()
-                title = candidate
-        # Another common pattern: "...论文基于占用网格..." -> keep "基于占用网格..." as project name.
-        if "论文基于" in title:
-            tail = title.split("论文基于")[-1].strip()
-            if tail and not tail.startswith("基于"):
-                tail = "基于" + tail
-            title = tail or title
-
-        body = s[m.end() : end].strip()
-        body = body.lstrip("：: \t-—")
-        body = re.sub(r"\n{3,}", "\n\n", body).strip()
-
-        # Skip obviously-bad titles.
-        if not title or len(title) > 120:
-            continue
-        out.append({"title": title, "period": period, "body": body})
-
-    return out[:8]
+    return split_projects_raw_into_blocks(text)
 
 
 def _safe_int(v, default: int = 0) -> int:
@@ -207,6 +127,54 @@ def _safe_int(v, default: int = 0) -> int:
         return int(v)
     except Exception:
         return int(default)
+
+
+def _parse_date_ymd(s: str) -> date | None:
+    t = str(s or "").strip()
+    if not t:
+        return None
+    try:
+        return date.fromisoformat(t)
+    except Exception:
+        return None
+
+
+def _invite_window_state(assignment: dict, *, now: datetime | None = None) -> tuple[str, date | None, date | None]:
+    """
+    Returns (state, start_date, end_date):
+    - state: ok | not_started | expired
+    - start/end are local dates (day granularity)
+
+    Expiration is judged only if the candidate has not started the exam yet.
+    """
+    a = assignment or {}
+    inv = a.get("invite_window") or {}
+    if not isinstance(inv, dict):
+        inv = {}
+    sd = _parse_date_ymd(str(inv.get("start_date") or ""))
+    ed = _parse_date_ymd(str(inv.get("end_date") or ""))
+
+    if now is None:
+        now = datetime.now().astimezone()
+    else:
+        now = now.astimezone()
+    tz = now.tzinfo
+
+    timing = a.get("timing") or {}
+    if isinstance(timing, dict) and str(timing.get("start_at") or "").strip():
+        return "ok", sd, ed
+
+    if sd is not None:
+        start_at = datetime.combine(sd, time.min, tzinfo=tz)
+        if now < start_at:
+            return "not_started", sd, ed
+
+    if ed is not None:
+        end_at = datetime.combine(ed, time.max, tzinfo=tz)
+        if now > end_at:
+            return "expired", sd, ed
+
+    return "ok", sd, ed
 
 
 _MD_IMAGE_RE = re.compile(r"!\[[^\]]*]\((?P<path>[^)]+)\)")
@@ -529,6 +497,160 @@ def create_app() -> Flask:
     except RuntimeError as e:
         raise SystemExit(str(e))
 
+    def _ensure_exam_paper_for_token(token: str, assignment: dict) -> dict[str, Any] | None:
+        """
+        Ensure exam_paper exists for a token (backward-compat for older tokens created before exam_paper table).
+        """
+        t = str(token or "").strip()
+        if not t:
+            return None
+        try:
+            ep = get_exam_paper_by_token(t)
+        except Exception:
+            ep = None
+        if ep:
+            return ep
+
+        try:
+            candidate_id = int(assignment.get("candidate_id") or 0)
+        except Exception:
+            candidate_id = 0
+        if candidate_id <= 0:
+            return None
+
+        c = get_candidate(candidate_id) or {}
+        exam_key = str(assignment.get("exam_key") or "").strip()
+        phone = str(c.get("phone") or "").strip()
+        if not exam_key or not phone:
+            return None
+
+        a_status = str(assignment.get("status") or "").strip()
+        status_map = {
+            "invited": "invited",
+            "verified": "verified",
+            "in_exam": "in_exam",
+            "grading": "grading",
+            "graded": "finished",
+        }
+        status = status_map.get(a_status, "invited")
+
+        inv = assignment.get("invite_window") or {}
+        if not isinstance(inv, dict):
+            inv = {}
+        invite_start_date = str(inv.get("start_date") or "").strip() or None
+        invite_end_date = str(inv.get("end_date") or "").strip() or None
+
+        try:
+            create_exam_paper(
+                candidate_id=candidate_id,
+                phone=phone,
+                exam_key=exam_key,
+                token=t,
+                invite_start_date=invite_start_date,
+                invite_end_date=invite_end_date,
+                status=status,
+            )
+        except Exception:
+            pass
+        try:
+            return get_exam_paper_by_token(t)
+        except Exception:
+            return None
+
+    def _backfill_exam_papers_from_assignments() -> None:
+        """
+        Best-effort backfill so the admin "答题邀请 -> 答题记录列表" can show historical tokens.
+        """
+        assignments_dir = STORAGE_DIR / "assignments"
+        if not assignments_dir.exists():
+            return
+
+        for p in assignments_dir.glob("*.json"):
+            try:
+                a = read_json(p)
+            except Exception:
+                continue
+            if not isinstance(a, dict):
+                continue
+            token = str(a.get("token") or p.stem).strip()
+            if not token:
+                continue
+            try:
+                if get_exam_paper_by_token(token):
+                    continue
+            except Exception:
+                pass
+
+            try:
+                candidate_id = int(a.get("candidate_id") or 0)
+            except Exception:
+                candidate_id = 0
+            if candidate_id <= 0:
+                continue
+            c = get_candidate(candidate_id)
+            if not c:
+                continue
+            phone = str(c.get("phone") or "").strip()
+            exam_key = str(a.get("exam_key") or "").strip()
+            if not phone or not exam_key:
+                continue
+
+            ep = _ensure_exam_paper_for_token(token, a) or {}
+            status = str(ep.get("status") or "").strip()
+
+            inv = a.get("invite_window") or {}
+            if not isinstance(inv, dict):
+                inv = {}
+            invite_start_date = str(inv.get("start_date") or "").strip() or None
+            invite_end_date = str(inv.get("end_date") or "").strip() or None
+            if token and (invite_start_date or invite_end_date):
+                try:
+                    if not ep.get("invite_start_date") or not ep.get("invite_end_date"):
+                        set_exam_paper_invite_window_if_missing(
+                            token,
+                            invite_start_date=invite_start_date,
+                            invite_end_date=invite_end_date,
+                        )
+                except Exception:
+                    pass
+
+            score = None
+            grading = a.get("grading") or {}
+            if isinstance(grading, dict) and grading.get("status") in {"done", "failed", "pending", "running"}:
+                if "total" in grading and grading.get("total") is not None:
+                    try:
+                        score = int(grading.get("total") or 0)
+                    except Exception:
+                        score = None
+
+            timing = a.get("timing") or {}
+            if not isinstance(timing, dict):
+                timing = {}
+            started_at = _parse_iso_dt(str(timing.get("start_at") or "").strip() or None)
+            finished_at = _parse_iso_dt(str(timing.get("end_at") or "").strip() or None)
+            duration_seconds = _duration_seconds(a)
+
+            # If assignment is graded, treat as finished.
+            if str(a.get("status") or "").strip() == "graded":
+                status = "finished"
+
+            try:
+                if status:
+                    update_exam_paper_result(
+                        token,
+                        status=status,
+                        score=score,
+                        entered_at=started_at,
+                        finished_at=finished_at,
+                    )
+            except Exception:
+                pass
+
+    try:
+        _backfill_exam_papers_from_assignments()
+    except Exception:
+        logger.exception("Backfill exam_paper from assignments failed")
+
     # Auto-collect: once countdown starts, keep decreasing even if candidate leaves the page.
     # Start only once (avoid Flask reloader double-start).
     if os.getenv("ENABLE_AUTO_COLLECT", "1").strip().lower() not in {"0", "false", "no"}:
@@ -608,6 +730,8 @@ def create_app() -> Flask:
 
         exam_q = (request.args.get("exam_q") or "").strip()
         attempt_q = (request.args.get("attempt_q") or "").strip()
+        attempt_start_from_raw = (request.args.get("attempt_start_from") or "").strip()
+        attempt_start_to_raw = (request.args.get("attempt_start_to") or "").strip()
         assign_exam_key = (request.args.get("assign_exam_key") or "").strip()
         assign_candidate_id = (request.args.get("assign_candidate_id") or "").strip()
         if exam_q:
@@ -653,64 +777,122 @@ def create_app() -> Flask:
             else:
                 e["updated_at"] = None
 
-        attempt_candidates = []
-        for c in candidates:
-            p = None
-            try:
-                p = _find_latest_archive(c)
-            except Exception:
-                p = None
-            if not p:
-                continue
-
-            # Prefer the exam_key recorded in the archive file. This keeps the table stable
-            # even if the candidate.exam_key changed after an exam rename.
-            display_exam_key = str(c.get("exam_key") or "")
-            try:
-                a = read_json(p)
-                display_exam_key = str(((a.get("exam") or {}).get("exam_key")) or "") or display_exam_key
-            except Exception:
-                pass
-            attempt_candidates.append(
-                {
-                    "id": int(c.get("id") or 0),
-                    "name": str(c.get("name") or ""),
-                    "phone": str(c.get("phone") or ""),
-                    "exam_key": display_exam_key,
-                    "score": c.get("score"),
-                    "exam_started_at": c.get("exam_started_at"),
-                    "exam_submitted_at": c.get("exam_submitted_at"),
-                    "attempt_href": url_for("admin_candidate_attempt", candidate_id=int(c.get("id") or 0)),
-                }
-            )
-
-        if attempt_q:
-            ql = attempt_q.lower()
-            attempt_candidates = [
-                x
-                for x in attempt_candidates
-                if ql in str(x.get("name") or "").lower()
-                or ql in str(x.get("phone") or "").lower()
-                or ql in str(x.get("exam_key") or "").lower()
-            ]
+        def _status_label(v: str) -> str:
+            s = str(v or "").strip()
+            m = {
+                "verified": "验证通过",
+                "invited": "已邀约",
+                "in_exam": "正在答题",
+                "grading": "正在判卷",
+                "finished": "判卷结束",
+                "expired": "失效",
+            }
+            return m.get(s, s or "未知")
 
         attempt_per_page = 20
-
         try:
             attempt_page = int(request.args.get("attempt_page") or "1")
         except Exception:
             attempt_page = 1
         attempt_page = max(1, attempt_page)
-        total_attempts = len(attempt_candidates)
+
+        attempt_start_from = _parse_date_ymd(attempt_start_from_raw) if attempt_start_from_raw else None
+        attempt_start_to = _parse_date_ymd(attempt_start_to_raw) if attempt_start_to_raw else None
+        invite_start_from = attempt_start_from.isoformat() if attempt_start_from else None
+        invite_start_to = attempt_start_to.isoformat() if attempt_start_to else None
+
+        try:
+            total_attempts = count_exam_papers(
+                query=attempt_q or None,
+                invite_start_from=invite_start_from,
+                invite_start_to=invite_start_to,
+            )
+        except Exception:
+            total_attempts = 0
         total_attempt_pages = (total_attempts + attempt_per_page - 1) // attempt_per_page
         if total_attempt_pages > 0:
             attempt_page = min(attempt_page, total_attempt_pages)
         else:
             attempt_page = 1
 
-        start2 = (attempt_page - 1) * attempt_per_page
-        end2 = start2 + attempt_per_page
-        attempt_candidates_page = attempt_candidates[start2:end2]
+        offset = (attempt_page - 1) * attempt_per_page
+        try:
+            rows = list_exam_papers(
+                query=attempt_q or None,
+                invite_start_from=invite_start_from,
+                invite_start_to=invite_start_to,
+                limit=attempt_per_page,
+                offset=offset,
+            )
+        except Exception:
+            rows = []
+
+        def _date_to_iso(v) -> str:
+            if v is None:
+                return ""
+            if isinstance(v, date):
+                return v.isoformat()
+            s = str(v).strip()
+            return s
+
+        today_local = datetime.now().astimezone().date()
+
+        attempt_candidates_page: list[dict[str, Any]] = []
+        for r in rows:
+            token = str(r.get("token") or "").strip()
+            status = str(r.get("status") or "").strip()
+
+            invite_start_date = _date_to_iso(r.get("invite_start_date"))
+            invite_end_date = _date_to_iso(r.get("invite_end_date"))
+
+            if token and (not invite_start_date or not invite_end_date):
+                # Backward compat: older exam_paper rows may not have invite dates. Load from assignment and backfill.
+                try:
+                    with assignment_locked(token):
+                        a = load_assignment(token)
+                        inv = a.get("invite_window") or {}
+                        if isinstance(inv, dict):
+                            invite_start_date = invite_start_date or str(inv.get("start_date") or "").strip()
+                            invite_end_date = invite_end_date or str(inv.get("end_date") or "").strip()
+                    if invite_start_date or invite_end_date:
+                        set_exam_paper_invite_window_if_missing(
+                            token,
+                            invite_start_date=(invite_start_date or None),
+                            invite_end_date=(invite_end_date or None),
+                        )
+                except Exception:
+                    pass
+
+            if token and status in {"invited", "verified"} and not r.get("entered_at"):
+                ed = _parse_date_ymd(invite_end_date) if invite_end_date else None
+                if ed is not None and today_local > ed:
+                    status = "expired"
+
+            attempt_href = None
+            attempt_msg = None
+            if token:
+                if status == "finished":
+                    attempt_href = url_for("admin_attempt", token=token)
+                else:
+                    attempt_msg = f"当前状态：{_status_label(status)}。判卷结束后才可查看答题结果。"
+
+            attempt_candidates_page.append(
+                {
+                    "attempt_id": int(r.get("attempt_id") or 0),
+                    "candidate_id": int(r.get("candidate_id") or 0),
+                    "name": str(r.get("name") or ""),
+                    "phone": str(r.get("phone") or ""),
+                    "exam_key": str(r.get("exam_key") or ""),
+                    "token": token,
+                    "status": status,
+                    "status_label": _status_label(status),
+                    "score": r.get("score"),
+                    "invite_start_date": invite_start_date,
+                    "invite_end_date": invite_end_date,
+                    "attempt_href": attempt_href,
+                    "attempt_msg": attempt_msg,
+                }
+            )
 
         return render_template(
             "admin_dashboard.html",
@@ -722,6 +904,8 @@ def create_app() -> Flask:
             exam_q=exam_q,
             exam_per_page=per_page,
             attempt_q=attempt_q,
+            attempt_start_from=attempt_start_from_raw,
+            attempt_start_to=attempt_start_to_raw,
             assign_exam_key=assign_exam_key,
             assign_candidate_id=assign_candidate_id,
             candidates=candidates,
@@ -1060,31 +1244,6 @@ def create_app() -> Flask:
         except Exception:
             logger.exception("Mark exam deleted failed (exam_key=%s)", exam_key)
 
-        deleted_assignments = 0
-        deleted_qr = 0
-        assignments_dir = STORAGE_DIR / "assignments"
-        if assignments_dir.exists():
-            for p in assignments_dir.glob("*.json"):
-                try:
-                    a = read_json(p)
-                except Exception:
-                    continue
-                if str(a.get("exam_key") or "") != exam_key:
-                    continue
-                token = str(a.get("token") or p.stem)
-                try:
-                    p.unlink(missing_ok=True)
-                    deleted_assignments += 1
-                except Exception:
-                    pass
-                qr_path = STORAGE_DIR / "qr" / f"{token}.png"
-                try:
-                    if qr_path.exists():
-                        qr_path.unlink(missing_ok=True)
-                        deleted_qr += 1
-                except Exception:
-                    pass
-
         try:
             shutil.rmtree(exam_dir)
         except Exception:
@@ -1242,6 +1401,31 @@ def create_app() -> Flask:
             except Exception:
                 projects_raw_blocks = []
 
+        # Prefer displaying experience blocks that preserve resume paragraphs (LLM-provided),
+        # otherwise fallback to heuristic raw blocks.
+        llm_blocks = details_data.get("experience_blocks") or []
+        if isinstance(llm_blocks, list) and any(isinstance(x, dict) for x in llm_blocks):
+            experience_blocks = [x for x in llm_blocks if isinstance(x, dict)]
+        else:
+            experience_blocks = projects_raw_blocks
+        # De-dupe blocks caused by merging head fallback + section extraction.
+        uniq_blocks: list[dict[str, str]] = []
+        seen: set[tuple[str, str, str]] = set()
+        for b in experience_blocks or []:
+            if not isinstance(b, dict):
+                continue
+            title = str(b.get("title") or "").strip()
+            period = str(b.get("period") or "").strip()
+            body = str(b.get("body") or "").strip()
+            sig = (title, period, body[:120])
+            if not title and not body:
+                continue
+            if sig in seen:
+                continue
+            seen.add(sig)
+            uniq_blocks.append(b)
+        experience_blocks = uniq_blocks
+
         evaluation_llm = ""
         try:
             evaluation_llm = str(details_data.get("evaluation") or "").strip()
@@ -1387,6 +1571,7 @@ def create_app() -> Flask:
             highest_education=str(details_data.get("highest_education") or "").strip(),
             educations=edu_show,
             english=english,
+            experience_blocks=experience_blocks,
             projects=projects,
             projects_raw=projects_raw,
             projects_raw_blocks=projects_raw_blocks,
@@ -1633,33 +1818,13 @@ def create_app() -> Flask:
             details_error = f"{type(e).__name__}: {e}"
 
         try:
-            projects_raw = extract_resume_section(
-                text or "",
-                section_keywords=["项目经历", "项目经验", "科研项目", "课程设计", "毕业设计", "比赛项目"],
-                stop_keywords=[
-                    "教育",
-                    "教育经历",
-                    "教育背景",
-                    "学习经历",
-                    "实习",
-                    "实习经历",
-                    "工作经历",
-                    "技能",
-                    "专业技能",
-                    "证书",
-                    "获奖",
-                    "荣誉",
-                    "自我评价",
-                    "个人总结",
-                ],
-                max_chars=6500,
-            )
-            if projects_raw:
-                details["projects_raw"] = _clean_projects_raw(projects_raw)
+            experience_raw = extract_experience_raw(text or "", max_chars=20000)
+            if experience_raw:
+                details["projects_raw"] = _clean_projects_raw(experience_raw)
         except Exception:
             pass
 
-        details_status = "done" if details else ("failed" if details_error else "empty")
+        details_status = "failed" if details_error else ("done" if details else "empty")
         details_block: dict[str, Any] = {
             "status": details_status,
             "data": details,
@@ -1717,7 +1882,6 @@ def create_app() -> Flask:
                 now = datetime.now(timezone.utc)
                 cid = int(existed["id"])
                 update_candidate(cid, name=name, phone=phone, created_at=now)
-                reset_candidate_exam_state(cid)
             except Exception:
                 flash("更新失败")
                 return redirect(url_for("admin_candidates"))
@@ -1863,33 +2027,13 @@ def create_app() -> Flask:
             details_error = f"{type(e).__name__}: {e}"
 
         try:
-            projects_raw = extract_resume_section(
-                text or "",
-                section_keywords=["项目经历", "项目经验", "科研项目", "课程设计", "毕业设计", "比赛项目"],
-                stop_keywords=[
-                    "教育",
-                    "教育经历",
-                    "教育背景",
-                    "学习经历",
-                    "实习",
-                    "实习经历",
-                    "工作经历",
-                    "技能",
-                    "专业技能",
-                    "证书",
-                    "获奖",
-                    "荣誉",
-                    "自我评价",
-                    "个人总结",
-                ],
-                max_chars=6500,
-            )
-            if projects_raw:
-                details["projects_raw"] = _clean_projects_raw(projects_raw)
+            experience_raw = extract_experience_raw(text or "", max_chars=20000)
+            if experience_raw:
+                details["projects_raw"] = _clean_projects_raw(experience_raw)
         except Exception:
             pass
 
-        details_status = "done" if details else ("failed" if details_error else "empty")
+        details_status = "failed" if details_error else ("done" if details else "empty")
         details_block: dict[str, Any] = {
             "status": details_status,
             "data": details,
@@ -1937,9 +2081,6 @@ def create_app() -> Flask:
         if not c:
             flash("候选人不存在")
             return redirect(url_for("admin_candidates"))
-        if str(c.get("status") or "") != "finished":
-            flash("候选者未提交答卷")
-            return redirect(url_for("admin_dashboard") + "#tab-assign")
         p = _find_latest_archive(c)
         if not p:
             flash("候选者未提交答卷")
@@ -2026,6 +2167,13 @@ def create_app() -> Flask:
         exam_key = (request.form.get("exam_key") or "").strip()
         candidate_id = int(request.form.get("candidate_id") or "0")
         time_limit_seconds = _parse_duration_seconds(request.form.get("time_limit_seconds")) or 7200
+        min_submit_seconds_raw = (request.form.get("min_submit_seconds") or "").strip()
+        min_submit_seconds: int | None = None
+        if min_submit_seconds_raw != "":
+            try:
+                min_submit_seconds = int(min_submit_seconds_raw)
+            except Exception:
+                min_submit_seconds = None
         pass_threshold = int(request.form.get("pass_threshold") or "60")
         verify_max_attempts = int(request.form.get("verify_max_attempts") or "3")
 
@@ -2039,21 +2187,45 @@ def create_app() -> Flask:
             flash("候选人不存在")
             return redirect(url_for("admin_dashboard"))
 
-        if has_recent_exam_submission_by_phone(str(c.get("phone") or ""), months=6):
-            flash("候选者6个月内已参加笔试，无法再次分发试卷")
-            return redirect(url_for("admin_dashboard"))
-        set_candidate_status(candidate_id, "distributed")
-        set_candidate_exam_key(candidate_id, exam_key)
+        invite_start_date_raw = (request.form.get("invite_start_date") or "").strip()
+        invite_end_date_raw = (request.form.get("invite_end_date") or "").strip()
+        sd = _parse_date_ymd(invite_start_date_raw) if invite_start_date_raw else None
+        ed = _parse_date_ymd(invite_end_date_raw) if invite_end_date_raw else None
+        if invite_start_date_raw and sd is None:
+            flash("答题开始日期格式不正确（应为 YYYY-MM-DD）")
+            return redirect(url_for("admin_dashboard") + "#tab-assign")
+        if invite_end_date_raw and ed is None:
+            flash("答题结束日期格式不正确（应为 YYYY-MM-DD）")
+            return redirect(url_for("admin_dashboard") + "#tab-assign")
+        if sd is not None and ed is not None and ed < sd:
+            flash("答题结束日期不能早于开始日期")
+            return redirect(url_for("admin_dashboard") + "#tab-assign")
 
         base_url = request.url_root.rstrip("/")
         result = create_assignment(
             exam_key=exam_key,
             candidate_id=candidate_id,
             base_url=base_url,
+            phone=str(c.get("phone") or ""),
+            invite_start_date=(sd.isoformat() if sd else None),
+            invite_end_date=(ed.isoformat() if ed else None),
             time_limit_seconds=time_limit_seconds,
+            min_submit_seconds=min_submit_seconds,
             verify_max_attempts=verify_max_attempts,
             pass_threshold=pass_threshold,
         )
+        try:
+            create_exam_paper(
+                candidate_id=candidate_id,
+                phone=str(c.get("phone") or ""),
+                exam_key=exam_key,
+                token=str(result.get("token") or ""),
+                invite_start_date=(sd.isoformat() if sd else None),
+                invite_end_date=(ed.isoformat() if ed else None),
+                status="invited",
+            )
+        except Exception:
+            logger.exception("Create exam_paper failed (candidate_id=%s, exam_key=%s)", candidate_id, exam_key)
         return render_template(
             "admin_assignment_created.html",
             exam_key=exam_key,
@@ -2078,17 +2250,62 @@ def create_app() -> Flask:
         assignment = load_assignment(token)
         return render_template("admin_result.html", assignment=assignment)
 
+    @app.get("/admin/attempt/<token>")
+    @admin_required
+    def admin_attempt(token: str):
+        try:
+            assignment = load_assignment(token)
+        except Exception:
+            abort(404)
+
+        p = None
+        try:
+            p = _find_archive_by_token(token, assignment=assignment)
+        except Exception:
+            p = None
+
+        if p:
+            try:
+                archive = read_json(p)
+            except Exception:
+                archive = None
+            if isinstance(archive, dict):
+                try:
+                    archive = _augment_archive_with_spec(archive)
+                except Exception:
+                    pass
+                return render_template("admin_candidate_attempt.html", archive=archive)
+
+        return render_template("admin_result.html", assignment=assignment)
+
     # ---------------- Candidate ----------------
     @app.get("/t/<token>")
     def public_verify_page(token: str):
         with assignment_locked(token):
             assignment = load_assignment(token)
+            st, sd, ed = _invite_window_state(assignment)
+            if st in {"not_started", "expired"}:
+                if st == "expired":
+                    try:
+                        if not str((assignment.get("timing") or {}).get("start_at") or "").strip():
+                            assignment["status"] = "expired"
+                            assignment["status_updated_at"] = datetime.now(timezone.utc).isoformat()
+                            save_assignment(token, assignment)
+                    except Exception:
+                        pass
+                title = "未到答题时间" if st == "not_started" else "邀约已失效"
+                msg = "当前未到答题时间，请在有效时间范围内进入答题。" if st == "not_started" else "当前邀约已超过有效时间范围，无法开始答题。"
+                return render_template(
+                    "public_unavailable.html",
+                    title=title,
+                    message=msg,
+                    start_date=(sd.isoformat() if sd else ""),
+                    end_date=(ed.isoformat() if ed else ""),
+                )
             if assignment.get("grading") or _finalize_if_time_up(token, assignment):
                 return redirect(url_for("public_done", token=token))
+            _ensure_exam_paper_for_token(token, assignment)
         verify = assignment.get("verify") or {}
-        c = get_candidate(int(assignment.get("candidate_id") or 0))
-        if c and c.get("status") == "finished":
-            return redirect(url_for("public_done", token=token))
         return render_template(
             "public_verify.html",
             token=token,
@@ -2108,22 +2325,27 @@ def create_app() -> Flask:
             return redirect(url_for("public_verify_page", token=token))
         with assignment_locked(token):
             assignment = load_assignment(token)
+            st, _sd, _ed = _invite_window_state(assignment)
+            if st in {"not_started", "expired"}:
+                return redirect(url_for("public_verify_page", token=token))
             if assignment.get("grading") or _finalize_if_time_up(token, assignment):
                 return redirect(url_for("public_done", token=token))
+            _ensure_exam_paper_for_token(token, assignment)
             verify = assignment.get("verify") or {"attempts": 0, "locked": False}
             if verify.get("locked"):
                 flash("链接已失效")
                 return redirect(url_for("public_verify_page", token=token))
 
             candidate_id = int(assignment["candidate_id"])
-            c0 = get_candidate(candidate_id)
-            if c0 and c0.get("status") == "finished":
-                return redirect(url_for("public_done", token=token))
             ok = verify_candidate(candidate_id, name=name, phone=phone)
             if ok:
-                c = get_candidate(candidate_id)
-                if c and c.get("status") != "finished":
-                    set_candidate_status(candidate_id, "verified")
+                try:
+                    set_exam_paper_status(token, "verified")
+                except Exception:
+                    pass
+                now2 = datetime.now(timezone.utc)
+                assignment["status"] = "verified"
+                assignment["status_updated_at"] = now2.isoformat()
             else:
                 verify["attempts"] = int(verify.get("attempts") or 0) + 1
                 if verify["attempts"] >= int(assignment.get("verify_max_attempts") or 3):
@@ -2133,26 +2355,52 @@ def create_app() -> Flask:
             save_assignment(token, assignment)
 
         if ok:
-            c = get_candidate(candidate_id)
-            if c and c.get("status") == "finished":
-                return redirect(url_for("public_done", token=token))
             return redirect(url_for("public_exam_page", token=token))
 
         flash("信息不匹配，请重试")
         return redirect(url_for("public_verify_page", token=token))
 
     @app.get("/a/<token>")
+    def public_exam_page_alias(token: str):
+        # Backward-compat: old exam page entrypoint was "/a/<token>".
+        return redirect(url_for("public_exam_page", token=token))
+
+    @app.get("/exam/<token>")
     def public_exam_page(token: str):
         with assignment_locked(token):
             assignment = load_assignment(token)
+            st, sd, ed = _invite_window_state(assignment)
+            if st in {"not_started", "expired"}:
+                if st == "expired":
+                    try:
+                        if not str((assignment.get("timing") or {}).get("start_at") or "").strip():
+                            assignment["status"] = "expired"
+                            assignment["status_updated_at"] = datetime.now(timezone.utc).isoformat()
+                            save_assignment(token, assignment)
+                    except Exception:
+                        pass
+                title = "未到答题时间" if st == "not_started" else "邀约已失效"
+                msg = "当前未到答题时间，请在有效时间范围内进入答题。" if st == "not_started" else "当前邀约已超过有效时间范围，无法开始答题。"
+                return render_template(
+                    "public_unavailable.html",
+                    title=title,
+                    message=msg,
+                    start_date=(sd.isoformat() if sd else ""),
+                    end_date=(ed.isoformat() if ed else ""),
+                )
             if (assignment.get("verify") or {}).get("locked"):
                 abort(410)
 
             candidate_id = int(assignment["candidate_id"])
             c = get_candidate(candidate_id)
-            if not c or c["status"] not in {"verified", "finished"}:
+            if not c:
                 return redirect(url_for("public_verify_page", token=token))
-            if c["status"] == "finished" or assignment.get("grading"):
+
+            ep = _ensure_exam_paper_for_token(token, assignment) or {}
+            ep_status = str(ep.get("status") or "").strip()
+            if ep_status not in {"verified", "in_exam", "grading", "finished"}:
+                return redirect(url_for("public_verify_page", token=token))
+            if ep_status in {"grading", "finished"} or assignment.get("grading"):
                 return redirect(url_for("public_done", token=token))
 
             # Start countdown only when candidate enters exam page (and never reset on re-verify).
@@ -2162,9 +2410,23 @@ def create_app() -> Flask:
                 now = datetime.now(timezone.utc)
                 timing["start_at"] = now.isoformat()
                 try:
-                    set_candidate_exam_started_at(candidate_id, now)
+                    set_exam_paper_entered_at(token, now)
                 except Exception:
                     pass
+            # Transition status to "in_exam" once the candidate enters the exam page.
+            try:
+                if ep_status == "verified":
+                    set_exam_paper_status(token, "in_exam")
+            except Exception:
+                pass
+            try:
+                if str(assignment.get("status") or "") not in {"in_exam", "grading", "graded"}:
+                    now3 = datetime.now(timezone.utc)
+                    assignment["status"] = "in_exam"
+                    assignment["status_updated_at"] = now3.isoformat()
+                    save_assignment(token, assignment)
+            except Exception:
+                pass
 
             time_limit_seconds = int(assignment.get("time_limit_seconds") or 0)
             remaining = _remaining_seconds(assignment)
@@ -2237,6 +2499,9 @@ def create_app() -> Flask:
 
         with assignment_locked(token):
             assignment = load_assignment(token)
+            st, _sd, _ed = _invite_window_state(assignment)
+            if st in {"not_started", "expired"}:
+                return {"ok": False, "error": "invite_window_invalid"}, 403
             if (assignment.get("verify") or {}).get("locked"):
                 abort(410)
             if assignment.get("grading") or _finalize_if_time_up(token, assignment):
@@ -2260,10 +2525,20 @@ def create_app() -> Flask:
     def public_submit(token: str):
         with assignment_locked(token):
             assignment = load_assignment(token)
+            st, _sd, _ed = _invite_window_state(assignment)
+            if st in {"not_started", "expired"}:
+                return redirect(url_for("public_verify_page", token=token))
+            _ensure_exam_paper_for_token(token, assignment)
         if (assignment.get("verify") or {}).get("locked"):
             abort(410)
         if assignment.get("grading"):
-            _sync_candidate_finished_from_assignment(assignment)
+            try:
+                g = assignment.get("grading") or {}
+                if isinstance(g, dict) and str(g.get("status") or "") in {"pending", "running"}:
+                    _start_background_grading(token)
+            except Exception:
+                pass
+            _sync_exam_paper_finished_from_assignment(assignment)
             return redirect(url_for("public_done", token=token))
 
         now = datetime.now(timezone.utc)
@@ -2272,6 +2547,10 @@ def create_app() -> Flask:
         if not started_at:
             started_at = now
             timing["start_at"] = now.isoformat()
+            try:
+                set_exam_paper_entered_at(token, started_at)
+            except Exception:
+                pass
 
         time_limit_seconds = int(assignment.get("time_limit_seconds") or 0)
         min_submit_seconds = compute_min_submit_seconds(
@@ -2295,13 +2574,20 @@ def create_app() -> Flask:
             if assignment.get("grading"):
                 return redirect(url_for("public_done", token=token))
             _finalize_public_submission(token, assignment, now=now)
+        _start_background_grading(token)
         return redirect(url_for("public_done", token=token))
 
     @app.get("/done/<token>")
     def public_done(token: str):
         assignment = load_assignment(token)
         if assignment.get("grading"):
-            _sync_candidate_finished_from_assignment(assignment)
+            try:
+                g = assignment.get("grading") or {}
+                if isinstance(g, dict) and str(g.get("status") or "") in {"pending", "running"}:
+                    _start_background_grading(token)
+            except Exception:
+                pass
+            _sync_exam_paper_finished_from_assignment(assignment)
         return render_template("public_done.html", assignment=assignment)
 
     return app
@@ -2409,6 +2695,10 @@ def _finalize_if_time_up(token: str, assignment: dict, *, now: datetime | None =
     if not _is_time_up(assignment, now=now):
         return False
     _finalize_public_submission(token, assignment, now=now)
+    try:
+        _start_background_grading(token)
+    except Exception:
+        pass
     return True
 
 
@@ -2428,7 +2718,7 @@ def _duration_seconds(assignment: dict) -> int | None:
 
 def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) -> None:
     """
-    Finalize a candidate submission by grading and persisting results.
+    Finalize a candidate submission by marking it submitted and scheduling background grading.
 
     Caller is responsible for locking (assignment_locked) if needed.
     """
@@ -2436,29 +2726,28 @@ def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) 
         return
 
     assignment.setdefault("timing", {})["end_at"] = now.isoformat()
-    spec = read_json(STORAGE_DIR / "exams" / assignment["exam_key"] / "spec.json")
-    grading = grade_attempt(spec, assignment)
-    assignment["grading"] = grading
-    assignment["candidate_remark"] = generate_candidate_remark(spec, assignment, grading)
+    assignment["status"] = "grading"
+    assignment["status_updated_at"] = now.isoformat()
+    assignment["grading_started_at"] = assignment.get("grading_started_at") or now.isoformat()
+    assignment["graded_at"] = None
+    assignment["grading_error"] = None
+    assignment["grading"] = {"status": "pending", "queued_at": now.isoformat()}
     save_assignment(token, assignment)
 
     duration_seconds = _duration_seconds(assignment)
     timing = assignment.get("timing") or {}
     started_at = _parse_iso_dt(timing.get("start_at"))
     submitted_at = _parse_iso_dt(timing.get("end_at"))
-    update_candidate_result(
-        int(assignment["candidate_id"]),
-        status="finished",
-        score=int(grading.get("total") or 0),
-        exam_started_at=started_at,
-        exam_submitted_at=submitted_at,
-        duration_seconds=duration_seconds,
-    )
-
     try:
-        _archive_candidate_attempt(assignment, spec=spec)
+        update_exam_paper_result(
+            token,
+            status="grading",
+            score=None,
+            entered_at=started_at,
+            finished_at=submitted_at,
+        )
     except Exception:
-        logger.exception("Archive candidate attempt failed (token=%s)", token)
+        logger.exception("Update exam_paper grading state failed (token=%s)", token)
 
 
 def _parse_iso_dt(value: str | None) -> datetime | None:
@@ -2468,6 +2757,104 @@ def _parse_iso_dt(value: str | None) -> datetime | None:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except Exception:
         return None
+
+
+_GRADING_THREADS_GUARD = threading.Lock()
+_GRADING_RUNNING: set[str] = set()
+
+
+def _start_background_grading(token: str) -> None:
+    t = str(token or "").strip()
+    if not t:
+        return
+    with _GRADING_THREADS_GUARD:
+        if t in _GRADING_RUNNING:
+            return
+        _GRADING_RUNNING.add(t)
+
+    def _runner() -> None:
+        try:
+            _grade_assignment_background(t)
+        finally:
+            with _GRADING_THREADS_GUARD:
+                _GRADING_RUNNING.discard(t)
+
+    th = threading.Thread(target=_runner, name=f"grading:{t}", daemon=True)
+    th.start()
+
+
+def _grade_assignment_background(token: str) -> None:
+    """
+    Background grading job: call LLM-based grading and persist results.
+    Safe to call multiple times; it will no-op if already graded.
+    """
+    # Mark as running and capture a stable snapshot.
+    with assignment_locked(token):
+        assignment = load_assignment(token)
+        grading0 = assignment.get("grading") or {}
+        if isinstance(grading0, dict) and str(grading0.get("status") or "").strip() == "done":
+            return
+        if isinstance(grading0, dict) and str(grading0.get("status") or "").strip() == "running":
+            return
+        now = datetime.now(timezone.utc)
+        assignment["grading"] = {"status": "running", "started_at": now.isoformat()}
+        assignment["status"] = "grading"
+        assignment["status_updated_at"] = now.isoformat()
+        assignment["grading_started_at"] = assignment.get("grading_started_at") or now.isoformat()
+        assignment["grading_error"] = None
+        save_assignment(token, assignment)
+        snapshot = dict(assignment)
+
+    try:
+        spec = read_json(STORAGE_DIR / "exams" / snapshot["exam_key"] / "spec.json")
+        grading = grade_attempt(spec, snapshot)
+        if isinstance(grading, dict):
+            grading["status"] = "done"
+        remark = generate_candidate_remark(spec, snapshot, grading) if grading else ""
+    except Exception as e:
+        logger.exception("Background grading failed (token=%s)", token)
+        with assignment_locked(token):
+            assignment = load_assignment(token)
+            assignment["grading"] = {"status": "failed"}
+            assignment["grading_error"] = f"{type(e).__name__}: {e}"
+            assignment["status"] = "grading"
+            assignment["status_updated_at"] = datetime.now(timezone.utc).isoformat()
+            save_assignment(token, assignment)
+        return
+
+    # Persist grading.
+    with assignment_locked(token):
+        assignment = load_assignment(token)
+        grading0 = assignment.get("grading") or {}
+        if isinstance(grading0, dict) and str(grading0.get("status") or "").strip() == "done":
+            return
+        now2 = datetime.now(timezone.utc)
+        assignment["grading"] = grading
+        assignment["candidate_remark"] = remark
+        assignment["graded_at"] = now2.isoformat()
+        assignment["status"] = "graded"
+        assignment["status_updated_at"] = now2.isoformat()
+        save_assignment(token, assignment)
+
+    # Sync candidate DB row + archive.
+    try:
+        duration_seconds = _duration_seconds(assignment)
+        timing = assignment.get("timing") or {}
+        started_at = _parse_iso_dt(timing.get("start_at"))
+        submitted_at = _parse_iso_dt(timing.get("end_at"))
+        update_exam_paper_result(
+            token,
+            status="finished",
+            score=int((grading or {}).get("total") or 0),
+            entered_at=started_at,
+            finished_at=submitted_at,
+        )
+    except Exception:
+        logger.exception("Update exam_paper graded result failed (token=%s)", token)
+    try:
+        _archive_candidate_attempt(assignment, spec=spec)
+    except Exception:
+        logger.exception("Archive candidate attempt failed (token=%s)", token)
 
 
 def _auto_collect_loop(*, interval_seconds: int = 15) -> None:
@@ -2484,7 +2871,15 @@ def _auto_collect_loop(*, interval_seconds: int = 15) -> None:
                     try:
                         with assignment_locked(token):
                             assignment = load_assignment(token)
-                            if assignment.get("grading"):
+                            g = assignment.get("grading")
+                            if isinstance(g, dict) and str(g.get("status") or "").strip() in {"pending", "running"}:
+                                # Ensure grading proceeds even after process restarts.
+                                try:
+                                    _start_background_grading(token)
+                                except Exception:
+                                    pass
+                                continue
+                            if g:
                                 continue
                             _finalize_if_time_up(token, assignment)
                     except Exception:
@@ -2524,15 +2919,24 @@ def _parse_duration_seconds(value: str | None) -> int:
     return h * 3600 + m * 60 + s
 
 
-def _archive_filename(name: str, phone: str, exam_key: str) -> str:
-    raw = f"{(name or '').strip()}_{(phone or '').strip()}_{(exam_key or '').strip()}"
-    raw = _FILENAME_UNSAFE_RE.sub("_", raw)
-    raw = re.sub(r"\s+", " ", raw).strip()
-    raw = raw.replace(" ", "_")
-    raw = raw.strip("._")
-    if not raw:
-        raw = "candidate"
+def _archive_filename(name: str, phone: str, token: str, exam_key: str, *, saved_at: datetime | None = None) -> str:
+    ts = (saved_at or datetime.now(timezone.utc)).strftime("%Y%m%dT%H%M%SZ")
+    name_part = _sanitize_archive_part(str(name or "")) or "candidate"
+    phone_part = _sanitize_archive_part(str(phone or ""))
+    token_part = _sanitize_archive_part(str(token or ""))
+    exam_part = _sanitize_archive_part(str(exam_key or ""))
+
+    # Keep suffix stable for rename/migration: ..._{token}_{exam_key}.json
+    suffix_parts = [p for p in (phone_part, token_part, exam_part) if p]
+    suffix = "_".join(suffix_parts) or "attempt"
+    prefix = f"{ts}_{name_part}"
+
+    raw = f"{prefix}_{suffix}".strip("._")
     if len(raw) > 160:
+        # Trim the name portion first to keep phone/token/exam_key suffix intact.
+        keep = max(0, 160 - len(f"{ts}__{suffix}"))
+        name_part2 = (name_part[:keep]).rstrip("._") or "candidate"
+        raw = f"{ts}_{name_part2}_{suffix}".strip("._")
         raw = raw[:160].rstrip("._")
     return f"{raw}.json"
 
@@ -2651,8 +3055,11 @@ def _archive_candidate_attempt(assignment: dict, *, spec: dict | None = None) ->
 
     questions_out.sort(key=_qid_key)
 
+    now_iso = datetime.now(timezone.utc).isoformat()
+    token = str(assignment.get("token") or "").strip()
     archive = {
-        "saved_at": datetime.now(timezone.utc).isoformat(),
+        "saved_at": now_iso,
+        "token": token,
         "candidate": {"id": c.get("id"), "name": c.get("name"), "phone": c.get("phone")},
         "exam": {
             "exam_key": exam_key,
@@ -2670,7 +3077,13 @@ def _archive_candidate_attempt(assignment: dict, *, spec: dict | None = None) ->
         "questions": questions_out,
     }
 
-    filename = _archive_filename(str(c.get("name") or ""), str(c.get("phone") or ""), exam_key)
+    filename = _archive_filename(
+        str(c.get("name") or ""),
+        str(c.get("phone") or ""),
+        token,
+        exam_key,
+        saved_at=datetime.fromisoformat(now_iso),
+    )
     path = STORAGE_DIR / "archives" / filename
     write_json(Path(path), archive)
 
@@ -2694,12 +3107,52 @@ def _find_latest_archive(candidate: dict) -> Path | None:
         matches.sort(key=lambda x: x.stat().st_mtime, reverse=True)
         return matches[0]
 
-    # Primary: match by phone + current exam_key.
+    # Primary: match by phone + exam_key.
+    # Filename format (new): ..._{phone}_{token}_{exam_key}.json
     # Fallback: match by phone only (covers exam_key renames or cleared exam_key).
     if exam_key and exam_key != "已删除":
-        hit = _pick_latest(f"*_{phone}_{exam_key}.json")
+        hit = _pick_latest(f"*_{phone}_*_{exam_key}.json")
         if hit:
             return hit
+    return _pick_latest(f"*_{phone}_*.json")
+
+
+def _find_archive_by_token(token: str, *, assignment: dict | None = None) -> Path | None:
+    archives_dir = STORAGE_DIR / "archives"
+    if not archives_dir.exists():
+        return None
+
+    def _pick_latest(pattern: str) -> Path | None:
+        matches = [p for p in archives_dir.glob(pattern) if p.is_file()]
+        if not matches:
+            return None
+        matches.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        return matches[0]
+
+    t = _sanitize_archive_part(str(token or ""))
+    if t:
+        hit = _pick_latest(f"*_{t}_*.json")
+        if hit:
+            return hit
+
+    if not assignment:
+        return None
+    exam_key = str(assignment.get("exam_key") or "").strip()
+    if not exam_key:
+        return None
+    try:
+        candidate_id = int(assignment.get("candidate_id") or 0)
+    except Exception:
+        candidate_id = 0
+    if candidate_id <= 0:
+        return None
+    c = get_candidate(candidate_id) or {}
+    phone = str(c.get("phone") or "").strip()
+    if not phone:
+        return None
+    hit = _pick_latest(f"*_{phone}_*_{exam_key}.json")
+    if hit:
+        return hit
     return _pick_latest(f"*_{phone}_*.json")
 
 
@@ -2742,19 +3195,16 @@ def _augment_archive_with_spec(archive: dict) -> dict:
     return archive
 
 
-def _sync_candidate_finished_from_assignment(assignment: dict) -> None:
+def _sync_exam_paper_finished_from_assignment(assignment: dict) -> None:
+    token = str(assignment.get("token") or "").strip()
+    if not token:
+        return
     grading = assignment.get("grading") or {}
     if not grading:
         return
-    try:
-        candidate_id = int(assignment.get("candidate_id") or 0)
-    except Exception:
+    if isinstance(grading, dict) and str(grading.get("status") or "").strip() in {"pending", "running"}:
         return
-    if candidate_id <= 0:
-        return
-
-    c = get_candidate(candidate_id)
-    if not c or c.get("status") == "finished":
+    if not isinstance(grading, dict) or ("total" not in grading):
         return
 
     timing = assignment.get("timing") or {}
@@ -2765,17 +3215,16 @@ def _sync_candidate_finished_from_assignment(assignment: dict) -> None:
         try:
             _archive_candidate_attempt(assignment)
         except Exception:
-            logger.exception("Archive candidate attempt failed (candidate_id=%s)", candidate_id)
-        update_candidate_result(
-            candidate_id,
+            logger.exception("Archive candidate attempt failed (token=%s)", token)
+        update_exam_paper_result(
+            token,
             status="finished",
             score=int(grading.get("total") or 0),
-            exam_started_at=started_at,
-            exam_submitted_at=submitted_at,
-            duration_seconds=duration_seconds,
+            entered_at=started_at,
+            finished_at=submitted_at,
         )
     except Exception:
-        logger.exception("Sync candidate finished failed (candidate_id=%s)", candidate_id)
+        logger.exception("Sync exam_paper finished failed (token=%s)", token)
         return
 
 # 此文件作为项目入口

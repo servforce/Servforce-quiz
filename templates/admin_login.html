@@ -45,7 +45,7 @@
       @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } .hero { display: none; } }
     </style>
   </head>
-  <body>
+  <body class="admin-login">
     <div class="wrap">
       <section class="hero" aria-label="产品介绍">
         <div class="brand">
@@ -87,5 +87,17 @@
         </div>
       </section>
     </div>
+    <style>
+      /* Match admin pages' perceived type size (login used smaller text). */
+      body.admin-login { font-size: 16px; }
+      body.admin-login .brand-sub { font-size: 14px; }
+      body.admin-login .hero p { font-size: 15px; }
+      body.admin-login .pill { font-size: 14px; }
+      body.admin-login .hint { font-size: 14px; }
+      body.admin-login .field label { font-size: 14px; }
+      body.admin-login .input { font-size: 16px; padding: 12px 14px; }
+      body.admin-login .btn { font-size: 16px; padding: 11px 14px; }
+      body.admin-login .footer { font-size: 13px; }
+    </style>
   </body>
 </html>

@@ -8,18 +8,25 @@
     <style>
       body { min-height: 100vh; display: grid; place-items: center; padding: 22px; }
       .card { width: min(720px, 100%); }
+      .cheer { display: grid; gap: 14px; }
+      .cheer img { width: 100%; height: auto; border-radius: 18px; border: 1px solid rgba(15, 23, 42, 0.10); background: rgba(255,255,255,0.94); }
+      .thanks-title {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 950;
+        letter-spacing: -0.2px;
+        line-height: 1.25;
+        text-align: center;
+      }
     </style>
   </head>
   <body>
     <div class="surface card" role="region" aria-label="试卷已提交">
       <div class="section">
-        <h2 class="title">试卷已提交</h2>
-        {% if assignment.grading %}
-          <p class="sub">总分：<b>{{ assignment.grading.total }}</b> / 100；是否进入面试：<b>{{ "是" if assignment.grading.interview else "否" }}</b></p>
-          <p class="sub" style="font-size:12px;">如对结果有疑问，请联系管理员。</p>
-        {% else %}
-          <p class="sub">等待判卷...</p>
-        {% endif %}
+        <div class="cheer">
+          <h2 class="thanks-title">考生辛苦了，我们已收到您的试卷。</h2>
+          <img src="{{ url_for('static', filename='cheer.svg') }}" alt="致谢插画" />
+        </div>
       </div>
     </div>
   </body>

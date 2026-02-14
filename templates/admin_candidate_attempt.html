@@ -67,7 +67,11 @@
                 {% endif %}
               </p>
             </div>
-            <a class="btn btn-primary" href="/admin#tab-assign">返回</a>
+            <a
+              class="btn btn-primary"
+              href="{{ back_url or '/admin#tab-assign' }}"
+              onclick="if (window.history && history.length > 1) { history.back(); return false; }"
+            >返回</a>
           </div>
         </section>
 
