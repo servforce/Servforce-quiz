@@ -1,0 +1,4 @@
+{
+  "prettier.logLevel": "warn",
+  "prettier.useEditorConfig": false
+}

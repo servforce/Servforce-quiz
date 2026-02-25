@@ -63,7 +63,6 @@
       <section class="card" aria-label="管理员登录">
         <div class="card-inner">
           <h2>管理员登录</h2>
-          <p class="hint">请输入账号和密码以继续。</p>
 
           {% for m in get_flashed_messages() %}
           <div class="flash">{{ m }}</div>
@@ -82,9 +81,6 @@
           </form>
         </div>
 
-        <div class="footer">
-          默认账号密码可通过环境变量 <code>ADMIN_USERNAME</code>/<code>ADMIN_PASSWORD</code 配置。
-        </div>
       </section>
     </div>
     <style>
@@ -93,11 +89,19 @@
       body.admin-login .brand-sub { font-size: 14px; }
       body.admin-login .hero p { font-size: 15px; }
       body.admin-login .pill { font-size: 14px; }
-      body.admin-login .hint { font-size: 14px; }
-      body.admin-login .field label { font-size: 14px; }
+      body.admin-login .field {
+        display: grid;
+        grid-template-columns: 56px 1fr;
+        column-gap: 10px;
+        align-items: center;
+      }
+      body.admin-login .field label { font-size: 14px; margin: 0; justify-self: end; }
       body.admin-login .input { font-size: 16px; padding: 12px 14px; }
       body.admin-login .btn { font-size: 16px; padding: 11px 14px; }
-      body.admin-login .footer { font-size: 13px; }
+      @media (max-width: 420px) {
+        body.admin-login .field { grid-template-columns: 1fr; row-gap: 6px; }
+        body.admin-login .field label { justify-self: start; }
+      }
     </style>
   </body>
 </html>

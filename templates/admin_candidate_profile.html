@@ -26,12 +26,12 @@
         display: inline-flex;
         align-items: center;
         gap: 10px;
-        padding: 6px 10px;
+        padding: 7px 12px;
         border-radius: 12px;
         border: 1px solid rgba(15, 23, 42, 0.10);
         background: rgba(248, 250, 252, 0.75);
         font-weight: 800;
-        font-size: 15px;
+        font-size: 16px;
         color: rgba(15, 23, 42, 0.80);
       }
       /* Segmented control (looks like a pager-style switch, not 3 separate buttons). */
@@ -42,7 +42,7 @@
         border-radius: 999px;
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(248, 250, 252, 0.80);
-        padding: 3px;
+        padding: 4px;
         gap: 0;
       }
       .head-tab {
@@ -50,10 +50,10 @@
         border: 0;
         background: transparent;
         border-radius: 999px;
-        height: 32px;
-        padding: 0 14px;
+        height: 38px;
+        padding: 0 16px;
         font-weight: 800;
-        font-size: 14px;
+        font-size: 16px;
         line-height: 1;
         cursor: pointer;
         user-select: none;
@@ -75,15 +75,15 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        height: 40px;
-        padding: 0 16px;
+        height: 46px;
+        padding: 0 18px;
         line-height: 1;
-        font-size: 14px;
-        border-radius: 14px;
+        font-size: 16px;
+        border-radius: 16px;
         text-decoration: none;
       }
       .head-actions .btn-icon {
-        width: 40px;
+        width: 46px;
         padding: 0;
       }
       .head-actions-main { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; }
@@ -155,7 +155,7 @@
         overflow: hidden;
       }
       .card-head {
-        padding: 12px 14px;
+        padding: 14px 16px;
         border-bottom: 1px solid rgba(15, 23, 42, 0.08);
         display: flex;
         align-items: center;
@@ -163,8 +163,8 @@
         gap: 12px;
         background: rgba(248, 250, 252, 0.75);
       }
-      .card-title { font-weight: 900; letter-spacing: 0.2px; }
-      .card-body { padding: 12px 14px; }
+      .card-title { font-weight: 900; letter-spacing: 0.2px; font-size: 17px; }
+      .card-body { padding: 14px 16px; }
       .kv {
         display: grid;
         grid-template-columns: 120px 1fr;
@@ -175,8 +175,8 @@
       .v { font-weight: 650; color: #333; }
       .mutedv { font-weight: 700; }
       .info-kv { display: grid; grid-template-columns: 120px 1fr; gap: 10px 16px; align-items: start; }
-      .info-kv .k { font-size: 13px; white-space: nowrap; }
-      .info-kv .v { font-size: 16px; letter-spacing: 0.1px; }
+      .info-kv .k { font-size: 14px; white-space: nowrap; }
+      .info-kv .v { font-size: 18px; letter-spacing: 0.1px; }
       .info-kv .v strong { font-weight: 800; }
       .eval {
         margin-top: 14px;
@@ -210,7 +210,7 @@
       .edu-degree { font-weight: 900; }
       .edu-school { font-weight: 800; }
       .edu-major { font-weight: 700; }
-      .edu-time { font-weight: 800; font-size: 14px; white-space: nowrap; color: #080; }
+      .edu-time { font-weight: 800; font-size: 16px; white-space: nowrap; color: #080; }
       .uni-badge {
         display: inline-flex;
         align-items: center;
@@ -291,12 +291,12 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 4px 10px;
+        padding: 6px 12px;
         border-radius: 999px;
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(248, 250, 252, 0.75);
         font-weight: 900;
-        font-size: 12px;
+        font-size: 14px;
         line-height: 1;
         color: rgba(51, 51, 51, 0.92);
         white-space: nowrap;
@@ -321,6 +321,15 @@
         .info-split { grid-template-columns: 1fr; }
         .info-right { padding-left: 0; border-left: 0; border-top: 1px solid rgba(15, 23, 42, 0.10); padding-top: 12px; }
         .info-kv { grid-template-columns: 120px 1fr; }
+      }
+      @media (max-width: 720px) {
+        .head-tab { height: 36px; font-size: 14px; padding: 0 12px; }
+        .head-actions .btn { height: 42px; font-size: 14px; padding: 0 14px; border-radius: 14px; }
+        .head-actions .btn-icon { width: 42px; }
+        .card-title { font-size: 16px; }
+        .info-kv .v { font-size: 16px; }
+        .edu-time { font-size: 14px; }
+        .eval-tag { font-size: 13px; padding: 5px 10px; }
       }
     </style>
   </head>
@@ -379,8 +388,8 @@
                   </span>
                 {% endif %}
                 <form id="reparseForm" method="post" action="/admin/candidates/{{ c.id }}/resume/reparse" enctype="multipart/form-data" style="margin:0;">
-                  <input id="reparseFile" type="file" name="file" accept=".pdf" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
-                  <button type="button" id="reparseBtn" class="btn btn-purple">上传PDF并解析</button>
+                  <input id="reparseFile" type="file" name="file" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+                  <button type="button" id="reparseBtn" class="btn btn-purple">上传简历并解析</button>
                 </form>
               </div>
               <a class="btn btn-purple" href="/admin/candidates" id="backBtn">返回</a>

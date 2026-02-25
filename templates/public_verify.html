@@ -8,31 +8,83 @@
     <style>
       body { min-height: 100vh; display: grid; place-items: center; padding: 22px; }
       .card { width: min(520px, 100%); }
-      .btn { width: 100%; }
+      .btn { width: auto; }
       .muted { color: var(--muted); font-size: 12px; }
-      .hfield {
-        display: grid;
-        grid-template-columns: 78px 1fr;
-        column-gap: 14px;
-        align-items: center;
-        margin-top: 12px;
+      .hero-visual {
+        margin: 6px 0 14px;
+        padding: 0;
+        border-radius: 16px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(248, 250, 252, 0.75);
+        overflow: hidden;
+        position: relative;
       }
+      .hero-visual img {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .hfield { margin-top: 12px; display: flex; justify-content: center; }
       .hfield:first-of-type { margin-top: 0; }
-      .hlabel { font-size: 12px; color: var(--muted); font-weight: 800; }
-      .hcontrol { display: flex; gap: 10px; align-items: center; }
-      .hcontrol .input { flex: 1 1 auto; }
+      .input-group { width: min(360px, 100%); display: flex; align-items: stretch; }
+      .input-addon {
+        flex: 0 0 88px;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        font-weight: 800;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.90);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-right: 0;
+        border-radius: 14px 0 0 14px;
+      }
+      .input-group .input { flex: 1 1 auto; width: 100%; border-radius: 0 14px 14px 0; }
+      .input-group.sms .input { border-radius: 0; border-right: 0; }
+      .input-group.sms .sms-send {
+        border-radius: 0 14px 14px 0;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        min-width: 110px;
+        padding: 0 14px;
+        font-weight: 900;
+      }
+      .sms-hint { margin-top: 8px; text-align: center; }
+      .verify-overlay {
+        position: absolute;
+        left: 50%;
+        top: 68%;
+        transform: translate(-50%, -50%) scale(0.985);
+        width: min(320px, calc(100% - 24px));
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(220, 38, 38, 0.22);
+        background: rgba(255, 255, 255, 0.92);
+        color: rgba(15, 23, 42, 0.92);
+        font-weight: 900;
+        text-align: center;
+        box-shadow: 0 16px 40px rgba(2, 6, 23, 0.12);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 180ms;
+      }
+      .verify-overlay.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, -50%) scale(1);
+        transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 0s;
+      }
+      .actions { margin-top: 14px; display: flex; justify-content: center; }
+      .actions .btn-primary { min-width: 120px; padding: 10px 34px; border-radius: 14px; }
       @media (max-width: 520px) {
-        .hfield { grid-template-columns: 1fr; row-gap: 6px; }
-        .hcontrol { gap: 8px; }
+        .hfield { justify-content: stretch; }
+        .input-group { width: 100%; }
       }
     </style>
   </head>
   <body>
     <div class="surface card" role="region" aria-label="候选人身份验证">
       <div class="section">
-        <h2 class="title">候选人身份验证</h2>
-        <p class="sub">请输入姓名与手机号完成验证。</p>
-
         {% for m in get_flashed_messages() %}
         <div class="flash error">{{ m }}</div>
         {% endfor %}
@@ -40,29 +92,162 @@
         {% if locked %}
           <div class="flash error">链接已失效（已达到最大验证次数）。</div>
         {% else %}
-          <p class="muted">剩余次数：{{ max_attempts - attempts }} / {{ max_attempts }}</p>
+          <div class="hero-visual" aria-label="场景图">
+            <img src="{{ url_for('static', filename='verify_hero.png') }}" alt="欢迎参加答题" loading="lazy" />
+            <div class="verify-overlay" id="verifyOverlay" role="status" aria-live="polite"></div>
+          </div>
           <form method="post" action="/api/public/verify" class="section" style="padding:0; border:0;">
             <input type="hidden" name="token" value="{{ token }}" />
 
             <div class="hfield">
-              <div class="hlabel">姓名</div>
-              <div class="hcontrol">
-                <input class="input" name="name" required pattern="[\u4e00-\u9fffA-Za-z·\\s]{2,20}" title="2-20位中文/英文，可含空格/·" />
+              <div class="input-group">
+                <div class="input-addon">姓名</div>
+                <input class="input" name="name" placeholder="请输入姓名" required pattern="[\u4e00-\u9fffA-Za-z·\\s]{2,20}" title="2-20位中文/英文，可含空格/·" />
               </div>
             </div>
 
             <div class="hfield">
-              <div class="hlabel">手机号</div>
-              <div class="hcontrol">
-                <input class="input" name="phone" required pattern="1[3-9][0-9]{9}" title="11位中国大陆手机号（可输入 +86 前缀，后端会自动处理）" inputmode="numeric" />
+              <div class="input-group">
+                <div class="input-addon">手机号</div>
+                <input class="input" name="phone" placeholder="请输入手机号" required pattern="1[3-9][0-9]{9}" title="11位中国大陆手机号（可输入 +86 前缀，后端会自动处理）" inputmode="numeric" />
               </div>
             </div>
 
-            <button class="btn btn-primary" type="submit">验证并继续</button>
+            <div class="hfield">
+              <div class="input-group sms">
+                <div class="input-addon">验证码</div>
+                <input class="input" name="sms_code" placeholder="请输入验证码" inputmode="numeric" autocomplete="one-time-code" />
+                <button class="btn sms-send" type="button" id="sendSmsBtn" {% if sms_verified %}disabled style="opacity:.55; cursor:not-allowed;"{% endif %}>
+                  {% if sms_verified %}已验证{% else %}发送验证码{% endif %}
+                </button>
+              </div>
+            </div>
+
+            <div class="muted sms-hint" id="smsHint"></div>
+
+            <div class="actions">
+              <button class="btn btn-primary" type="submit">验证</button>
+            </div>
           </form>
         {% endif %}
       </div>
     </div>
+    <script>
+      (function () {
+        const btn = document.getElementById("sendSmsBtn");
+        const hint = document.getElementById("smsHint");
+        const overlay = document.getElementById("verifyOverlay");
+        const form = (btn && btn.closest("form")) || document.querySelector("form[action='/api/public/verify']");
+        const tokenEl = form ? form.querySelector("input[name='token']") : null;
+        const nameEl = form ? form.querySelector("input[name='name']") : null;
+        const phoneEl = form ? form.querySelector("input[name='phone']") : null;
+        const smsEl = form ? form.querySelector("input[name='sms_code']") : null;
+        const submitBtn = form ? form.querySelector("button[type='submit']") : null;
+
+        const setHint = (t) => { if (hint) hint.textContent = String(t || ""); };
+        let overlayTimer = null;
+        const showOverlay = (t) => {
+          if (!overlay) return;
+          const msg = String(t || "").trim();
+          if (!msg) {
+            overlay.classList.remove("show");
+            overlay.textContent = "";
+            if (overlayTimer) window.clearTimeout(overlayTimer);
+            overlayTimer = null;
+            return;
+          }
+          overlay.textContent = msg;
+          overlay.classList.add("show");
+          if (overlayTimer) window.clearTimeout(overlayTimer);
+          overlayTimer = window.setTimeout(() => {
+            try { overlay.classList.remove("show"); } catch (_) {}
+            try { overlay.textContent = ""; } catch (_) {}
+            overlayTimer = null;
+          }, 10000);
+        };
+
+        let timer = null;
+        const startCountdown = (sec) => {
+          const end = Date.now() + Math.max(0, parseInt(sec || "0", 10)) * 1000;
+          if (btn) btn.disabled = true;
+          const tick = () => {
+            const left = Math.ceil((end - Date.now()) / 1000);
+            if (left <= 0) {
+              if (btn) {
+                btn.disabled = false;
+                btn.textContent = "发送验证码";
+              }
+              setHint("");
+              if (timer) window.clearInterval(timer);
+              timer = null;
+              return;
+            }
+            if (btn) btn.textContent = `${left}s`;
+          };
+          tick();
+          if (timer) window.clearInterval(timer);
+          timer = window.setInterval(tick, 1000);
+        };
+
+        if (btn && !btn.disabled) btn.addEventListener("click", async () => {
+          showOverlay("");
+          setHint("");
+          const token = tokenEl ? tokenEl.value : "";
+          const name = nameEl ? nameEl.value : "";
+          const phone = phoneEl ? phoneEl.value : "";
+          try {
+            const res = await fetch("/api/public/sms/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token, name, phone }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || !data.ok) {
+              const cd = parseInt((data && data.cooldown) || "0", 10);
+              if (cd > 0) startCountdown(cd);
+              setHint((data && data.error) || "发送失败，请稍后重试。");
+              return;
+            }
+            startCountdown(parseInt(data.cooldown || "60", 10));
+            setHint("验证码已发送，请查收短信。");
+          } catch (_) {
+            setHint("发送失败，请检查网络后重试。");
+          }
+        });
+
+        if (form) {
+          form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            showOverlay("");
+            if (submitBtn) submitBtn.disabled = true;
+            let keepDisabled = false;
+            try {
+              const res = await fetch(form.action, {
+                method: "POST",
+                headers: { Accept: "application/json" },
+                body: new FormData(form),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (data && data.ok && data.redirect) {
+                window.location.href = data.redirect;
+                return;
+              }
+              const msg = (data && data.error) || "验证码错误或已过期，请重试。";
+              showOverlay(msg);
+              if (smsEl) smsEl.value = "";
+              if (data && data.expired) {
+                keepDisabled = true;
+                if (submitBtn) submitBtn.disabled = true;
+                if (btn) btn.disabled = true;
+              }
+            } catch (_) {
+              showOverlay("验证失败，请稍后重试。");
+            } finally {
+              if (submitBtn && !keepDisabled) submitBtn.disabled = false;
+            }
+          });
+        }
+      })();
+    </script>
   </body>
 </html>
-

@@ -50,6 +50,14 @@
       a.row-a code { color: inherit; }
       a.row-a:hover { text-decoration: underline; }
 
+      a.token-copy { color: inherit; text-decoration: none; cursor: copy; }
+      a.token-copy:hover { text-decoration: underline; }
+      a.token-copy:focus-visible {
+        outline: 3px solid rgba(37, 99, 235, 0.20);
+        outline-offset: 2px;
+        border-radius: 10px;
+      }
+
       /* Date proxy (same UX as candidate list: yyyy/mm/dd + calendar button). */
       .assign-grid-2 .date-proxy { position: relative; width: 100%; }
       .assign-grid-2 .date-proxy .date-display { padding-right: 42px; cursor: pointer; }
@@ -624,7 +632,11 @@
                         <code>{{ c.exam_key }}</code>
                       {% endif %}
                     </td>
-                    <td class="ellipsis"><code title="{{ c.token }}">{{ c.token }}</code></td>
+                    <td class="ellipsis">
+                      <a class="token-copy" href="#" data-token="{{ c.token }}" title="点击复制邀约链接">
+                        <code title="{{ c.token }}">{{ c.token }}</code>
+                      </a>
+                    </td>
                     <td class="center"><span class="status-pill {{ c.status }}">{{ c.status_label }}</span></td>
                     <td class="center">{{ c.score if c.score is not none else "" }}</td>
                     <td class="nowrap">
@@ -855,6 +867,64 @@
           }
         });
       }
+
+      const copyText = async (text) => {
+        const t = String(text || "");
+        if (!t) return false;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(t);
+            return true;
+          }
+        } catch (_) {}
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = t;
+          ta.setAttribute("readonly", "readonly");
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          ta.style.top = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          ta.setSelectionRange(0, ta.value.length);
+          const ok = document.execCommand && document.execCommand("copy");
+          ta.remove();
+          return !!ok;
+        } catch (_) {
+          return false;
+        }
+      };
+
+      const copyInviteLink = async (token) => {
+        const t = String(token || "").trim();
+        if (!t) return;
+        const url = new URL(`/t/${encodeURIComponent(t)}`, window.location.origin).toString();
+        const ok = await copyText(url);
+        if (ok) toast("已复制邀约链接");
+        else {
+          try { window.prompt("复制下面的邀约链接：", url); } catch (_) {}
+          toast("复制失败：已弹出链接，可手动复制");
+        }
+      };
+
+      // Click token to copy invite link (do not affect other row/links behavior).
+      document.addEventListener("click", (ev) => {
+        const el = ev.target && ev.target.closest ? ev.target.closest("a.token-copy") : null;
+        if (!el) return;
+        try { ev.preventDefault(); } catch (_) {}
+        try { ev.stopPropagation(); } catch (_) {}
+        const sel = window.getSelection ? String(window.getSelection().toString() || "") : "";
+        if (sel && sel.trim()) return; // allow text selection
+        copyInviteLink(el.dataset.token || "");
+      });
+      document.addEventListener("keydown", (ev) => {
+        const el = ev.target && ev.target.closest ? ev.target.closest("a.token-copy") : null;
+        if (!el) return;
+        if (ev.key !== "Enter" && ev.key !== " ") return;
+        try { ev.preventDefault(); } catch (_) {}
+        try { ev.stopPropagation(); } catch (_) {}
+        copyInviteLink(el.dataset.token || "");
+      });
 
       // Date proxy for invite window (yyyy/mm/dd).
       const initDateProxy = (id) => {

@@ -119,8 +119,23 @@
         grid-row: 2;
       }
       .cand-actions { display: inline-flex; gap: 10px; align-items: center; justify-content: flex-end; }
-      .cand-actions .btn { padding: 7px 10px; font-weight: 800; }
-      .cand-actions .btn-icon { min-width: 44px; padding: 7px 0; }
+      .cand-actions .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 44px;
+        padding: 0 16px;
+        font-size: 16px;
+        font-weight: 900;
+        border-radius: 14px;
+        line-height: 1;
+      }
+      .cand-actions .btn-icon {
+        min-width: 44px;
+        width: 44px;
+        padding: 0;
+        font-size: 20px;
+      }
 
       /* Make Candidate Management font scale match Exams Management (admin dashboard). */
       .admin-surface { font-size: 16px; }
@@ -209,7 +224,7 @@
             </form>
             <form id="resumeUploadForm" method="post" action="/admin/candidates/resume/upload" enctype="multipart/form-data">
               <div class="resume-upload-cell">
-                <input id="resumeFile" class="input" type="file" name="file" accept=".pdf,.docx,.txt,.md" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+                <input id="resumeFile" class="input" type="file" name="file" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
                 <button id="resumePickBtn" class="btn btn-primary" type="button">上传简历</button>
               </div>
               <div id="resumeFileName" class="resume-name" title=""></div>

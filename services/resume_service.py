@@ -7,7 +7,7 @@ from io import BytesIO
 from typing import Any
 
 from config import logger
-from services.llm_client import call_llm_structured
+from services.llm_client import call_llm_structured, call_llm_structured_ex
 
 
 _PHONE_RE = re.compile(r"^1[3-9]\d{9}$")
@@ -142,6 +142,65 @@ def _extract_pdf_text_ocr(data: bytes, *, max_pages: int, lang: str) -> str:
     return out
 
 
+def _extract_image_text_ocr(data: bytes, *, lang: str) -> str:
+    """
+    OCR for image resumes (jpg/png/webp/etc).
+
+    Notes:
+    - Requires system Tesseract installation (binary).
+    - Uses env TESSERACT_CMD / RESUME_OCR_LANG / RESUME_OCR_ZOOM (same as PDF OCR).
+    """
+    try:
+        import pytesseract  # type: ignore
+    except Exception as e:
+        raise RuntimeError("Missing dependency: pytesseract. Please install requirements.txt") from e
+
+    try:
+        from PIL import Image  # type: ignore
+    except Exception as e:
+        raise RuntimeError("Missing dependency: pillow. Please install requirements.txt") from e
+
+    tesseract_cmd = str(os.getenv("TESSERACT_CMD", "") or "").strip()
+    if tesseract_cmd:
+        try:
+            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+        except Exception:
+            pass
+
+    try:
+        _ = pytesseract.get_tesseract_version()
+    except Exception as e:
+        raise RuntimeError(
+            "Tesseract OCR is not available. Install Tesseract and ensure it is on PATH, "
+            "or set env TESSERACT_CMD to the tesseract executable path."
+        ) from e
+
+    try:
+        img = Image.open(BytesIO(data))
+    except Exception as e:
+        raise RuntimeError(f"Image decode failed: {type(e).__name__}({e})") from e
+
+    try:
+        if img.mode not in {"RGB", "L"}:
+            img = img.convert("RGB")
+        zoom = float(os.getenv("RESUME_OCR_ZOOM", "2.0") or "2.0")
+        if zoom and abs(zoom - 1.0) > 0.05:
+            w, h = img.size
+            nw = max(1, int(w * zoom))
+            nh = max(1, int(h * zoom))
+            img = img.resize((nw, nh))
+        txt = pytesseract.image_to_string(img, lang=lang) or ""
+    finally:
+        try:
+            img.close()
+        except Exception:
+            pass
+
+    out = (txt or "").strip()
+    out = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", out)
+    return out
+
+
 def extract_resume_text(data: bytes, filename: str) -> str:
     """
     Best-effort resume text extraction.
@@ -149,10 +208,15 @@ def extract_resume_text(data: bytes, filename: str) -> str:
     - .txt/.md
     - .pdf (pypdf)
     - .docx (python-docx)
+    - image files (.png/.jpg/.jpeg/.webp/.bmp/.tif/.tiff) via OCR
     """
     name = (filename or "").strip().lower()
     if name.endswith((".txt", ".md")):
         return (data or b"").decode("utf-8", errors="replace")
+
+    if name.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff")):
+        lang = str(os.getenv("RESUME_OCR_LANG", "chi_sim+eng") or "chi_sim+eng").strip()
+        return _extract_image_text_ocr(data, lang=lang)
 
     if name.endswith(".pdf"):
         try:
@@ -1295,11 +1359,14 @@ def parse_resume_details_llm(text: str) -> dict[str, Any]:
     prompt = _build_details_llm_prompt(t)
     if not prompt.strip():
         return {}
-    raw = (call_llm_structured(prompt, system=system) or "").strip()
+    raw, err = call_llm_structured_ex(prompt, system=system)
+    raw = (raw or "").strip()
     if not raw:
+        hint = (err or "").strip() or "empty output"
         raise RuntimeError(
-            "LLM returned empty output. Check DOUBAO_API_KEY/DOUBAO_BASE_URL/DOUBAO_MODEL "
-            "and server logs for 'LLM call failed (doubao,structured)'."
+            "LLM call failed: "
+            + hint
+            + ". Check DOUBAO_API_KEY/DOUBAO_BASE_URL/DOUBAO_MODEL and confirm the API key has permission for this endpoint."
         )
     try:
         s = raw

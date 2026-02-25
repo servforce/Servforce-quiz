@@ -5,10 +5,10 @@ import os
 import re
 import shutil
 import threading
-import time
+import time as time_module
 import zipfile
 from datetime import datetime, timezone
-from datetime import date, time
+from datetime import date, time as dt_time
 from io import BytesIO
 from pathlib import Path
 
@@ -16,6 +16,7 @@ from flask import (
     Flask,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -59,6 +60,7 @@ from services.assignment_service import (
     load_assignment,
     save_assignment,
 )
+from services.aliyun_dypns import check_sms_verify_code, send_sms_verify_code
 from services.grading_service import generate_candidate_remark, grade_attempt
 from services.resume_service import (
     clean_projects_raw_for_display,
@@ -165,12 +167,12 @@ def _invite_window_state(assignment: dict, *, now: datetime | None = None) -> tu
         return "ok", sd, ed
 
     if sd is not None:
-        start_at = datetime.combine(sd, time.min, tzinfo=tz)
+        start_at = datetime.combine(sd, dt_time.min, tzinfo=tz)
         if now < start_at:
             return "not_started", sd, ed
 
     if ed is not None:
-        end_at = datetime.combine(ed, time.max, tzinfo=tz)
+        end_at = datetime.combine(ed, dt_time.max, tzinfo=tz)
         if now > end_at:
             return "expired", sd, ed
 
@@ -874,7 +876,7 @@ def create_app() -> Flask:
                 if status == "finished":
                     attempt_href = url_for("admin_attempt", token=token)
                 else:
-                    attempt_msg = f"当前状态：{_status_label(status)}。判卷结束后才可查看答题结果。"
+                    attempt_msg = f"当前状态：{_status_label(status)}，不可查看答题结果"
 
             attempt_candidates_page.append(
                 {
@@ -915,6 +917,60 @@ def create_app() -> Flask:
             total_attempt_pages=total_attempt_pages,
             attempt_per_page=attempt_per_page,
         )
+
+    @app.get("/admin/api/attempt-status")
+    @admin_required
+    def admin_attempt_status_api():
+        tokens_raw = (request.args.get("tokens") or "").strip()
+        tokens = [t.strip() for t in tokens_raw.split(",") if t.strip()]
+        tokens = tokens[:50]
+
+        def status_label(v: str) -> str:
+            s = str(v or "").strip()
+            m = {
+                "verified": "验证通过",
+                "invited": "已邀约",
+                "in_exam": "正在答题",
+                "grading": "正在判卷",
+                "finished": "判卷结束",
+                "expired": "失效",
+            }
+            return m.get(s, s or "未知")
+
+        def date_to_iso(v) -> str:
+            if v is None:
+                return ""
+            if isinstance(v, date):
+                return v.isoformat()
+            return str(v).strip()
+
+        today_local = datetime.now().astimezone().date()
+
+        items: list[dict[str, Any]] = []
+        for token in tokens:
+            ep = get_exam_paper_by_token(token) or {}
+            if not ep:
+                continue
+
+            status = str(ep.get("status") or "").strip()
+            entered_at = ep.get("entered_at")
+            invite_end_date = date_to_iso(ep.get("invite_end_date"))
+
+            if status in {"invited", "verified"} and not entered_at:
+                ed = _parse_date_ymd(invite_end_date) if invite_end_date else None
+                if ed is not None and today_local > ed:
+                    status = "expired"
+
+            items.append(
+                {
+                    "token": token,
+                    "status": status,
+                    "status_label": status_label(status),
+                    "score": ep.get("score"),
+                }
+            )
+
+        return jsonify({"items": items})
 
     @app.post("/admin/exams/upload")    # 上传
     @admin_required        #  必须在管理员登录后才能看到 
@@ -1503,7 +1559,7 @@ def create_app() -> Flask:
 
         if phone and archives_dir.exists():
             files = [p for p in archives_dir.glob(f"*_{phone}_*.json") if p.is_file()]
-            rows: list[dict[str, object]] = []
+            best_by_key: dict[str, dict[str, object]] = {}
             for p in files:
                 try:
                     a = read_json(p)
@@ -1511,6 +1567,7 @@ def create_app() -> Flask:
                     continue
                 if not isinstance(a, dict):
                     continue
+                token = str(a.get("token") or "").strip()
                 timing = a.get("timing") or {}
                 if not isinstance(timing, dict):
                     timing = {}
@@ -1535,8 +1592,12 @@ def create_app() -> Flask:
                     except Exception:
                         sort_key = 0.0
 
-                rows.append(
-                    {
+                # De-dup: multiple archive files may exist for the same token (e.g. refresh /done triggers re-archive).
+                # Keep the latest one per token+exam_key.
+                key = f"{token}::{exam_key}" if token else str(p.name)
+                cur = best_by_key.get(key)
+                if cur is None or float(sort_key) >= float(cur.get("_sort_key") or 0.0):
+                    best_by_key[key] = {
                         "exam_name": exam_name,
                         "score": str(score),
                         "start_at": start_at,
@@ -1544,8 +1605,8 @@ def create_app() -> Flask:
                         "_sort_key": sort_key,
                         "_archive_name": str(p.name),
                     }
-                )
 
+            rows = list(best_by_key.values())
             rows.sort(key=lambda x: float(x.get("_sort_key") or 0.0))
             for i, r in enumerate(rows, start=1):
                 attempt_results.append(
@@ -1593,7 +1654,9 @@ def create_app() -> Flask:
         evaluation = str(request.form.get("evaluation") or "").strip()
         if not evaluation:
             flash("请输入评价内容")
-            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+            return redirect(
+                url_for("admin_candidate_profile", candidate_id=candidate_id, _anchor="evaluations")
+            )
 
         parsed = c.get("resume_parsed") or {}
         if not isinstance(parsed, dict):
@@ -1660,10 +1723,12 @@ def create_app() -> Flask:
         except Exception:
             logger.exception("Update candidate evaluation failed (cid=%s)", candidate_id)
             flash("保存失败：评价写入失败")
-            return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+            return redirect(
+                url_for("admin_candidate_profile", candidate_id=candidate_id, _anchor="evaluations")
+            )
 
         flash("评价已保存")
-        return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+        return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id, _anchor="evaluations"))
 
     @app.get("/admin/candidates/<int:candidate_id>/resume/download")
     @admin_required
@@ -1726,7 +1791,7 @@ def create_app() -> Flask:
 
         filename = str(file.filename or "")
         ext = os.path.splitext(filename)[1].lower()
-        if ext not in {".pdf", ".docx", ".txt", ".md"}:
+        if ext not in {".pdf", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}:
             flash("暂不支持该文件类型（仅支持 PDF/DOCX/TXT/MD）")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
@@ -1878,14 +1943,7 @@ def create_app() -> Flask:
 
         existed = get_candidate_by_phone(phone)
         if existed:
-            try:
-                now = datetime.now(timezone.utc)
-                cid = int(existed["id"])
-                update_candidate(cid, name=name, phone=phone, created_at=now)
-            except Exception:
-                flash("更新失败")
-                return redirect(url_for("admin_candidates"))
-            flash("候选人已覆盖更新（按新创建处理）")
+            flash("候选人已创建，请勿重复创建")
             return redirect(url_for("admin_candidates"))
 
         try:
@@ -1916,7 +1974,7 @@ def create_app() -> Flask:
 
         filename = str(file.filename or "")
         ext = os.path.splitext(filename)[1].lower()
-        if ext not in {".pdf", ".docx", ".txt", ".md"}:
+        if ext not in {".pdf", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}:
             flash("暂不支持该文件类型（仅支持 PDF/DOCX/TXT/MD）")
             return redirect(url_for("admin_candidates"))
 
@@ -2166,7 +2224,11 @@ def create_app() -> Flask:
     def admin_assignments_create():
         exam_key = (request.form.get("exam_key") or "").strip()
         candidate_id = int(request.form.get("candidate_id") or "0")
-        time_limit_seconds = _parse_duration_seconds(request.form.get("time_limit_seconds")) or 7200
+        time_limit_raw = (request.form.get("time_limit_seconds") or "").strip()
+        time_limit_seconds = _parse_duration_seconds(time_limit_raw)
+        if not time_limit_raw or time_limit_seconds is None:
+            flash("请填写限时（时:分:秒），例如 02:00:00")
+            return redirect(url_for("admin_dashboard") + "#tab-assign")
         min_submit_seconds_raw = (request.form.get("min_submit_seconds") or "").strip()
         min_submit_seconds: int | None = None
         if min_submit_seconds_raw != "":
@@ -2189,8 +2251,20 @@ def create_app() -> Flask:
 
         invite_start_date_raw = (request.form.get("invite_start_date") or "").strip()
         invite_end_date_raw = (request.form.get("invite_end_date") or "").strip()
+        if not invite_start_date_raw:
+            flash("请选择答题开始日期")
+            return redirect(url_for("admin_dashboard") + "#tab-assign")
+        if not invite_end_date_raw:
+            flash("请选择答题结束日期")
+            return redirect(url_for("admin_dashboard") + "#tab-assign")
         sd = _parse_date_ymd(invite_start_date_raw) if invite_start_date_raw else None
         ed = _parse_date_ymd(invite_end_date_raw) if invite_end_date_raw else None
+        if sd is None:
+            flash("答题开始日期格式不正确（应为 YYYY-MM-DD）")
+            return redirect(url_for("admin_dashboard") + "#tab-assign")
+        if ed is None:
+            flash("答题结束日期格式不正确（应为 YYYY-MM-DD）")
+            return redirect(url_for("admin_dashboard") + "#tab-assign")
         if invite_start_date_raw and sd is None:
             flash("答题开始日期格式不正确（应为 YYYY-MM-DD）")
             return redirect(url_for("admin_dashboard") + "#tab-assign")
@@ -2283,6 +2357,14 @@ def create_app() -> Flask:
     def public_verify_page(token: str):
         with assignment_locked(token):
             assignment = load_assignment(token)
+            if str(assignment.get("status") or "").strip() == "expired":
+                return render_template(
+                    "public_unavailable.html",
+                    title="邀约已失效",
+                    message="当前答题链接已失效，请联系管理员重新生成新的邀请链接。",
+                    start_date="",
+                    end_date="",
+                )
             st, sd, ed = _invite_window_state(assignment)
             if st in {"not_started", "expired"}:
                 if st == "expired":
@@ -2306,39 +2388,222 @@ def create_app() -> Flask:
                 return redirect(url_for("public_done", token=token))
             _ensure_exam_paper_for_token(token, assignment)
         verify = assignment.get("verify") or {}
+        sms = assignment.get("sms_verify") or {}
         return render_template(
             "public_verify.html",
             token=token,
             locked=bool(verify.get("locked")),
             attempts=int(verify.get("attempts") or 0),
             max_attempts=int(assignment.get("verify_max_attempts") or 3),
+            sms_verified=bool(sms.get("verified")),
+        )
+
+    @app.post("/api/public/sms/send")
+    def public_send_sms_code():
+        data = request.get_json(silent=True) or {}
+        token = str(data.get("token") or "").strip()
+        name = str(data.get("name") or "").strip()
+        phone = _normalize_phone(str(data.get("phone") or ""))
+        if not token or not _is_valid_name(name) or not _is_valid_phone(phone):
+            return jsonify({"ok": False, "error": "请输入正确的姓名和手机号。"}), 400
+
+        cooldown_seconds = 60
+        max_send = 3
+        now = datetime.now(timezone.utc)
+        with assignment_locked(token):
+            assignment = load_assignment(token)
+            if str(assignment.get("status") or "").strip() == "expired":
+                return jsonify({"ok": False, "error": "链接已失效。"}), 410
+
+            st, _sd, _ed = _invite_window_state(assignment)
+            if st in {"not_started", "expired"}:
+                return jsonify({"ok": False, "error": "当前不在可答题时间范围内。"}), 400
+            if assignment.get("grading") or _finalize_if_time_up(token, assignment):
+                return jsonify({"ok": False, "error": "答题已结束。"}), 400
+
+            verify = assignment.get("verify") or {"attempts": 0, "locked": False}
+            if verify.get("locked"):
+                return jsonify({"ok": False, "error": "链接已失效。"}), 410
+
+            candidate_id = int(assignment.get("candidate_id") or 0)
+            ok = verify_candidate(candidate_id, name=name, phone=phone)
+            if not ok:
+                verify["attempts"] = int(verify.get("attempts") or 0) + 1
+                if verify["attempts"] >= int(assignment.get("verify_max_attempts") or 3):
+                    verify["locked"] = True
+                assignment["verify"] = verify
+                save_assignment(token, assignment)
+                return jsonify({"ok": False, "error": "信息不匹配，请检查后重试。"}), 400
+
+            sms = assignment.get("sms_verify") or {}
+            if not sms.get("verified") and int(sms.get("send_count") or 0) >= max_send:
+                nowx = datetime.now(timezone.utc)
+                assignment["status"] = "expired"
+                assignment["status_updated_at"] = nowx.isoformat()
+                try:
+                    set_exam_paper_status(token, "expired")
+                except Exception:
+                    pass
+                verify["locked"] = True
+                assignment["verify"] = verify
+                save_assignment(token, assignment)
+                return jsonify({"ok": False, "expired": True, "error": "验证码发送次数已达上限，链接已失效。"}), 410
+
+            last_phone = str(sms.get("phone") or "")
+            last_sent_at = str(sms.get("last_sent_at") or "").strip()
+            if last_phone == phone and last_sent_at:
+                try:
+                    last_dt = datetime.fromisoformat(last_sent_at.replace("Z", "+00:00"))
+                except Exception:
+                    last_dt = None
+                if last_dt is not None:
+                    elapsed = (now - last_dt).total_seconds()
+                    left = int(cooldown_seconds - elapsed)
+                    if left > 0:
+                        return jsonify({"ok": False, "cooldown": left, "error": f"请{left}秒后再试。"}), 429
+
+            try:
+                resp = send_sms_verify_code(phone)
+            except Exception:
+                logger.exception("Send SMS verify code failed")
+                return jsonify({"ok": False, "error": "短信服务暂不可用，请稍后重试。"}), 502
+            success = bool(resp.get("Success")) and str(resp.get("Code") or "").upper() == "OK"
+            if not success:
+                return jsonify({"ok": False, "error": str(resp.get("Message") or "发送失败。")}), 502
+
+            biz_id = ""
+            model = resp.get("Model")
+            if isinstance(model, dict):
+                biz_id = str(model.get("BizId") or "").strip()
+
+            sms["phone"] = phone
+            sms["last_sent_at"] = now.isoformat()
+            sms["send_count"] = int(sms.get("send_count") or 0) + 1
+            if biz_id:
+                sms["biz_id"] = biz_id
+            assignment["sms_verify"] = sms
+            save_assignment(token, assignment)
+
+        return jsonify(
+            {
+                "ok": True,
+                "cooldown": cooldown_seconds,
+                "biz_id": biz_id,
+                "send_count": int(sms.get("send_count") or 0),
+                "send_max": max_send,
+            }
         )
 
     # 验证候选者信息进入答卷
     @app.post("/api/public/verify")
     def public_verify():
+        wants_json = "application/json" in str(request.headers.get("Accept") or "").lower()
         token = (request.form.get("token") or "").strip()
         name = (request.form.get("name") or "").strip()
         phone = _normalize_phone(request.form.get("phone") or "")
+        sms_code = (request.form.get("sms_code") or "").strip()
         if not _is_valid_name(name) or not _is_valid_phone(phone):
+            if wants_json:
+                return jsonify({"ok": False, "error": "姓名或手机号格式不正确。"}), 400
             flash("姓名或手机号格式不正确")
             return redirect(url_for("public_verify_page", token=token))
         with assignment_locked(token):
             assignment = load_assignment(token)
+            if str(assignment.get("status") or "").strip() == "expired":
+                if wants_json:
+                    return jsonify({"ok": False, "expired": True, "error": "当前链接已失效，请联系管理员重新生成。"}), 410
+                flash("链接已失效")
+                return redirect(url_for("public_verify_page", token=token))
             st, _sd, _ed = _invite_window_state(assignment)
             if st in {"not_started", "expired"}:
+                if wants_json:
+                    return jsonify({"ok": False, "error": "当前不在可答题时间范围内。"}), 400
                 return redirect(url_for("public_verify_page", token=token))
             if assignment.get("grading") or _finalize_if_time_up(token, assignment):
+                if wants_json:
+                    return jsonify({"ok": False, "error": "答题已结束。"}), 400
                 return redirect(url_for("public_done", token=token))
             _ensure_exam_paper_for_token(token, assignment)
             verify = assignment.get("verify") or {"attempts": 0, "locked": False}
             if verify.get("locked"):
+                if wants_json:
+                    return jsonify({"ok": False, "expired": True, "error": "当前链接已失效，请联系管理员重新生成。"}), 410
                 flash("链接已失效")
                 return redirect(url_for("public_verify_page", token=token))
 
             candidate_id = int(assignment["candidate_id"])
             ok = verify_candidate(candidate_id, name=name, phone=phone)
             if ok:
+                sms = assignment.get("sms_verify") or {}
+                if str(sms.get("phone") or "") != phone:
+                    sms["phone"] = phone
+                    assignment["sms_verify"] = sms
+                if not sms.get("verified"):
+                    if not sms_code:
+                        if wants_json:
+                            return jsonify({"ok": False, "error": "请输入短信验证码。"}), 400
+                        flash("请输入短信验证码")
+                        return redirect(url_for("public_verify_page", token=token))
+
+                    try:
+                        resp = check_sms_verify_code(phone, sms_code)
+                    except Exception:
+                        logger.exception("Check SMS verify code failed")
+                        if wants_json:
+                            return jsonify({"ok": False, "error": "短信服务暂不可用，请稍后重试。"}), 502
+                        flash("短信服务暂不可用，请稍后重试。")
+                        return redirect(url_for("public_verify_page", token=token))
+                    verify_result = ""
+                    model = resp.get("Model")
+                    if isinstance(model, dict):
+                        verify_result = str(model.get("VerifyResult") or "").strip().upper()
+                    sms_ok = (
+                        bool(resp.get("Success"))
+                        and str(resp.get("Code") or "").upper() == "OK"
+                        and verify_result == "PASS"
+                    )
+                    if not sms_ok:
+                        if int((sms.get("send_count") or 0)) >= 3:
+                            nowx = datetime.now(timezone.utc)
+                            assignment["status"] = "expired"
+                            assignment["status_updated_at"] = nowx.isoformat()
+                            try:
+                                set_exam_paper_status(token, "expired")
+                            except Exception:
+                                pass
+                            verify["locked"] = True
+                            assignment["verify"] = verify
+                            save_assignment(token, assignment)
+                            if wants_json:
+                                return (
+                                    jsonify(
+                                        {
+                                            "ok": False,
+                                            "expired": True,
+                                            "error": "验证码未在规定次数内验证通过，链接已失效，请联系管理员重新生成。",
+                                            "clear_sms": True,
+                                        }
+                                    ),
+                                    410,
+                                )
+                            flash("验证码未在规定次数内验证通过，链接已失效，请联系管理员重新生成。")
+                            return redirect(url_for("public_verify_page", token=token))
+
+                        if wants_json:
+                            return (
+                                jsonify({"ok": False, "error": "验证码错误，请重试。", "clear_sms": True}),
+                                400,
+                            )
+                        # If the candidate has already requested 3 codes and still cannot verify,
+                        # expire this token to force the admin to re-issue a new invite.
+                        save_assignment(token, assignment)
+                        flash("验证码错误，请重试。")
+                        return redirect(url_for("public_verify_page", token=token))
+
+                    sms["verified"] = True
+                    sms["verified_at"] = datetime.now(timezone.utc).isoformat()
+                    assignment["sms_verify"] = sms
+
                 try:
                     set_exam_paper_status(token, "verified")
                 except Exception:
@@ -2355,8 +2620,12 @@ def create_app() -> Flask:
             save_assignment(token, assignment)
 
         if ok:
+            if wants_json:
+                return jsonify({"ok": True, "redirect": url_for("public_exam_page", token=token)})
             return redirect(url_for("public_exam_page", token=token))
 
+        if wants_json:
+            return jsonify({"ok": False, "error": "信息不匹配，请重试。"}), 400
         flash("信息不匹配，请重试")
         return redirect(url_for("public_verify_page", token=token))
 
@@ -2369,6 +2638,14 @@ def create_app() -> Flask:
     def public_exam_page(token: str):
         with assignment_locked(token):
             assignment = load_assignment(token)
+            if str(assignment.get("status") or "").strip() == "expired":
+                return render_template(
+                    "public_unavailable.html",
+                    title="邀约已失效",
+                    message="当前答题链接已失效，请联系管理员重新生成新的邀请链接。",
+                    start_date="",
+                    end_date="",
+                )
             st, sd, ed = _invite_window_state(assignment)
             if st in {"not_started", "expired"}:
                 if st == "expired":
@@ -2886,7 +3163,7 @@ def _auto_collect_loop(*, interval_seconds: int = 15) -> None:
                         logger.exception("Auto-collect scan failed (token=%s)", token)
         except Exception:
             logger.exception("Auto-collect loop failed")
-        time.sleep(interval_seconds)
+        time_module.sleep(interval_seconds)
 
 
 def _parse_duration_seconds(value: str | None) -> int:
@@ -2939,6 +3216,57 @@ def _archive_filename(name: str, phone: str, token: str, exam_key: str, *, saved
         raw = f"{ts}_{name_part2}_{suffix}".strip("._")
         raw = raw[:160].rstrip("._")
     return f"{raw}.json"
+
+
+def _stable_archive_filename(phone: str, token: str, exam_key: str) -> str:
+    phone_part = _sanitize_archive_part(str(phone or ""))
+    token_part = _sanitize_archive_part(str(token or ""))
+    exam_part = _sanitize_archive_part(str(exam_key or ""))
+
+    # Stable per token: one attempt -> one archive file (overwrite on re-save).
+    # Must keep suffix compatible with existing glob patterns: *_{phone}_*_{exam_key}.json
+    suffix_parts = [p for p in (phone_part, token_part, exam_part) if p]
+    suffix = "_".join(suffix_parts) or "attempt"
+    raw = f"latest_{suffix}".strip("._")
+    if len(raw) > 160:
+        raw = raw[:160].rstrip("._")
+    return f"{raw}.json"
+
+
+def _cleanup_old_archives_for_token(
+    *,
+    phone: str,
+    token: str,
+    exam_key: str,
+    keep_filename: str,
+) -> None:
+    phone_part = _sanitize_archive_part(str(phone or ""))
+    token_part = _sanitize_archive_part(str(token or ""))
+    exam_part = _sanitize_archive_part(str(exam_key or ""))
+    if not phone_part or not token_part or not exam_part:
+        return
+
+    archives_dir = STORAGE_DIR / "archives"
+    if not archives_dir.exists():
+        return
+
+    keep = str(keep_filename or "").strip()
+    if not keep:
+        return
+
+    # Old format: {ts}_{name}_{phone}_{token}_{exam_key}.json (and similar).
+    # Match anything with the stable suffix and remove all but `keep_filename`.
+    pattern = f"*_{phone_part}_{token_part}_{exam_part}.json"
+    for p in archives_dir.glob(pattern):
+        try:
+            if not p.is_file():
+                continue
+            if p.name == keep:
+                continue
+            p.unlink(missing_ok=True)
+        except Exception:
+            # Best-effort cleanup only.
+            continue
 
 
 def _sanitize_archive_part(value: str) -> str:
@@ -3077,14 +3405,17 @@ def _archive_candidate_attempt(assignment: dict, *, spec: dict | None = None) ->
         "questions": questions_out,
     }
 
-    filename = _archive_filename(
-        str(c.get("name") or ""),
-        str(c.get("phone") or ""),
-        token,
-        exam_key,
-        saved_at=datetime.fromisoformat(now_iso),
-    )
+    filename = _stable_archive_filename(str(c.get("phone") or ""), token, exam_key)
     path = STORAGE_DIR / "archives" / filename
+    try:
+        _cleanup_old_archives_for_token(
+            phone=str(c.get("phone") or ""),
+            token=token,
+            exam_key=exam_key,
+            keep_filename=filename,
+        )
+    except Exception:
+        pass
     write_json(Path(path), archive)
 
 

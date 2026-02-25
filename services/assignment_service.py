@@ -73,7 +73,7 @@ def compute_min_submit_seconds(time_limit_seconds: int, min_submit_seconds: int 
         limit = 0
     if limit <= 0:
         return 0
-    # Default rule: at least ceil(half of time limit).
+    # (limit + 1) // 2
     half_or_more = (limit + 1) // 2
     if min_submit_seconds is None:
         return int(half_or_more)
@@ -82,7 +82,6 @@ def compute_min_submit_seconds(time_limit_seconds: int, min_submit_seconds: int 
     except Exception:
         given = 0
     if given <= 0:
-        # Explicitly disable the minimum-submit restriction (useful for testing/validation flows).
         return 0
     return max(0, max(int(given), int(half_or_more)))
 

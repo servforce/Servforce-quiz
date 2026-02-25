@@ -16,24 +16,119 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
-      .q { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 14px; padding: 12px; margin: 12px 0; background: rgba(15, 23, 42, 0.02); }
-      .q.ok { border-color: rgba(22, 163, 74, 0.35); background: rgba(22, 163, 74, 0.06); }
-      .q.bad { border-color: rgba(220, 38, 38, 0.30); background: rgba(220, 38, 38, 0.05); }
       .md { white-space: normal; }
       .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
-      .ans { margin-top: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(15, 23, 42, 0.10); background: rgba(255, 255, 255, 0.92); }
-      .opt { display:flex; gap: 10px; align-items: baseline; padding: 6px 8px; border-radius: 10px; }
-      .opt.ok { background: rgba(22, 163, 74, 0.12); }
-      .opt.bad { background: rgba(220, 38, 38, 0.10); }
-      .pill { display:inline-flex; align-items:center; gap:6px; padding: 4px 10px; border-radius: 999px; font-weight: 900; font-size: 12px; border: 1px solid rgba(15,23,42,0.12); background: rgba(255,255,255,0.92); }
+
+      /* Review cards: visually align with the exam question cards in ui.css. */
+      .q {
+        position: relative;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+        overflow: hidden;
+        padding: 14px 14px 16px;
+        margin: 14px 0;
+      }
+      .q::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: rgba(37, 99, 235, 0.55);
+      }
+      .q > .flex {
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+      }
+      .q .md { margin-top: 12px !important; line-height: 1.75; }
+      .q > div[style*="display:grid"] { gap: 10px !important; }
+
+      .q code {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(37, 99, 235, 0.26);
+        background: rgba(37, 99, 235, 0.10);
+        color: #1d4ed8;
+        font-weight: 900;
+        font-size: 12px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-weight: 900;
+        font-size: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.92);
+        white-space: nowrap;
+      }
       .pill.ok { border-color: rgba(22, 163, 74, 0.30); color: #166534; background: rgba(22, 163, 74, 0.10); }
       .pill.bad { border-color: rgba(220, 38, 38, 0.25); color: #991b1b; background: rgba(220, 38, 38, 0.08); }
-      pre.code { white-space: pre-wrap; margin: 0; }
+
+      .opt {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 12px 14px;
+        border-radius: 16px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(255, 255, 255, 0.92);
+      }
+      .opt.ok { border-color: rgba(22, 163, 74, 0.26); background: rgba(22, 163, 74, 0.06); }
+      .opt.bad { border-color: rgba(220, 38, 38, 0.22); background: rgba(220, 38, 38, 0.05); }
+      .opt > div:first-child b {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        height: 26px;
+        border-radius: 10px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(15, 23, 42, 0.03);
+        font-weight: 950;
+        color: rgba(15, 23, 42, 0.86);
+      }
+
+      .ans {
+        margin-top: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 16px;
+        padding: 12px 14px;
+        background: rgba(255, 255, 255, 0.92);
+      }
+      pre.code { white-space: pre-wrap; margin: 0; line-height: 1.7; }
+
+      /* Font scale for review page (especially the header area). */
+      .review-page { font-size: 16px; }
+      .review-page .section-head .title { font-size: 26px; }
+      .review-page .section-head .sub { font-size: 17px; }
+      .review-page .section-head .sub code { font-size: 16px; padding: 4px 10px; }
+
+      .review-page .q { font-size: 16px; }
+      .review-page .q .md { font-size: 16px; }
+      .review-page .opt { font-size: 16px; }
+      .review-page .pill { font-size: 13px; padding: 6px 12px; }
+      .review-page .q code { font-size: 13px; padding: 5px 12px; }
+
+      .review-page .section-head .btn {
+        font-size: 16px;
+        padding: 12px 18px;
+        border-radius: 14px;
+      }
     </style>
   </head>
-  <body>
+  <body class="review-page">
     <header class="topbar">
-      <div class="container topbar-inner">
+      <div class="container topbar-inner exam-frame">
         <div class="brand" aria-label="Servforce Quiz 管理后台">
           <span class="brand-badge" aria-hidden="true"></span>
           <span>Servforce Quiz</span>
@@ -49,7 +144,7 @@
       </div>
     </header>
 
-    <main class="container page">
+    <main class="container page exam-frame">
       {% for m in get_flashed_messages() %}
       <div class="flash error">{{ m }}</div>
       {% endfor %}
@@ -76,6 +171,7 @@
         </section>
 
         <section class="section">
+          {% set type_label_map = {'single':'单选','multiple':'多选','short':'简答'} %}
           {% for q in archive.questions %}
             {% set score = q.score %}
             {% set mx = q.score_max %}
@@ -84,7 +180,8 @@
               <div class="flex" style="justify-content: space-between; align-items: center;">
                 <div class="flex" style="gap:10px; flex-wrap: wrap;">
                   <div><b>{{ q.label or q.qid }}</b></div>
-                  <div><code>{{ q.type }}</code></div>
+                  <div><code>{{ type_label_map.get(q.type, q.type) }}</code></div>
+                  {% if mx is not none %}<span class="pill">{{ mx }}分</span>{% endif %}
                   {% if score is not none and mx is not none %}
                     <span class="pill {{ 'ok' if ok else 'bad' }}">得分 {{ score }}/{{ mx }}</span>
                   {% endif %}
@@ -110,7 +207,7 @@
                     {% if is_correct %}{% set cls = 'ok' %}{% endif %}
                     {% if is_chosen and not is_correct %}{% set cls = 'bad' %}{% endif %}
                     <div class="opt {{ cls }}">
-                      <div style="min-width: 26px;"><b>{{ o.key }})</b></div>
+                      <div style="min-width: 26px;"><b>{{ o.key }}</b></div>
                       <div style="flex:1;">{{ o.text }}</div>
                       {% if is_correct %}<span class="pill ok">正确</span>{% endif %}
                       {% if is_chosen and not is_correct %}<span class="pill bad">选错</span>{% endif %}

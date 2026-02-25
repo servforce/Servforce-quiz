@@ -6,15 +6,62 @@
     <title>答题邀请已生成</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <style>
-      .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; align-items: start; }
+      /* Match the screenshot: larger white surface (page size unchanged, only this view). */
+      .container { max-width: 1080px; width: min(1080px, 100%); }
       .card-mini { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 12px; padding: 14px; background: rgba(15, 23, 42, 0.02); }
-      .label { color: var(--muted); font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
-      .value { margin-top: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; background: rgba(17, 24, 39, 0.08); padding: 4px 8px; border-radius: 10px; word-break: break-all; }
-      .linkbox { flex: 1; min-width: 280px; padding: 10px 12px; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 12px; background: rgba(255, 255, 255, 0.92); word-break: break-all; }
-      .hint { color: var(--muted); font-size: 13px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .linkbox { padding: 10px 12px; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 12px; background: rgba(255, 255, 255, 0.92); word-break: break-all; }
       .qr { display: grid; place-items: center; padding: 10px; background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 12px; }
-      @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* Layout per sketch: center QR, right copy-QR; bottom link, right copy-link. */
+      .invite-layout {
+        width: 100%;
+        display: grid;
+        /* Keep link width same as QR block width. */
+        grid-template-columns: min(520px, 100%) max-content;
+        grid-auto-rows: max-content;
+        gap: 14px 16px;
+        align-items: stretch;
+        justify-content: center;
+      }
+      .qr-card {
+        width: 100%;
+        min-height: 340px;
+        display: grid;
+        place-items: center;
+      }
+      .qr-card .qr { width: min(380px, 100%); }
+      .qr-card img { width: 300px; height: 300px; }
+      .invite-layout .linkbox { width: 100%; }
+      .copy-btn {
+        min-width: 132px;
+        justify-self: end;
+        align-self: end; /* bottom-right of its row */
+      }
+
+      /* Ensure the white surface fills the viewport height (more like the screenshot). */
+      /* Make the white surface match the "red-frame" size (narrower than the container). */
+      #inviteSurface {
+        width: min(900px, 100%);
+        margin: 0 auto;
+        min-height: calc(100vh - 64px - 18px - 36px);
+      }
+      #inviteBody { flex: 1 1 auto; }
+
+      @media (max-width: 980px) {
+        .invite-layout { grid-template-columns: 1fr; justify-content: stretch; }
+        .copy-btn { width: 100%; }
+      }
     </style>
   </head>
   <body>
@@ -38,7 +85,7 @@
     </header>
 
     <main class="container page">
-      <div class="surface" role="region" aria-label="答题邀请已生成">
+      <div class="surface" role="region" aria-label="答题邀请已生成" id="inviteSurface">
         <section class="section">
           <div class="section-head">
             <div>
@@ -49,44 +96,32 @@
           </div>
         </section>
 
-        <section class="section">
-          <div class="grid">
-            <div class="card-mini">
-              <div class="label">答题链接</div>
-              <div class="value">
-                <div class="linkbox" id="urlText">{{ url }}</div>
-                <a class="btn btn-primary" href="{{ url }}" target="_blank" rel="noopener">打开</a>
-                <button class="btn" type="button" data-copy="#urlText">复制链接</button>
+        <section class="section" id="inviteBody">
+          <div class="invite-layout">
+            <div class="card-mini qr-card" aria-label="邀请二维码">
+              <div class="qr">
+                <img src="/admin/qr/{{ token }}.png" width="300" height="300" alt="答题二维码" />
               </div>
+              <div id="qrUrlText" class="sr-only">/admin/qr/{{ token }}.png</div>
             </div>
+            <button class="btn btn-primary copy-btn" type="button" data-copy-qr="/admin/qr/{{ token }}.png" data-copy-qr-fallback="#qrUrlText">复制二维码</button>
 
-            <div class="card-mini">
-              <div class="label">二维码</div>
-              <div class="value" style="justify-content:center;">
-                <div class="qr">
-                  <img src="/admin/qr/{{ token }}.png" width="220" height="220" alt="答题二维码" />
-                </div>
-              </div>
-              <div class="value" style="justify-content:center; margin-top:10px;">
-                <a class="btn" href="/admin/qr/{{ token }}.png" target="_blank" rel="noopener">打开图片</a>
-              </div>
-            </div>
+            <div class="linkbox" id="inviteUrl">{{ url }}</div>
+            <button class="btn btn-primary copy-btn" type="button" data-copy="#inviteUrl">复制链接</button>
           </div>
         </section>
       </div>
     </main>
 
     <script>
-      async function copyTextFrom(selector) {
-        const el = document.querySelector(selector);
-        if (!el) return;
-        const text = (el.textContent || "").trim();
-        if (!text) return;
+      async function copyText(text) {
+        const t = String(text || "").trim();
+        if (!t) return;
         try {
-          await navigator.clipboard.writeText(text);
+          await navigator.clipboard.writeText(t);
         } catch (_e) {
           const ta = document.createElement("textarea");
-          ta.value = text;
+          ta.value = t;
           ta.style.position = "fixed";
           ta.style.left = "-9999px";
           document.body.appendChild(ta);
@@ -97,8 +132,31 @@
         }
       }
 
+      async function copyTextFrom(selector) {
+        const el = document.querySelector(selector);
+        if (!el) return;
+        await copyText(el.textContent || "");
+      }
+
+      async function copyQrImage(path, fallbackSelector) {
+        const url = new URL(String(path || ""), window.location.origin).toString();
+        try {
+          const r = await fetch(url, { credentials: "same-origin" });
+          const blob = await r.blob();
+          if (navigator.clipboard && window.ClipboardItem) {
+            await navigator.clipboard.write([new ClipboardItem({ [blob.type || "image/png"]: blob })]);
+            return;
+          }
+        } catch (_e) {}
+        const el = fallbackSelector ? document.querySelector(fallbackSelector) : null;
+        await copyText((el && el.textContent ? el.textContent : url) || "");
+      }
+
       for (const btn of document.querySelectorAll("[data-copy]")) {
         btn.addEventListener("click", () => copyTextFrom(btn.dataset.copy));
+      }
+      for (const btn of document.querySelectorAll("[data-copy-qr]")) {
+        btn.addEventListener("click", () => copyQrImage(btn.dataset.copyQr, btn.dataset.copyQrFallback || ""));
       }
     </script>
   </body>

@@ -20,6 +20,17 @@ def _supports_response_format_json() -> bool:
     return os.getenv("LLM_RESPONSE_FORMAT_JSON", "").strip().lower() in {"1", "true", "yes"}
 
 
+def _env_timeout(name: str, default: int) -> int:
+    v = str(os.getenv(name, "") or "").strip()
+    if not v:
+        return int(default)
+    try:
+        n = int(float(v))
+    except Exception:
+        return int(default)
+    return max(5, min(600, n))
+
+
 def _doubao_responses(
     *,
     input_messages: list[dict[str, Any]],
@@ -78,12 +89,12 @@ def _doubao_responses(
             last_err = e
             code = int(getattr(e, "code", 0) or 0)
             retryable = code in {429, 500, 502, 503, 504}
-            if attempt >= max_retries or not retryable:
-                raise
             try:
                 body_txt = e.read().decode("utf-8", errors="replace")
             except Exception:
                 body_txt = ""
+            if attempt >= max_retries or not retryable:
+                raise RuntimeError(f"Doubao HTTP {code}: {(body_txt or str(e))[:400]}") from e
             logger.warning(
                 "LLM HTTP %s (attempt %s/%s): %s",
                 code,
@@ -198,7 +209,7 @@ def call_llm_json(prompt: str, model: str | None = None) -> str:
             model=use_model,
             temperature=0.0,
             top_p=1.0,
-            timeout_seconds=90,
+            timeout_seconds=_env_timeout("LLM_TIMEOUT_JSON", 90),
             response_format_json=_supports_response_format_json(),
         )
         logger.debug("LLM(doubao,json) ok in %.2fs", time.time() - start)
@@ -226,7 +237,7 @@ def call_llm_text(prompt: str, model: str | None = None) -> str:
             model=use_model,
             temperature=0.2,
             top_p=1.0,
-            timeout_seconds=90,
+            timeout_seconds=_env_timeout("LLM_TIMEOUT_TEXT", 90),
             response_format_json=False,
         )
         logger.debug("LLM(doubao,text) ok in %.2fs", time.time() - start)
@@ -237,6 +248,16 @@ def call_llm_text(prompt: str, model: str | None = None) -> str:
 
 
 def call_llm_structured(prompt: str, *, system: str, model: str | None = None) -> str:
+    txt, _err = call_llm_structured_ex(prompt, system=system, model=model)
+    return txt
+
+
+def call_llm_structured_ex(
+    prompt: str,
+    *,
+    system: str,
+    model: str | None = None,
+) -> tuple[str, str]:
     """
     Generic structured call returning a JSON string (best-effort).
     Used by various extractors.
@@ -254,15 +275,15 @@ def call_llm_structured(prompt: str, *, system: str, model: str | None = None) -
             model=use_model,
             temperature=0.0,
             top_p=1.0,
-            timeout_seconds=120,
+            timeout_seconds=_env_timeout("LLM_TIMEOUT_STRUCTURED", 120),
             response_format_json=_supports_response_format_json(),
         )
         dt = time.time() - start
         logger.debug("LLM(doubao,structured) ok in %.2fs", dt)
-        return _extract_output_text(obj)
+        return _extract_output_text(obj), ""
     except Exception as e:
         logger.error("LLM call failed (doubao,structured): %s", e)
-        return ""
+        return "", f"{type(e).__name__}: {e}"
 
 
 def call_llm_vision_text(
@@ -289,7 +310,7 @@ def call_llm_vision_text(
             model=use_model,
             temperature=0.0,
             top_p=1.0,
-            timeout_seconds=120,
+            timeout_seconds=_env_timeout("LLM_TIMEOUT_VISION", 120),
             response_format_json=False,
         )
         logger.debug("LLM(doubao,vision) ok in %.2fs", time.time() - start)
