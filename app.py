@@ -4,6 +4,9 @@ import html
 import os
 import re
 import shutil
+import base64
+import hashlib
+import secrets
 import threading
 import time as time_module
 import zipfile
@@ -181,6 +184,217 @@ def _invite_window_state(assignment: dict, *, now: datetime | None = None) -> tu
 
 _MD_IMAGE_RE = re.compile(r"!\[[^\]]*]\((?P<path>[^)]+)\)")
 _FILENAME_UNSAFE_RE = re.compile(r'[\\\\/:*?"<>|]+')
+_PUBLIC_INVITE_GUARD = threading.Lock()
+
+
+def _public_invite_index_path() -> Path:
+    return STORAGE_DIR / "public_invites.json"
+
+
+def _load_public_invite_index() -> dict[str, str]:
+    """
+    Returns mapping: public_token -> exam_key.
+
+    This is a best-effort index to avoid scanning all exams for a token.
+    """
+    try:
+        p = _public_invite_index_path()
+        if not p.exists():
+            return {}
+        d = read_json(p)
+        if isinstance(d, dict):
+            out: dict[str, str] = {}
+            for k, v in d.items():
+                kk = str(k or "").strip()
+                vv = str(v or "").strip()
+                if kk and vv:
+                    out[kk] = vv
+            return out
+    except Exception:
+        return {}
+    return {}
+
+
+def _save_public_invite_index(index: dict[str, str]) -> None:
+    try:
+        write_json(_public_invite_index_path(), dict(index or {}))
+    except Exception:
+        return
+
+
+def _public_invite_cfg_path(exam_key: str) -> Path:
+    ek = str(exam_key or "").strip()
+    return STORAGE_DIR / "exams" / ek / "public_invite.json"
+
+
+def get_public_invite_config(exam_key: str) -> dict[str, object]:
+    p = _public_invite_cfg_path(exam_key)
+    try:
+        if not p.exists():
+            return {"enabled": False, "token": ""}
+        d = read_json(p)
+    except Exception:
+        d = None
+    if not isinstance(d, dict):
+        return {"enabled": False, "token": ""}
+    enabled = bool(d.get("enabled"))
+    token = str(d.get("token") or "").strip()
+    return {"enabled": enabled, "token": token}
+
+
+def _new_public_invite_token(index: dict[str, str]) -> str:
+    raise RuntimeError("Use _compute_public_invite_token_for_exam() instead")
+
+
+def _hash_token_base64url(seed: str, *, length: int = 10) -> str:
+    """
+    Deterministic, URL-safe token: base64url(sha256(seed)) truncated to `length`.
+    """
+    raw = hashlib.sha256(seed.encode("utf-8", errors="ignore")).digest()
+    b64 = base64.urlsafe_b64encode(raw).decode("ascii", errors="ignore").rstrip("=")
+    return b64[:length]
+
+
+def _compute_public_invite_token_for_exam(
+    index: dict[str, str],
+    *,
+    exam_key: str,
+    created_at: str,
+    title: str,
+    length: int = 10,
+) -> str:
+    """
+    Generate a stable public invite token for an exam based on exam metadata.
+
+    Seed includes: created_at, exam_key (id), title. Token is base64url hash (10 chars).
+    Collision-safe: appends a suffix and re-hashes if token already taken by another exam.
+    """
+    ek = str(exam_key or "").strip()
+    ca = str(created_at or "").strip()
+    tt = str(title or "").strip()
+    if not ek or not ca:
+        raise ValueError("missing exam_key/created_at")
+
+    base_seed = f"{ek}\n{tt}\n{ca}"
+    for n in range(0, 50):
+        seed = base_seed if n == 0 else f"{base_seed}\n#{n}"
+        t = _hash_token_base64url(seed, length=length)
+        if not t:
+            continue
+        bound = str(index.get(t) or "").strip()
+        if not bound or bound == ek:
+            return t
+    raise RuntimeError("Failed to allocate a collision-free public invite token")
+
+
+def set_public_invite_enabled(exam_key: str, enabled: bool) -> dict[str, object]:
+    ek = str(exam_key or "").strip()
+    if not ek:
+        return {"enabled": False, "token": ""}
+    cfg_path = _public_invite_cfg_path(ek)
+    exam_dir = cfg_path.parent
+    if not exam_dir.exists():
+        return {"enabled": False, "token": ""}
+
+    with _PUBLIC_INVITE_GUARD:
+        index = _load_public_invite_index()
+        cfg0 = get_public_invite_config(ek)
+        token0 = str(cfg0.get("token") or "").strip()
+
+        created_at0 = ""
+        title0 = ""
+        try:
+            raw0 = read_json(_public_invite_cfg_path(ek))
+        except Exception:
+            raw0 = None
+        if isinstance(raw0, dict):
+            created_at0 = str(raw0.get("created_at") or "").strip()
+            title0 = str(raw0.get("title") or "").strip()
+
+        if enabled:
+            if not created_at0:
+                created_at0 = datetime.now(timezone.utc).isoformat()
+            if not title0:
+                try:
+                    spec = read_json(STORAGE_DIR / "exams" / ek / "spec.json")
+                except Exception:
+                    spec = {}
+                if isinstance(spec, dict):
+                    title0 = str(spec.get("title") or "").strip()
+            token = _compute_public_invite_token_for_exam(
+                index, exam_key=ek, created_at=created_at0, title=title0, length=10
+            )
+        else:
+            token = token0
+
+        # If we are enabling and token changed, remove old mapping.
+        if enabled and token0 and token0 != token:
+            try:
+                if str(index.get(token0) or "").strip() == ek:
+                    index.pop(token0, None)
+            except Exception:
+                pass
+
+        cfg = {
+            "enabled": bool(enabled),
+            "token": token,
+            "created_at": created_at0 or None,
+            "title": title0 or None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        try:
+            write_json(cfg_path, cfg)
+        except Exception:
+            return {"enabled": False, "token": ""}
+
+        if token:
+            index[token] = ek
+            _save_public_invite_index(index)
+
+    return {"enabled": bool(enabled), "token": token}
+
+def _resolve_public_invite_exam_key(public_token: str) -> str:
+    """
+    Resolve public invite token -> exam_key.
+
+    Uses an index file for performance, but falls back to scanning exam dirs
+    if the index is missing/out-of-sync (e.g. manual file edits or older data).
+    """
+    t = str(public_token or "").strip()
+    if not t:
+        return ""
+
+    with _PUBLIC_INVITE_GUARD:
+        index = _load_public_invite_index()
+        ek = str(index.get(t) or "").strip()
+        if ek:
+            return ek
+
+        exams_dir = STORAGE_DIR / "exams"
+        if not exams_dir.exists():
+            return ""
+        for d in sorted(exams_dir.iterdir()):
+            if not d.is_dir():
+                continue
+            cfg_path = d / "public_invite.json"
+            if not cfg_path.exists():
+                continue
+            try:
+                cfg = read_json(cfg_path)
+            except Exception:
+                continue
+            if not isinstance(cfg, dict):
+                continue
+            tok = str(cfg.get("token") or "").strip()
+            if tok != t:
+                continue
+            ek = str(d.name or "").strip()
+            if ek:
+                index[t] = ek
+                _save_public_invite_index(index)
+                return ek
+
+    return ""
 
 
 def _protect_math_for_markdown(raw: str) -> tuple[str, list[tuple[str, str]]]:
@@ -779,6 +993,13 @@ def create_app() -> Flask:
             else:
                 e["updated_at"] = None
 
+            try:
+                cfg = get_public_invite_config(str(e.get("exam_key") or ""))
+            except Exception:
+                cfg = {"enabled": False, "token": ""}
+            e["public_invite_enabled"] = bool(cfg.get("enabled"))
+            e["public_invite_token"] = str(cfg.get("token") or "").strip()
+
         def _status_label(v: str) -> str:
             s = str(v or "").strip()
             m = {
@@ -1071,6 +1292,12 @@ def create_app() -> Flask:
             abort(404)
         spec = read_json(spec_path)
         exam_stats = _compute_exam_stats(spec)
+        cfg = get_public_invite_config(exam_key)
+        public_enabled = bool(cfg.get("enabled"))
+        public_token = str(cfg.get("token") or "").strip()
+        base_url = request.url_root.rstrip("/")
+        public_url = f"{base_url}/p/{public_token}" if (public_enabled and public_token) else ""
+        public_qr_url = url_for("public_invite_qr", public_token=public_token) if (public_enabled and public_token) else ""
 
         return render_template(
             "admin_exam_detail.html",
@@ -1079,6 +1306,9 @@ def create_app() -> Flask:
             exam_sort_id=None,
             view="detail",
             exam_stats=exam_stats,
+            public_invite_enabled=public_enabled,
+            public_invite_url=public_url,
+            public_invite_qr_url=public_qr_url,
         )
 
     def _compute_exam_stats(spec: dict) -> dict:
@@ -1113,6 +1343,12 @@ def create_app() -> Flask:
             abort(404)
         spec = read_json(spec_path)
         exam_stats = _compute_exam_stats(spec)
+        cfg = get_public_invite_config(exam_key)
+        public_enabled = bool(cfg.get("enabled"))
+        public_token = str(cfg.get("token") or "").strip()
+        base_url = request.url_root.rstrip("/")
+        public_url = f"{base_url}/p/{public_token}" if (public_enabled and public_token) else ""
+        public_qr_url = url_for("public_invite_qr", public_token=public_token) if (public_enabled and public_token) else ""
         return render_template(
             "admin_exam_detail.html",
             spec=spec,
@@ -1120,6 +1356,9 @@ def create_app() -> Flask:
             exam_sort_id=int(exam_id),
             view="detail",
             exam_stats=exam_stats,
+            public_invite_enabled=public_enabled,
+            public_invite_url=public_url,
+            public_invite_qr_url=public_qr_url,
         )
 
     @app.get("/admin/exams/<int:exam_id>/edit")
@@ -1196,6 +1435,12 @@ def create_app() -> Flask:
         public_spec = read_json(public_path)
         spec = read_json(spec_path)
         exam_stats = _compute_exam_stats(spec)
+        cfg = get_public_invite_config(exam_key)
+        public_enabled = bool(cfg.get("enabled"))
+        public_token = str(cfg.get("token") or "").strip()
+        base_url = request.url_root.rstrip("/")
+        public_url = f"{base_url}/p/{public_token}" if (public_enabled and public_token) else ""
+        public_qr_url = url_for("public_invite_qr", public_token=public_token) if (public_enabled and public_token) else ""
         return render_template(
             "admin_exam_paper.html",
             exam_key=exam_key,
@@ -1205,6 +1450,9 @@ def create_app() -> Flask:
             description=str(spec.get("description") or ""),
             exam_stats=exam_stats,
             view="paper",
+            public_invite_enabled=public_enabled,
+            public_invite_url=public_url,
+            public_invite_qr_url=public_qr_url,
         )
 
     @app.get("/admin/exams/<exam_key>/edit")
@@ -1275,6 +1523,12 @@ def create_app() -> Flask:
         public_spec = read_json(public_path)
         spec = read_json(spec_path)
         exam_stats = _compute_exam_stats(spec)
+        cfg = get_public_invite_config(exam_key)
+        public_enabled = bool(cfg.get("enabled"))
+        public_token = str(cfg.get("token") or "").strip()
+        base_url = request.url_root.rstrip("/")
+        public_url = f"{base_url}/p/{public_token}" if (public_enabled and public_token) else ""
+        public_qr_url = url_for("public_invite_qr", public_token=public_token) if (public_enabled and public_token) else ""
         return render_template(
             "admin_exam_paper.html",
             exam_key=exam_key,
@@ -1284,6 +1538,9 @@ def create_app() -> Flask:
             description=str(spec.get("description") or ""),
             exam_stats=exam_stats,
             view="paper",
+            public_invite_enabled=public_enabled,
+            public_invite_url=public_url,
+            public_invite_qr_url=public_qr_url,
         )
 
     @app.post("/admin/exams/<exam_key>/delete")
@@ -1309,6 +1566,45 @@ def create_app() -> Flask:
 
         # Success: keep UI quiet (no flash), user can see result from list refresh.
         return redirect(url_for("admin_dashboard") + "#tab-exams")
+
+    @app.post("/admin/exams/<exam_key>/public-invite")
+    @admin_required
+    def admin_exam_public_invite_toggle(exam_key: str):
+        """
+        Enable/disable a public invite for an exam.
+
+        When enabled, the exam gets a stable public token and can be accessed via:
+        - /p/<public_token> (each visitor gets their own attempt token)
+        - /qr/p/<public_token>.png (QR for the public URL)
+        """
+        ek = str(exam_key or "").strip()
+        spec_path = STORAGE_DIR / "exams" / ek / "spec.json"
+        if not ek or not spec_path.exists():
+            return jsonify({"ok": False, "error": "exam_not_found"}), 404
+
+        enabled_raw = None
+        data = request.get_json(silent=True)
+        if isinstance(data, dict):
+            enabled_raw = data.get("enabled")
+        if enabled_raw is None:
+            enabled_raw = request.form.get("enabled")
+        enabled = str(enabled_raw).strip().lower() in {"1", "true", "on", "yes"}
+
+        cfg = set_public_invite_enabled(ek, enabled)
+        public_token = str(cfg.get("token") or "").strip()
+        base_url = request.url_root.rstrip("/")
+        public_url = f"{base_url}/p/{public_token}" if public_token else ""
+        qr_url = url_for("public_invite_qr", public_token=public_token) if public_token else ""
+
+        return jsonify(
+            {
+                "ok": True,
+                "enabled": bool(cfg.get("enabled")),
+                "token": public_token,
+                "public_url": public_url,
+                "qr_url": qr_url,
+            }
+        )
 
     # 候选者信息
     @app.get("/admin/candidates")
@@ -2353,6 +2649,115 @@ def create_app() -> Flask:
         return render_template("admin_result.html", assignment=assignment)
 
     # ---------------- Candidate ----------------
+    @app.get("/p/<public_token>")
+    def public_invite_entry(public_token: str):
+        """
+        Public invite entry: each browser session gets an attempt token.
+        Reuses an existing token via cookie to avoid creating multiple records on refresh.
+        """
+        t = str(public_token or "").strip()
+        if not t:
+            abort(404)
+
+        exam_key = _resolve_public_invite_exam_key(t)
+        if not exam_key:
+            abort(404)
+
+        cfg = get_public_invite_config(exam_key)
+        if not bool(cfg.get("enabled")) or str(cfg.get("token") or "").strip() != t:
+            return render_template(
+                "public_unavailable.html",
+                title="链接不可用",
+                message="当前公开邀约链接已关闭或无效，请联系管理员。",
+                start_date="",
+                end_date="",
+            )
+
+        spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
+        if not spec_path.exists():
+            abort(404)
+
+        cookie_name = f"public_invite_{t}"
+        existing = str(request.cookies.get(cookie_name) or "").strip()
+        if existing:
+            ap = STORAGE_DIR / "assignments" / f"{existing}.json"
+            if ap.exists():
+                try:
+                    with assignment_locked(existing):
+                        a0 = load_assignment(existing)
+                    if str(a0.get("exam_key") or "").strip() == exam_key:
+                        return redirect(url_for("public_verify_page", token=existing))
+                except Exception:
+                    pass
+
+        base_url = request.url_root.rstrip("/")
+        result = create_assignment(
+            exam_key=exam_key,
+            candidate_id=0,
+            base_url=base_url,
+            phone="",
+            invite_start_date=None,
+            invite_end_date=None,
+            time_limit_seconds=7200,
+            min_submit_seconds=None,
+            verify_max_attempts=3,
+            pass_threshold=60,
+        )
+        token = str(result.get("token") or "").strip()
+        if not token:
+            abort(500)
+
+        try:
+            with assignment_locked(token):
+                a = load_assignment(token)
+                a["public_invite"] = {"token": t, "exam_key": exam_key}
+                save_assignment(token, a)
+        except Exception:
+            pass
+
+        resp = redirect(url_for("public_verify_page", token=token))
+        try:
+            resp.set_cookie(cookie_name, token, max_age=7 * 24 * 3600, samesite="Lax")
+        except Exception:
+            pass
+        return resp
+
+    @app.get("/qr/p/<public_token>.png")
+    def public_invite_qr(public_token: str):
+        t = str(public_token or "").strip()
+        if not t:
+            abort(404)
+        exam_key = _resolve_public_invite_exam_key(t)
+        if not exam_key:
+            abort(404)
+        cfg = get_public_invite_config(exam_key)
+        if not bool(cfg.get("enabled")) or str(cfg.get("token") or "").strip() != t:
+            abort(404)
+
+        try:
+            import qrcode  # type: ignore
+        except Exception:
+            abort(500)
+
+        public_url = f"{request.url_root.rstrip('/')}/p/{t}"
+        img = qrcode.make(public_url)
+        buf = BytesIO()
+        # qrcode may return either PIL image or PyPNG image depending on installed deps.
+        try:
+            img.save(buf, format="PNG")
+        except TypeError:
+            # PyPNGImage.save() does not accept the `format` kwarg.
+            img.save(buf)
+        buf.seek(0)
+        resp = send_file(buf, mimetype="image/png")
+        # Avoid browsers caching a stale/broken QR (e.g. previous 404 during index mismatch).
+        try:
+            resp.headers["Cache-Control"] = "no-store, max-age=0"
+            resp.headers["Pragma"] = "no-cache"
+        except Exception:
+            pass
+        return resp
+
     @app.get("/t/<token>")
     def public_verify_page(token: str):
         with assignment_locked(token):
@@ -2531,8 +2936,18 @@ def create_app() -> Flask:
                 flash("链接已失效")
                 return redirect(url_for("public_verify_page", token=token))
 
-            candidate_id = int(assignment["candidate_id"])
-            ok = verify_candidate(candidate_id, name=name, phone=phone)
+            try:
+                candidate_id = int(assignment.get("candidate_id") or 0)
+            except Exception:
+                candidate_id = 0
+
+            # Public invite attempts may start with candidate_id=0 (unknown candidate).
+            # In that case, we treat this as registration after SMS verification.
+            if candidate_id > 0:
+                ok = verify_candidate(candidate_id, name=name, phone=phone)
+            else:
+                ok = True
+
             if ok:
                 sms = assignment.get("sms_verify") or {}
                 if str(sms.get("phone") or "") != phone:
@@ -2603,6 +3018,44 @@ def create_app() -> Flask:
                     sms["verified"] = True
                     sms["verified_at"] = datetime.now(timezone.utc).isoformat()
                     assignment["sms_verify"] = sms
+
+                # If this is a public invite attempt, create/bind a candidate now.
+                if candidate_id <= 0:
+                    cand = None
+                    try:
+                        cand = get_candidate_by_phone(phone)
+                    except Exception:
+                        cand = None
+                    if cand and int(cand.get("id") or 0) > 0:
+                        cid = int(cand.get("id") or 0)
+                        try:
+                            if str(cand.get("name") or "").strip() != name:
+                                update_candidate(cid, name=name, phone=phone)
+                        except Exception:
+                            pass
+                        candidate_id = cid
+                    else:
+                        candidate_id = int(create_candidate(name=name, phone=phone))
+
+                    assignment["candidate_id"] = int(candidate_id)
+                    try:
+                        inv = assignment.get("invite_window") or {}
+                        if not isinstance(inv, dict):
+                            inv = {}
+                        invite_start_date = str(inv.get("start_date") or "").strip() or None
+                        invite_end_date = str(inv.get("end_date") or "").strip() or None
+                        if not get_exam_paper_by_token(token):
+                            create_exam_paper(
+                                candidate_id=int(candidate_id),
+                                phone=phone,
+                                exam_key=str(assignment.get("exam_key") or ""),
+                                token=token,
+                                invite_start_date=invite_start_date,
+                                invite_end_date=invite_end_date,
+                                status="verified",
+                            )
+                    except Exception:
+                        pass
 
                 try:
                     set_exam_paper_status(token, "verified")

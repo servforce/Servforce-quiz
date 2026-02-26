@@ -149,6 +149,8 @@
       th.col-id, td.col-id { padding-right: 8px; }
       th.col-exam-key, td.col-key { text-align: left; padding-left: 8px; padding-right: 12px; }
       td.col-key, td.col-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      td.col-title { padding-right: 6px; }
+      th.col-count, td.col-count { padding-left: 6px; }
 
       /* "答题邀请" tab: fit all columns without horizontal scrolling (no font-size changes). */
       .assign-attempts .table-scroll { overflow-x: visible; padding-left: 0; padding-right: 0; }
@@ -162,8 +164,8 @@
       td.col-key .exam-key { white-space: nowrap; display: block; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
       th.col-count, td.col-count { text-align: center; white-space: nowrap; }
       th.col-updated, td.col-updated { text-align: center; white-space: nowrap; }
-      th.col-actions, td.col-actions { white-space: nowrap; text-align: right; min-width: 160px; }
-      .shift-updated { display: inline-block; transform: translateX(2cm); }
+      th.col-actions, td.col-actions { white-space: nowrap; text-align: right; min-width: 220px; padding-right: 18px; }
+      .shift-updated { display: inline-block; }
       .btn-icon {
         min-width: 64px;
         padding: 9px 12px;
@@ -196,6 +198,36 @@
       #tab-exams .btn { height: 40px; font-size: 16px; border-radius: 14px; }
       #tab-exams table.exam-table { font-size: 18px; }
       #tab-exams table.exam-table th { font-size: 16px; }
+      #tab-exams .public-invite-toggle {
+        width: 54px;
+        height: 30px;
+        border-radius: 999px;
+        border: 1px solid rgba(15,23,42,.16);
+        background: rgba(148,163,184,.25);
+        position: relative;
+        padding: 0;
+        cursor: pointer;
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+      }
+      #tab-exams .public-invite-toggle[aria-pressed="true"] {
+        background: rgba(79, 70, 229, .92);
+        border-color: rgba(79, 70, 229, .35);
+      }
+      #tab-exams .public-invite-toggle .knob {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 24px;
+        height: 24px;
+        border-radius: 999px;
+        background: #fff;
+        box-shadow: 0 6px 16px rgba(2,6,23,.22);
+        transition: transform .18s ease;
+      }
+      #tab-exams .public-invite-toggle[aria-pressed="true"] .knob {
+        transform: translateX(24px);
+      }
+      #tab-exams .public-invite-toggle:disabled { opacity: .6; cursor: not-allowed; }
 
       /* Invite form visual polish (scoped to "答题邀请" only). */
       #tab-assign { font-size: 16px; }
@@ -364,14 +396,14 @@
 
           <div class="table-scroll">
             <table class="exam-table" aria-label="试卷列表">
-			              <colgroup>
-			                <col style="width: 70px;" />
-			                <col style="width: 220px;" />
-			                <col style="width: 220px;" />
-			                <col style="width: 60px;" />
-			                <col style="width: 200px;" />
-			                <col />
-			              </colgroup>
+              <colgroup>
+                <col style="width: 60px;" />
+                <col style="width: 180px;" />
+                <col style="width: 180px;" />
+                <col style="width: 80px;" />
+                <col style="width: 160px;" />
+                <col style="width: 220px;" />
+              </colgroup>
               <thead>
 		                <tr>
 		                  <th class="col-id">ID</th>
@@ -395,6 +427,14 @@
                       <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该试卷？删除后候选人关联试卷将显示为“已删除”，但已归档答题仍可查看。');">
                         <button class="btn btn-danger" type="submit">删除</button>
                       </form>
+                      <button
+                        type="button"
+                        class="public-invite-toggle"
+                        data-exam-key="{{ e.exam_key }}"
+                        aria-pressed="{{ 'true' if e.public_invite_enabled else 'false' }}"
+                        aria-label="公开邀约开关">
+                        <span class="knob" aria-hidden="true"></span>
+                      </button>
                       <a class="btn btn-primary btn-icon" href="/admin?assign_exam_key={{ e.exam_key }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
                     </div>
                   </td>
@@ -845,8 +885,12 @@
       const toast = (msg) => {
         const m = String(msg || "").trim();
         if (!m) return;
+        // Keep only one toast at a time to avoid overlapping text.
+        document.querySelectorAll(".flash.toast").forEach((n) => {
+          try { n.remove(); } catch (_) {}
+        });
         const div = document.createElement("div");
-        div.className = "flash";
+        div.className = "flash toast";
         div.textContent = m;
         document.body.appendChild(div);
         window.setTimeout(() => {
@@ -924,6 +968,59 @@
         try { ev.preventDefault(); } catch (_) {}
         try { ev.stopPropagation(); } catch (_) {}
         copyInviteLink(el.dataset.token || "");
+      });
+
+      const togglePublicInvite = async (examKey, enabled) => {
+        const ek = String(examKey || "").trim();
+        if (!ek) return { ok: false };
+        const resp = await fetch(`/admin/exams/${encodeURIComponent(ek)}/public-invite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({ enabled: !!enabled }),
+        });
+        let data = null;
+        try { data = await resp.json(); } catch (_) { data = null; }
+        if (!resp.ok) {
+          const msg = (data && (data.error || data.message)) ? String(data.error || data.message) : `HTTP ${resp.status}`;
+          throw new Error(msg);
+        }
+        return data || { ok: true };
+      };
+
+      document.addEventListener("click", async (ev) => {
+        const btn = ev.target && ev.target.closest ? ev.target.closest("button.public-invite-toggle") : null;
+        if (!btn) return;
+        try { ev.preventDefault(); } catch (_) {}
+        try { ev.stopPropagation(); } catch (_) {}
+
+        const examKey = btn.dataset.examKey || "";
+        const cur = String(btn.getAttribute("aria-pressed") || "false") === "true";
+        const next = !cur;
+
+        btn.disabled = true;
+        try {
+          const res = await togglePublicInvite(examKey, next);
+          const enabled = !!(res && res.enabled);
+          btn.setAttribute("aria-pressed", enabled ? "true" : "false");
+          if (enabled) {
+            const url = String(res.public_url || "").trim();
+            if (url) {
+              const ok = await copyText(url);
+              if (ok) toast(`${examKey}：已开启公开邀约`);
+              else {
+                try { window.prompt("复制下面的公开邀约链接：", url); } catch (_) {}
+                toast(`${examKey}：已开启公开邀约`);
+              }
+            }
+          } else {
+            toast(`${examKey}：已关闭公开邀约`);
+          }
+        } catch (e) {
+          btn.setAttribute("aria-pressed", cur ? "true" : "false");
+          toast(`操作失败：${(e && e.message) ? e.message : e}`);
+        } finally {
+          btn.disabled = false;
+        }
       });
 
       // Date proxy for invite window (yyyy/mm/dd).

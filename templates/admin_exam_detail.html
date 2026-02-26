@@ -83,6 +83,88 @@
         color: rgba(15, 23, 42, 0.86);
         white-space: nowrap;
       }
+      /* Floating public invite card (like candidate exam countdown). */
+      .floating-invite-card {
+        position: fixed;
+        top: 120px; /* below topbar */
+        /* Stick to the viewport right edge (outer right side). */
+        right: 16px;
+        z-index: 12;
+        width: 240px;
+        max-width: calc(100vw - 36px);
+        padding: 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 22px 56px rgba(2, 6, 23, 0.18);
+        backdrop-filter: blur(10px);
+        display: grid;
+        gap: 10px;
+      }
+      .floating-invite-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .floating-invite-title .t { font-weight: 950; font-size: 16px; color: rgba(15, 23, 42, 0.86); }
+      .floating-invite-title .tag {
+        font-size: 12px;
+        font-weight: 950;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(34, 197, 94, 0.25);
+        background: rgba(34, 197, 94, 0.10);
+        color: rgba(21, 128, 61, 0.95);
+        white-space: nowrap;
+      }
+      .floating-invite-qr {
+        width: 160px;
+        height: 160px;
+        margin: 0 auto;
+        padding: 8px;
+        border-radius: 16px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: #fff;
+      }
+      .floating-invite-qr img { width: 100%; height: 100%; object-fit: contain; display: block; }
+      .floating-invite-link { display: grid; gap: 8px; }
+      .floating-invite-url {
+        width: 100%;
+        height: 34px;
+        padding: 6px 10px;
+        border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(248, 250, 252, 0.92);
+        color: rgba(15, 23, 42, 0.86);
+        font-size: 12px;
+        line-height: 22px;
+        outline: none;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .floating-invite-link .btn {
+        height: 34px;
+        padding: 0 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 950;
+        white-space: nowrap;
+        width: fit-content;
+        min-width: 56px;
+        justify-self: center;
+      }
+      .floating-invite-hint { display: none; }
+      @media (max-width: 860px) {
+        .floating-invite-card {
+          right: 12px;
+          left: auto;
+          width: min(240px, calc(100vw - 24px));
+          max-width: calc(100vw - 24px);
+        }
+      }
     </style>
   </head>
   <body>
@@ -188,5 +270,60 @@
         </section>
       </div>
     </main>
+
+    {% if public_invite_enabled and public_invite_url and public_invite_qr_url %}
+      <div class="floating-invite-card" role="region" aria-label="公开邀约浮窗">
+        <div class="floating-invite-title">
+          <span class="t">公开邀约</span>
+          <span class="tag">已启用</span>
+        </div>
+        <div class="floating-invite-qr">
+          <img src="{{ public_invite_qr_url }}" alt="公开邀约二维码" />
+        </div>
+        <div class="floating-invite-link">
+          <input class="floating-invite-url" type="text" value="{{ public_invite_url }}" readonly title="{{ public_invite_url }}" />
+          <button type="button" class="btn btn-primary public-invite-copy" data-url="{{ public_invite_url }}">复制</button>
+        </div>
+      </div>
+    {% endif %}
+
+    <script>
+      const copyText = async (text) => {
+        const t = String(text || "");
+        if (!t) return false;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(t);
+            return true;
+          }
+        } catch (_) {}
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = t;
+          ta.setAttribute("readonly", "readonly");
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          ta.style.top = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          ta.setSelectionRange(0, ta.value.length);
+          const ok = document.execCommand && document.execCommand("copy");
+          ta.remove();
+          return !!ok;
+        } catch (_) {
+          return false;
+        }
+      };
+
+      document.addEventListener("click", async (ev) => {
+        const btn = ev.target && ev.target.closest ? ev.target.closest("button.public-invite-copy") : null;
+        if (!btn) return;
+        const url = btn.dataset.url || "";
+        const ok = await copyText(url);
+        if (!ok) {
+          try { window.prompt("复制下面的公开邀约链接：", url); } catch (_) {}
+        }
+      });
+    </script>
   </body>
 </html>

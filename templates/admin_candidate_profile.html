@@ -87,14 +87,8 @@
         padding: 0;
       }
       .head-actions-main { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-      .btn-purple {
-        background: linear-gradient(135deg, var(--brand2), #5b21b6);
-        border-color: rgba(124, 58, 237, 0.45);
-        color: #fff;
-        font-weight: 900;
-      }
-      .btn-purple:hover { filter: brightness(1.03); text-decoration: none; }
-      .btn-purple:active { transform: translateY(1px); }
+      /* Keep legacy class for in-page buttons, but align with system primary style. */
+      .btn-purple { background: none; }
       /* Editing is removed on this page; keep view layout only. */
       .input-sm {
         width: 100%;
@@ -371,7 +365,7 @@
             <div class="head-actions">
               <div class="head-actions-main" id="headActionsMain">
                 {% if c.resume_size %}
-                  <a class="btn btn-purple btn-icon" href="/admin/candidates/{{ c.id }}/resume/download" title="下载PDF" aria-label="下载PDF">
+                  <a class="btn btn-primary btn-icon" href="/admin/candidates/{{ c.id }}/resume/download" title="下载PDF" aria-label="下载PDF">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M7 2h7l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2" />
                       <path d="M14 2v6h6" stroke="currentColor" stroke-width="2" />
@@ -380,7 +374,7 @@
                     </svg>
                   </a>
                 {% else %}
-                  <span class="btn btn-purple btn-icon" style="opacity:.55; pointer-events:none;" aria-label="暂无PDF可下载" title="暂无PDF可下载">
+                  <span class="btn btn-primary btn-icon" style="opacity:.55; pointer-events:none;" aria-label="暂无PDF可下载" title="暂无PDF可下载">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M7 2h7l4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" stroke="currentColor" stroke-width="2" />
                       <path d="M14 2v6h6" stroke="currentColor" stroke-width="2" />
@@ -389,10 +383,10 @@
                 {% endif %}
                 <form id="reparseForm" method="post" action="/admin/candidates/{{ c.id }}/resume/reparse" enctype="multipart/form-data" style="margin:0;">
                   <input id="reparseFile" type="file" name="file" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
-                  <button type="button" id="reparseBtn" class="btn btn-purple">上传简历并解析</button>
+                  <button type="button" id="reparseBtn" class="btn btn-primary">上传简历并解析</button>
                 </form>
               </div>
-              <a class="btn btn-purple" href="/admin/candidates" id="backBtn">返回</a>
+              <a class="btn btn-primary" href="/admin/candidates" id="backBtn">返回</a>
             </div>
           </div>
         </section>
