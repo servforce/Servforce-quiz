@@ -10,7 +10,7 @@ import secrets
 import threading
 import time as time_module
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from datetime import date, time as dt_time
 from io import BytesIO
 from pathlib import Path
@@ -34,6 +34,8 @@ from db import (
     create_candidate,
     create_exam_paper,
     count_exam_papers,
+    count_operation_logs,
+    count_operation_logs_by_category,
     delete_candidate,
     get_exam_paper_by_token,
     get_candidate,
@@ -42,6 +44,8 @@ from db import (
     init_db,
     list_candidates,
     list_exam_papers,
+    list_operation_daily_counts,
+    list_operation_logs,
     mark_exam_deleted,
     rename_exam_key,
     set_exam_paper_entered_at,
@@ -948,6 +952,8 @@ def create_app() -> Flask:
         attempt_q = (request.args.get("attempt_q") or "").strip()
         attempt_start_from_raw = (request.args.get("attempt_start_from") or "").strip()
         attempt_start_to_raw = (request.args.get("attempt_start_to") or "").strip()
+        chart_start_raw = (request.args.get("chart_start") or "").strip()
+        chart_end_raw = (request.args.get("chart_end") or "").strip()
         assign_exam_key = (request.args.get("assign_exam_key") or "").strip()
         assign_candidate_id = (request.args.get("assign_candidate_id") or "").strip()
         if exam_q:
@@ -1117,6 +1123,190 @@ def create_app() -> Flask:
                 }
             )
 
+        # ---------------- Logs (system_log) ----------------
+        # The template expects:
+        # - log_counts: category counts
+        # - chart_days/chart_counts + chart_range_start/end: density chart
+        # - logs: paged rows with derived type_key/type_label/detail_text
+        log_per_page = 20
+        try:
+            log_page = int(request.args.get("log_page") or "1")
+        except Exception:
+            log_page = 1
+        log_page = max(1, log_page)
+
+        try:
+            log_counts = count_operation_logs_by_category()
+        except Exception:
+            log_counts = {"candidate": 0, "exam": 0, "grading": 0, "assignment": 0}
+
+        try:
+            total_logs = int(count_operation_logs() or 0)
+        except Exception:
+            total_logs = 0
+        total_log_pages = (total_logs + log_per_page - 1) // log_per_page
+        total_log_pages = max(1, int(total_log_pages or 1))
+        log_page = min(log_page, total_log_pages)
+
+        log_offset = (log_page - 1) * log_per_page
+        try:
+            ops = list_operation_logs(limit=log_per_page, offset=log_offset)
+        except Exception:
+            ops = []
+
+        chart_days: list[str] = []
+        chart_counts: list[int] = []
+        chart_range_start = ""
+        chart_range_end = ""
+        try:
+            now_local = datetime.now().astimezone()
+            local_tz = now_local.tzinfo
+            today_local2 = now_local.date()
+
+            start_day = _parse_date_ymd(chart_start_raw) if chart_start_raw else None
+            end_day = _parse_date_ymd(chart_end_raw) if chart_end_raw else None
+
+            # Default: last 30 days (inclusive), ending today (local).
+            if end_day is None:
+                end_day = today_local2
+            if start_day is None:
+                start_day = end_day - timedelta(days=29)
+
+            # Guardrails: no future dates and reasonable span.
+            if end_day > today_local2:
+                end_day = today_local2
+            if start_day > end_day:
+                start_day = end_day - timedelta(days=29)
+            max_span_days = 180
+            if (end_day - start_day).days > max_span_days:
+                start_day = end_day - timedelta(days=max_span_days)
+
+            chart_range_start = start_day.isoformat() if start_day else ""
+            chart_range_end = end_day.isoformat() if end_day else ""
+
+            start_local_dt = datetime.combine(start_day, dt_time.min, tzinfo=local_tz)
+            end_local_dt = datetime.combine(end_day, dt_time.max, tzinfo=local_tz)
+            try:
+                tz_offset_seconds = int((now_local.utcoffset() or timedelta(0)).total_seconds())
+            except Exception:
+                tz_offset_seconds = 0
+
+            daily = list_operation_daily_counts(
+                tz_offset_seconds=tz_offset_seconds,
+                at_from=start_local_dt.astimezone(timezone.utc),
+                at_to=end_local_dt.astimezone(timezone.utc),
+            )
+            m2: dict[str, int] = {}
+            for r2 in daily or []:
+                d = r2.get("day")
+                cnt = r2.get("cnt")
+                k = str(d)[:10]
+                try:
+                    m2[k] = int(cnt or 0)
+                except Exception:
+                    m2[k] = 0
+            span = max(0, min(max_span_days, (end_day - start_day).days))
+            for i in range(span + 1):
+                d2 = start_day + timedelta(days=i)
+                k2 = d2.isoformat()
+                chart_days.append(k2)
+                chart_counts.append(int(m2.get(k2, 0)))
+        except Exception:
+            chart_days = []
+            chart_counts = []
+            chart_range_start = ""
+            chart_range_end = ""
+
+        def _type_label(et: str) -> tuple[str, str]:
+            if et.startswith("candidate."):
+                return "candidate", "候选者操作"
+            if et in {"assignment.create", "exam.enter", "exam.finish"}:
+                return "assignment", "答题邀约"
+            if et == "exam.grade":
+                return "grading", "判卷操作"
+            if et.startswith("exam."):
+                return "exam", "试卷操作"
+            return "assignment", "答题邀约"
+
+        def _fmt_person(name: str | None, phone: str | None, cid: Any) -> str:
+            n = str(name or "").strip()
+            p = _normalize_phone(str(phone or "").strip())
+            if n and p:
+                return f"{n} {p}"
+            if n:
+                return n
+            if p:
+                return p
+            try:
+                return f"candidate_id={int(cid)}" if cid is not None else ""
+            except Exception:
+                return ""
+
+        def _detail_text(it: dict[str, Any]) -> str:
+            et = str(it.get("event_type") or "").strip()
+            meta = it.get("meta") if isinstance(it.get("meta"), dict) else {}
+            who = _fmt_person(it.get("candidate_name"), it.get("candidate_phone"), it.get("candidate_id"))
+            exam_key = str(it.get("exam_key") or "").strip()
+            ek = exam_key or "（未知试卷）"
+
+            if et.startswith("candidate."):
+                op = et.split(".", 1)[1] if "." in et else et
+                if op == "read":
+                    return f"查看候选人 {who}".strip()
+                if op == "create":
+                    n2 = str(meta.get("name") or "").strip()
+                    p2 = _normalize_phone(str(meta.get("phone") or "").strip())
+                    who2 = " ".join([x for x in [n2, p2] if x]) or who
+                    return f"新增候选人 {who2}".strip()
+                if op == "update":
+                    field = str(meta.get("field") or "").strip()
+                    fp = f"（{field}）" if field else ""
+                    return f"更新候选人 {who}{fp}".strip()
+                if op == "delete":
+                    return f"删除候选人 {who}".strip()
+                return f"候选人操作 {op} {who}".strip()
+
+            if et == "assignment.create":
+                who2 = who or "（未知候选人）"
+                return f"答题邀约 {who2} → 试卷 {ek}".strip()
+            if et == "exam.enter":
+                who2 = who or "（未知候选人）"
+                return f"进入答题 {who2} → 试卷 {ek}".strip()
+            if et == "exam.finish":
+                who2 = who or "（未知候选人）"
+                return f"提交答题 {who2} → 试卷 {ek}".strip()
+            if et == "exam.grade":
+                who2 = who or "（未知候选人）"
+                score = meta.get("score")
+                score_part = ""
+                try:
+                    if score is not None and score != "":
+                        score_part = f"（得分 {int(score)}）"
+                except Exception:
+                    score_part = f"（得分 {str(score).strip()}）" if score is not None else ""
+                return f"判卷完成 {who2} → 试卷 {ek}{score_part}".strip()
+
+            if et.startswith("exam."):
+                op = et.split(".", 1)[1] if "." in et else et
+                if op == "read":
+                    return f"查看试卷 {ek}".strip()
+                if op == "result":
+                    who2 = who or "（未知候选人）"
+                    return f"查看答题结果 {who2} → 试卷 {ek}".strip()
+                if op in {"upload", "update", "delete"}:
+                    m = {"upload": "上传", "update": "更新", "delete": "删除"}[op]
+                    return f"{m}试卷 {ek}".strip()
+                return f"试卷操作 {op} {ek}".strip()
+
+            return et
+
+        for it in ops:
+            et = str(it.get("event_type") or "").strip()
+            k, label = _type_label(et)
+            it["type_key"] = k
+            it["type_label"] = label
+            it["detail_text"] = _detail_text(it)
+
         return render_template(
             "admin_dashboard.html",
             exams_all=exams_all,
@@ -1137,6 +1327,16 @@ def create_app() -> Flask:
             total_attempts=total_attempts,
             total_attempt_pages=total_attempt_pages,
             attempt_per_page=attempt_per_page,
+            logs=ops,
+            log_page=log_page,
+            total_logs=total_logs,
+            total_log_pages=total_log_pages,
+            log_per_page=log_per_page,
+            log_counts=log_counts,
+            chart_days=chart_days,
+            chart_counts=chart_counts,
+            chart_range_start=chart_range_start,
+            chart_range_end=chart_range_end,
         )
 
     @app.get("/admin/api/attempt-status")

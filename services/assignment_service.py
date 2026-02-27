@@ -74,7 +74,7 @@ def compute_min_submit_seconds(time_limit_seconds: int, min_submit_seconds: int 
     if limit <= 0:
         return 0
     # (limit + 1) // 2
-    half_or_more = (limit + 1) // 2
+    half_or_more = 60
     if min_submit_seconds is None:
         return int(half_or_more)
     try:

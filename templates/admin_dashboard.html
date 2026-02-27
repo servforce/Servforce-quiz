@@ -230,7 +230,7 @@
       #tab-exams .public-invite-toggle:disabled { opacity: .6; cursor: not-allowed; }
 
       /* Invite form visual polish (scoped to "答题邀请" only). */
-      #tab-assign { font-size: 16px; }
+      #tab-assign { font-size: 17px; }
       #tab-assign .panel-head .title { font-size: 22px; letter-spacing: 0.2px; }
       #tab-assign .panel-head .sub { font-size: 16px; line-height: 1.6; color: rgba(15, 23, 42, 0.70); }
       #tab-assign .assign-form {
@@ -256,18 +256,18 @@
       #tab-assign .assign-form .field.field-mid { max-width: 420px; width: 100%; justify-self: start; }
       #tab-assign .assign-form .field.field-narrow { max-width: 260px; width: 100%; justify-self: start; }
       #tab-assign .assign-form .field label {
-        font-size: 16px;
+        font-size: 18px;
         font-weight: 800;
         color: rgba(15, 23, 42, 0.78);
         margin-bottom: 6px;
       }
       #tab-assign .assign-form .input,
       #tab-assign .assign-form select {
-        height: 40px;
-        font-size: 17px;
+        height: 48px;
+        font-size: 18px;
         padding-top: 0;
         padding-bottom: 0;
-        line-height: 38px;
+        line-height: 46px;
       }
       #tab-assign .assign-form .field { max-width: none; }
       #tab-assign .assign-form select { font-weight: 700; }
@@ -288,7 +288,7 @@
       #tab-assign .assign-form .field.field-narrow select { max-width: 260px; }
       #tab-assign .assign-form .field.field-narrow select { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #tab-assign .assign-form .assign-actions { margin-top: 10px; display:flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
-      #tab-assign .assign-form .assign-actions .btn { height: 40px; padding: 0 18px; border-radius: 14px; }
+      #tab-assign .assign-form .assign-actions .btn { height: 48px; padding: 0 22px; border-radius: 14px; font-size: 18px; }
       @media (max-width: 1100px) {
         #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: repeat(2, minmax(220px, 260px)); }
       }
@@ -318,6 +318,12 @@
         text-transform: none;
         letter-spacing: 0;
       }
+      .attempt-table .deleted-mark,
+      .attempt-table code.deleted-mark {
+        text-decoration: line-through;
+        text-decoration-thickness: 1.5px;
+        text-decoration-color: rgba(239, 68, 68, 0.85);
+      }
       .attempt-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .attempt-table th.center, .attempt-table td.center { text-align: center; }
       .attempt-table td.nowrap { white-space: nowrap; }
@@ -341,6 +347,116 @@
       .status-pill.grading { border-color: rgba(124, 58, 237, 0.30); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
       .status-pill.finished { border-color: rgba(22, 163, 74, 0.30); background: rgba(22, 163, 74, 0.10); color: #166534; }
       .status-pill.expired { border-color: rgba(220, 38, 38, 0.30); background: rgba(220, 38, 38, 0.08); color: #b91c1c; }
+      .log-table { width: 100%; min-width: 980px; font-size: 18px; }
+      .log-table th, .log-table td { vertical-align: middle; }
+      .log-table th { white-space: nowrap; font-size: 15px; }
+      .log-table td { font-variant-numeric: tabular-nums; }
+      .log-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .log-table code { white-space: nowrap; }
+      .log-table .type-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-weight: 900;
+        font-size: 13px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(15, 23, 42, 0.03);
+        color: rgba(15, 23, 42, 0.86);
+        white-space: nowrap;
+      }
+      .log-table .type-pill.cat-candidate { border-color: rgba(22, 163, 74, 0.28); background: rgba(22, 163, 74, 0.10); color: #166534; }
+      .log-table .type-pill.cat-exam { border-color: rgba(124, 58, 237, 0.28); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
+      .log-table .type-pill.cat-grading { border-color: rgba(245, 158, 11, 0.32); background: rgba(245, 158, 11, 0.12); color: #92400e; }
+      .log-table .type-pill.cat-assignment { border-color: rgba(37, 99, 235, 0.28); background: rgba(37, 99, 235, 0.10); color: #1d4ed8; }
+      .log-table .type-pill.cat-ui { border-color: rgba(100, 116, 139, 0.28); background: rgba(100, 116, 139, 0.10); color: #334155; }
+      .log-table .type-pill.cat-system { border-color: rgba(17, 24, 39, 0.20); background: rgba(17, 24, 39, 0.06); color: rgba(15, 23, 42, 0.86); }
+      .log-box {
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        border-radius: 14px;
+        background: rgba(248, 250, 252, 0.55);
+        padding: 12px 12px;
+        margin: 12px 0;
+      }
+      /* Logs (tab-logs) visual scale */
+      #tab-logs .log-box-title { font-weight: 950; margin-bottom: 12px; font-size: 18px; }
+      #tab-logs .log-box-head { display:flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+      #tab-logs .log-box-head .log-box-title { margin-bottom: 0; }
+      #tab-logs .log-box-sub { color: rgba(15, 23, 42, 0.60); font-size: 16px; font-weight: 950; white-space: nowrap; }
+      #tab-logs .legend-grid { display:flex; flex-wrap: wrap; gap: 12px; }
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(255, 255, 255, 0.78);
+        font-weight: 900;
+        font-size: 16px;
+      }
+      .legend-dot { width: 12px; height: 12px; border-radius: 999px; display:inline-block; }
+      .legend-cnt { color: rgba(15, 23, 42, 0.62); font-weight: 950; }
+      .density-wrap { width: 100%; overflow-x: auto; }
+      .density-bars { display:flex; align-items: flex-end; gap: 10px; padding: 10px 4px 4px; min-height: 180px; }
+      .density-bar {
+        width: 22px;
+        border-radius: 10px 10px 6px 6px;
+        background: rgba(37, 99, 235, 0.20);
+        border: 1px solid rgba(37, 99, 235, 0.25);
+      }
+      .density-bar:hover { background: rgba(37, 99, 235, 0.30); }
+      .density-bar.zero {
+        background: transparent;
+        border-color: transparent;
+      }
+      .density-bar.zero:hover { background: transparent; }
+      .density-x { display:flex; gap: 10px; padding: 0 4px 8px; }
+      .density-x span { width: 22px; font-size: 13px; color: rgba(15, 23, 42, 0.55); text-align: center; }
+
+      /* Logs: density range filter */
+      #tab-logs .density-filter { display:flex; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-end; gap: 10px; margin: 0; margin-left: auto; }
+      #tab-logs .density-filter .field { margin: 0; }
+      #tab-logs .density-filter .field.field-sm { flex: 0 0 190px; }
+      #tab-logs .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 38px; font-size: 16px; }
+      #tab-logs .density-filter .range-group { display:flex; align-items: flex-end; gap: 10px; }
+      #tab-logs .density-filter .range-sep { padding: 0 2px; height: 40px; line-height: 40px; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
+      #tab-logs .density-filter .actions { display: inline-flex; gap: 10px; align-items: flex-end; margin-left: auto; }
+      #tab-logs .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: 16px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+      @media (max-width: 980px) {
+        #tab-logs .density-filter { flex-wrap: wrap; }
+        #tab-logs .density-filter .actions { margin-left: 0; }
+      }
+
+      #tab-logs .density-filter .date-proxy { position: relative; width: 100%; }
+      #tab-logs .density-filter .date-proxy .date-display { padding-right: 42px; cursor: pointer; }
+      #tab-logs .density-filter .date-proxy .date-native {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+      #tab-logs .density-filter .date-proxy .date-btn {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.65);
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: rgba(15, 23, 42, 0.75);
+      }
+      #tab-logs .density-filter .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
+
+      /* Logs: hide header + filter area (keep page clean). */
+      #tab-logs .panel-head,
+      #tab-logs .section-head.attempt-head { display: none; }
     </style>
   </head>
   <body>
@@ -355,6 +471,7 @@
           <a class="nav-link active" href="#tab-exams" data-nav="exams">试卷管理</a>
           <a class="nav-link" href="/admin/candidates">候选人管理</a>
           <a class="nav-link" href="#tab-assign" data-nav="assign">答题邀请</a>
+          <a class="nav-link" href="#tab-logs" data-nav="logs">系统日志</a>
         </nav>
 
         <form method="post" action="/admin/logout" style="margin:0;">
@@ -655,21 +772,30 @@
                     {% if c.attempt_href or c.attempt_msg %}class="row-link"{% endif %}
                     {% if c.attempt_href %}data-href="{{ c.attempt_href }}"{% endif %}
                     {% if c.attempt_msg %}data-msg="{{ c.attempt_msg }}"{% endif %}
+                    data-token="{{ c.token }}"
                   >
                     <td>{{ c.attempt_id }}</td>
                     <td class="ellipsis">
-                      {% if c.candidate_id %}
+                      {% if c.candidate_id and (c.name or '').strip() != '已删除' %}
                         <a class="row-a" href="{{ url_for('admin_candidate_profile', candidate_id=c.candidate_id) }}">{{ c.name }}</a>
                       {% else %}
-                        {{ c.name }}
+                        {% if (c.name or '').strip() == '已删除' %}
+                          <span class="deleted-mark">{{ c.name }}</span>
+                        {% else %}
+                          {{ c.name }}
+                        {% endif %}
                       {% endif %}
                     </td>
                     <td class="ellipsis">{{ c.phone }}</td>
                     <td class="ellipsis">
-                      {% if c.exam_key %}
+                      {% if c.exam_key and (c.exam_key or '').strip() != '已删除' %}
                         <a class="row-a" href="{{ url_for('admin_exam_detail', exam_key=c.exam_key) }}"><code>{{ c.exam_key }}</code></a>
                       {% else %}
-                        <code>{{ c.exam_key }}</code>
+                        {% if (c.exam_key or '').strip() == '已删除' %}
+                          <code class="deleted-mark">{{ c.exam_key }}</code>
+                        {% else %}
+                          <code>{{ c.exam_key }}</code>
+                        {% endif %}
                       {% endif %}
                     </td>
                     <td class="ellipsis">
@@ -677,8 +803,8 @@
                         <code title="{{ c.token }}">{{ c.token }}</code>
                       </a>
                     </td>
-                    <td class="center"><span class="status-pill {{ c.status }}">{{ c.status_label }}</span></td>
-                    <td class="center">{{ c.score if c.score is not none else "" }}</td>
+                    <td class="center status-cell"><span class="status-pill {{ c.status }}">{{ c.status_label }}</span></td>
+                    <td class="center score-cell">{{ c.score if c.score is not none else "" }}</td>
                     <td class="nowrap">
                       {% if c.invite_start_date %}<div>开始：{{ c.invite_start_date.replace("-", "/") }}</div>{% endif %}
                       {% if c.invite_end_date %}<div>结束：{{ c.invite_end_date.replace("-", "/") }}</div>{% endif %}
@@ -765,6 +891,206 @@
             </div>
           </div>
         </section>
+
+        <section id="tab-logs" class="panel" role="tabpanel" aria-label="系统日志">
+          <div class="panel-head">
+            <div>
+              <h2 class="title">系统日志</h2>
+              <p class="sub">系统行为记录：候选人/试卷操作、邀约、答题时间、大模型 Token 消耗等。</p>
+            </div>
+          </div>
+
+          <div class="assign-attempts" role="region" aria-label="日志列表">
+            <div class="log-box" aria-label="任务类型图例">
+              <div class="log-box-title">任务类型图例</div>
+              <div class="legend-grid">
+                <div class="legend-item" title="candidate">
+                  <span class="legend-dot" style="background: #16a34a;"></span>
+                  <span>候选者操作</span>
+                  <span class="legend-cnt">{{ log_counts.candidate if log_counts else 0 }}</span>
+                </div>
+                <div class="legend-item" title="exam">
+                  <span class="legend-dot" style="background: #7c3aed;"></span>
+                  <span>试卷操作</span>
+                  <span class="legend-cnt">{{ log_counts.exam if log_counts else 0 }}</span>
+                </div>
+                <div class="legend-item" title="grading">
+                  <span class="legend-dot" style="background: #f59e0b;"></span>
+                  <span>判卷操作</span>
+                  <span class="legend-cnt">{{ log_counts.grading if log_counts else 0 }}</span>
+                </div>
+                <div class="legend-item" title="assignment">
+                  <span class="legend-dot" style="background: #2563eb;"></span>
+                  <span>答题邀约</span>
+                  <span class="legend-cnt">{{ log_counts.assignment if log_counts else 0 }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="log-box" aria-label="任务密度图">
+              <div class="log-box-head">
+                <div class="log-box-title">任务密度图</div>
+                <form class="density-filter" method="get" action="/admin#tab-logs" aria-label="选择任务密度时间范围">
+                  <input type="hidden" name="exam_q" value="{{ exam_q or '' }}" />
+                  <input type="hidden" name="exam_page" value="{{ exam_page or '' }}" />
+                  <input type="hidden" name="attempt_q" value="{{ attempt_q or '' }}" />
+                  <input type="hidden" name="attempt_page" value="{{ attempt_page or '' }}" />
+                  <input type="hidden" name="attempt_start_from" value="{{ attempt_start_from or '' }}" />
+                  <input type="hidden" name="attempt_start_to" value="{{ attempt_start_to or '' }}" />
+                  <input type="hidden" name="assign_exam_key" value="{{ assign_exam_key or '' }}" />
+                  <input type="hidden" name="assign_candidate_id" value="{{ assign_candidate_id or '' }}" />
+                  <input type="hidden" name="log_page" value="{{ log_page or '' }}" />
+
+                  <div class="range-group" aria-label="时间范围">
+                    <div class="field field-sm">
+                      <div class="date-proxy">
+                        <input id="chart_start_display" class="input date-display" type="text" value="" placeholder="开始日期" readonly aria-label="开始日期" />
+                        <input id="chart_start" class="input date-native" type="date" name="chart_start" value="{{ chart_range_start or '' }}" tabindex="-1" aria-hidden="true" />
+                        <button class="date-btn" type="button" data-for="chart_start" aria-label="选择开始(起)日期">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="range-sep" aria-hidden="true">—</div>
+
+                    <div class="field field-sm">
+                      <div class="date-proxy">
+                        <input id="chart_end_display" class="input date-display" type="text" value="" placeholder="结束日期" readonly aria-label="结束日期" />
+                        <input id="chart_end" class="input date-native" type="date" name="chart_end" value="{{ chart_range_end or '' }}" tabindex="-1" aria-hidden="true" />
+                        <button class="date-btn" type="button" data-for="chart_end" aria-label="选择结束(止)日期">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="actions" aria-label="操作">
+                    <button class="btn btn-primary" type="submit">查询</button>
+                    {% set density_reset_qs = "" %}
+                    {% if exam_q %}{% set density_reset_qs = density_reset_qs ~ "exam_q=" ~ (exam_q|urlencode) %}{% endif %}
+                    {% if exam_page %}{% set density_reset_qs = density_reset_qs ~ ("&" if density_reset_qs else "") ~ "exam_page=" ~ exam_page %}{% endif %}
+                    {% if attempt_q %}{% set density_reset_qs = density_reset_qs ~ ("&" if density_reset_qs else "") ~ "attempt_q=" ~ (attempt_q|urlencode) %}{% endif %}
+                    {% if attempt_page %}{% set density_reset_qs = density_reset_qs ~ ("&" if density_reset_qs else "") ~ "attempt_page=" ~ attempt_page %}{% endif %}
+                    {% if attempt_start_from %}{% set density_reset_qs = density_reset_qs ~ ("&" if density_reset_qs else "") ~ "attempt_start_from=" ~ (attempt_start_from|urlencode) %}{% endif %}
+                    {% if attempt_start_to %}{% set density_reset_qs = density_reset_qs ~ ("&" if density_reset_qs else "") ~ "attempt_start_to=" ~ (attempt_start_to|urlencode) %}{% endif %}
+                    {% if assign_exam_key %}{% set density_reset_qs = density_reset_qs ~ ("&" if density_reset_qs else "") ~ "assign_exam_key=" ~ (assign_exam_key|urlencode) %}{% endif %}
+                    {% if assign_candidate_id %}{% set density_reset_qs = density_reset_qs ~ ("&" if density_reset_qs else "") ~ "assign_candidate_id=" ~ (assign_candidate_id|urlencode) %}{% endif %}
+                    {% if log_page %}{% set density_reset_qs = density_reset_qs ~ ("&" if density_reset_qs else "") ~ "log_page=" ~ log_page %}{% endif %}
+                    <a class="btn btn-primary" href="/admin{% if density_reset_qs %}?{{ density_reset_qs }}{% endif %}#tab-logs" aria-label="重置时间范围">重置</a>
+                  </div>
+                </form>
+              </div>
+              <div class="density-wrap">
+                {% set maxc = (chart_counts|max) if chart_counts else 0 %}
+                <div class="density-bars">
+                  {% for d in (chart_days or []) %}
+                  {% set i = loop.index0 %}
+                  {% set c = (chart_counts[i] if chart_counts and (i < chart_counts|length) else 0) %}
+                  {% if c and c > 0 and maxc > 0 %}
+                    {% set h = (8 + (c * 96 // maxc)) %}
+                    <div class="density-bar" style="height: {{ h }}px" title="{{ d }}：{{ c }}"></div>
+                  {% else %}
+                    <div class="density-bar zero" style="height: 0px" title="{{ d }}：0"></div>
+                  {% endif %}
+                {% endfor %}
+                  {% if not chart_days %}
+                    <div class="muted" style="padding: 8px 0;">暂无数据</div>
+                  {% endif %}
+                </div>
+                {% if chart_days and (not maxc or maxc <= 0) %}
+                  <div class="muted" style="padding: 6px 4px 0;">该时间范围暂无操作记录，可调整时间范围。</div>
+                {% endif %}
+                <div class="density-x" aria-hidden="true">
+                  {% for d in (chart_days or []) %}
+                    <span>{{ (d[5:7]|int) ~ "." ~ (d[8:10]|int) }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+
+            <div class="log-box" aria-label="任务详情列表">
+              <div class="log-box-title">任务详情列表</div>
+              <div class="table-scroll">
+                <table class="log-table" aria-label="日志表">
+                  <thead>
+                    <tr>
+                      <th style="width:56px;">ID</th>
+                      <th style="width:170px;">时间</th>
+                      <th style="width:160px;">类型</th>
+                      <th>详情</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for it in (logs or []) %}
+                    <tr>
+                      <td>{{ it.id }}</td>
+                      <td class="nowrap">{{ it.at.strftime("%Y-%m-%d %H:%M:%S") if it.at else "" }}</td>
+                      <td><span class="type-pill cat-{{ it.type_key or 'system' }}">{{ it.type_label or "" }}</span></td>
+                      <td class="ellipsis">{{ it.detail_text or "" }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not logs %}
+                    <tr>
+                      <td colspan="4" class="muted" style="padding:16px;">暂无系统日志</td>
+                    </tr>
+                    {% endif %}
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="std-pager" aria-label="日志分页">
+                <div class="per-page"><span>{{ log_per_page or 50 }}条/页</span></div>
+                {% set total_log_pages_display = total_log_pages if total_log_pages and total_log_pages > 0 else 1 %}
+                {% set log_qs_extra = "" %}
+                {% if exam_q %}{% set log_qs_extra = log_qs_extra ~ "&exam_q=" ~ (exam_q|urlencode) %}{% endif %}
+                {% if exam_page %}{% set log_qs_extra = log_qs_extra ~ "&exam_page=" ~ exam_page %}{% endif %}
+                {% if attempt_q %}{% set log_qs_extra = log_qs_extra ~ "&attempt_q=" ~ (attempt_q|urlencode) %}{% endif %}
+                {% if attempt_page %}{% set log_qs_extra = log_qs_extra ~ "&attempt_page=" ~ attempt_page %}{% endif %}
+                {% if attempt_start_from %}{% set log_qs_extra = log_qs_extra ~ "&attempt_start_from=" ~ (attempt_start_from|urlencode) %}{% endif %}
+                {% if attempt_start_to %}{% set log_qs_extra = log_qs_extra ~ "&attempt_start_to=" ~ (attempt_start_to|urlencode) %}{% endif %}
+                {% if assign_exam_key %}{% set log_qs_extra = log_qs_extra ~ "&assign_exam_key=" ~ (assign_exam_key|urlencode) %}{% endif %}
+                {% if assign_candidate_id %}{% set log_qs_extra = log_qs_extra ~ "&assign_candidate_id=" ~ (assign_candidate_id|urlencode) %}{% endif %}
+                {% if chart_range_start %}{% set log_qs_extra = log_qs_extra ~ "&chart_start=" ~ (chart_range_start|urlencode) %}{% endif %}
+                {% if chart_range_end %}{% set log_qs_extra = log_qs_extra ~ "&chart_end=" ~ (chart_range_end|urlencode) %}{% endif %}
+                <div class="pages" aria-label="页码">
+                  {% if log_page and log_page > 1 %}
+                    <a class="page-btn" href="/admin?log_page={{ log_page - 1 }}{{ log_qs_extra }}#tab-logs" aria-label="上一页">‹</a>
+                  {% else %}
+                    <span class="page-btn" style="opacity:.45; pointer-events:none;">‹</span>
+                  {% endif %}
+
+                  <span class="page-btn active">{{ log_page or 1 }}</span>
+
+                  {% if log_page and (log_page < total_log_pages_display) %}
+                    <a class="page-btn" href="/admin?log_page={{ log_page + 1 }}{{ log_qs_extra }}#tab-logs" aria-label="下一页">›</a>
+                  {% else %}
+                    <span class="page-btn" style="opacity:.45; pointer-events:none;">›</span>
+                  {% endif %}
+                </div>
+
+                <div class="jump" aria-label="跳转页">
+                  <span>跳转至</span>
+                  <input
+                    id="log_page_jump"
+                    type="number"
+                    min="1"
+                    max="{{ total_log_pages_display }}"
+                    placeholder="{{ log_page or 1 }}"
+                    inputmode="numeric"
+                  />
+                  <button class="btn" type="button" id="log_page_go">前往</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
 
@@ -775,6 +1101,7 @@
       const panels = new Map([
         ["exams", document.getElementById("tab-exams")],
         ["assign", document.getElementById("tab-assign")],
+        ["logs", document.getElementById("tab-logs")],
       ]);
       const navLinks = Array.from(document.querySelectorAll("[data-nav]"));
 
@@ -797,6 +1124,7 @@
       function tabKeyFromHash() {
         const h = (location.hash || "").toLowerCase();
         if (h.includes("assign")) return "assign";
+        if (h.includes("logs")) return "logs";
         if (h.includes("exams")) return "exams";
         return "exams";
       }
@@ -805,7 +1133,7 @@
         btn.addEventListener("click", () => {
           const key = btn.dataset.tab;
           setActive(key);
-          location.hash = key === "assign" ? "#tab-assign" : "#tab-exams";
+          location.hash = key === "assign" ? "#tab-assign" : (key === "logs" ? "#tab-logs" : "#tab-exams");
         });
       }
 
@@ -882,21 +1210,104 @@
         });
       }
 
-      const toast = (msg) => {
-        const m = String(msg || "").trim();
-        if (!m) return;
-        // Keep only one toast at a time to avoid overlapping text.
-        document.querySelectorAll(".flash.toast").forEach((n) => {
-          try { n.remove(); } catch (_) {}
+      // Logs pager jump.
+      const logJump = document.getElementById("log_page_jump");
+      const logGo = document.getElementById("log_page_go");
+      if (logGo && logJump) {
+        const go3 = () => {
+          const raw = (logJump.value || "").trim();
+          const n = parseInt(raw, 10);
+          if (!Number.isFinite(n) || n <= 0) return;
+          const u = new URL(window.location.href);
+          u.searchParams.set("log_page", String(n));
+          u.hash = "#tab-logs";
+          window.location.href = u.toString();
+        };
+        logGo.addEventListener("click", go3);
+        logJump.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") go3();
         });
-        const div = document.createElement("div");
-        div.className = "flash toast";
-        div.textContent = m;
-        document.body.appendChild(div);
-        window.setTimeout(() => {
-          try { div.remove(); } catch (_) {}
-        }, 5200);
-      };
+      }
+
+      // Disable floating "toast" flash messages on this page.
+      const toast = (_msg) => {};
+
+      // Auto-refresh logs tab on a fixed interval.
+      // This fixes the common case: keep the dashboard open while operations happen elsewhere (public invite flow).
+      // Default: refresh every 10 seconds. You can override with ?logs_refresh=15 (3..120).
+      (() => {
+        const RELOAD_COOLDOWN_MS = 1500;
+        const LAST_RELOAD_KEY = "admin_logs_last_reload_at";
+
+        const refreshSeconds = () => {
+          const u = new URL(window.location.href);
+          const raw = (u.searchParams.get("logs_refresh") || "10").trim();
+          const n = parseInt(raw, 10);
+          if (!Number.isFinite(n)) return 10;
+          return Math.max(3, Math.min(120, n));
+        };
+
+        const canReload = () => {
+          try {
+            const raw = window.sessionStorage ? window.sessionStorage.getItem(LAST_RELOAD_KEY) : "";
+            const last = parseInt(String(raw || "0"), 10);
+            if (!Number.isFinite(last) || last <= 0) return true;
+            return (Date.now() - last) > RELOAD_COOLDOWN_MS;
+          } catch (_) {
+            return true;
+          }
+        };
+
+        const markReload = () => {
+          try {
+            if (!window.sessionStorage) return;
+            window.sessionStorage.setItem(LAST_RELOAD_KEY, String(Date.now()));
+          } catch (_) {}
+        };
+
+        const shouldReloadNow = () => {
+          const onLogs = (location.hash || "").toLowerCase().includes("logs");
+          if (!onLogs) return false;
+          const u = new URL(window.location.href);
+          const lp = (u.searchParams.get("log_page") || "1").trim();
+          return lp === "" || lp === "1";
+        };
+
+        let timer = null;
+        const stop = () => {
+          if (!timer) return;
+          try { window.clearInterval(timer); } catch (_) {}
+          timer = null;
+        };
+
+        const tick = () => {
+          if (document.hidden) return;
+          if (!shouldReloadNow()) return;
+          if (!canReload()) return;
+          markReload();
+          const u = new URL(window.location.href);
+          u.searchParams.delete("log_page");
+          u.hash = "#tab-logs";
+          window.location.replace(u.toString());
+        };
+
+        const start = () => {
+          stop();
+          timer = window.setInterval(() => {
+            tick();
+          }, refreshSeconds() * 1000);
+        };
+
+        start();
+        // When user returns from other pages (e.g. viewing result), reload immediately so logs feel "real-time".
+        window.addEventListener("hashchange", () => { tick(); start(); });
+        window.addEventListener("focus", () => { tick(); start(); });
+        window.addEventListener("pageshow", () => { tick(); start(); });
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) { tick(); start(); }
+        });
+        window.addEventListener("beforeunload", stop);
+      })();
 
       // Clickable rows (except clicking buttons/links in the action column).
       for (const tr of document.querySelectorAll("tr[data-href], tr[data-msg]")) {
@@ -1056,6 +1467,8 @@
       initDateProxy("invite_end_date");
       initDateProxy("attempt_start_from");
       initDateProxy("attempt_start_to");
+      initDateProxy("chart_start");
+      initDateProxy("chart_end");
       document.querySelectorAll("button.date-btn[data-for]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const id = btn.getAttribute("data-for");
@@ -1072,6 +1485,108 @@
           }
         });
       });
+
+      // Auto-refresh attempt list status/score (no full page reload).
+      // Goal: after the candidate submits, admin status flips to "正在判卷" without manual refresh.
+      // Default: refresh every 5 seconds (3..120). You can override with ?attempt_refresh=8.
+      (() => {
+        const table = document.querySelector("#tab-assign table.attempt-table");
+        if (!table) return;
+
+        const refreshSeconds = () => {
+          const u = new URL(window.location.href);
+          const raw = (u.searchParams.get("attempt_refresh") || "5").trim();
+          const n = parseInt(raw, 10);
+          if (!Number.isFinite(n)) return 5;
+          return Math.max(3, Math.min(120, n));
+        };
+
+        const isOnAssign = () => (location.hash || "").toLowerCase().includes("assign");
+        const tokensFromTable = () =>
+          Array.from(table.querySelectorAll("tbody tr[data-token]"))
+            .map((tr) => String(tr.dataset.token || "").trim())
+            .filter(Boolean)
+            .slice(0, 50);
+
+        const applyItems = (items) => {
+          const m = new Map();
+          for (const it of (items || [])) {
+            const token = String(it && it.token ? it.token : "").trim();
+            if (!token) continue;
+            m.set(token, it);
+          }
+          for (const tr of table.querySelectorAll("tbody tr[data-token]")) {
+            const token = String(tr.dataset.token || "").trim();
+            if (!token) continue;
+            const it = m.get(token);
+            if (!it) continue;
+
+            const status = String(it.status || "").trim();
+            const statusLabel = String(it.status_label || "").trim();
+            const pill = tr.querySelector(".status-cell .status-pill");
+            if (pill) {
+              pill.textContent = statusLabel || status || pill.textContent;
+              pill.className = `status-pill ${status || ""}`.trim();
+            }
+
+            const scoreTd = tr.querySelector("td.score-cell");
+            if (scoreTd) {
+              if (it.score === undefined || it.score === null) scoreTd.textContent = "";
+              else scoreTd.textContent = String(it.score);
+            }
+          }
+        };
+
+        let timer = null;
+        let inFlight = false;
+
+        const stop = () => {
+          if (!timer) return;
+          try { window.clearInterval(timer); } catch (_) {}
+          timer = null;
+        };
+
+        const refreshOnce = async () => {
+          if (inFlight) return;
+          if (document.hidden) return;
+          if (!isOnAssign()) return;
+          const tokens = tokensFromTable();
+          if (!tokens.length) return;
+
+          inFlight = true;
+          try {
+            const resp = await fetch(`/admin/api/attempt-status?tokens=${encodeURIComponent(tokens.join(","))}`, {
+              method: "GET",
+              headers: { "Accept": "application/json" },
+            });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            applyItems(data && data.items ? data.items : []);
+          } catch (_) {
+            // ignore
+          } finally {
+            inFlight = false;
+          }
+        };
+
+        const start = () => {
+          stop();
+          timer = window.setInterval(refreshOnce, refreshSeconds() * 1000);
+          refreshOnce();
+        };
+
+        const sync = () => {
+          if (isOnAssign()) start();
+          else stop();
+        };
+
+        window.addEventListener("hashchange", sync);
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) refreshOnce();
+        });
+
+        sync();
+      })();
 
     </script>
   </body>

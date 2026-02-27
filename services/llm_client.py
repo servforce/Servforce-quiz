@@ -14,6 +14,48 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from config import DOUBAO_API_KEY, DOUBAO_BASE_URL, DOUBAO_MODEL, logger
+from services.audit_context import incr_audit_meta_int
+
+
+def _extract_llm_usage(obj: dict[str, Any]) -> tuple[int | None, int | None, int | None]:
+    try:
+        usage = obj.get("usage")
+    except Exception:
+        usage = None
+    if not isinstance(usage, dict):
+        return None, None, None
+
+    def _int(v):
+        if v is None or v == "":
+            return None
+        try:
+            return int(v)
+        except Exception:
+            return None
+
+    # OpenAI Responses style: input_tokens/output_tokens/total_tokens.
+    inp = _int(usage.get("input_tokens"))
+    out = _int(usage.get("output_tokens"))
+    tot = _int(usage.get("total_tokens"))
+    # ChatCompletions style fallback.
+    if inp is None:
+        inp = _int(usage.get("prompt_tokens"))
+    if out is None:
+        out = _int(usage.get("completion_tokens"))
+    if tot is None:
+        tot = _int(usage.get("total_tokens"))
+    return inp, out, tot
+
+
+def _accumulate_llm_usage(obj: dict[str, Any]) -> None:
+    """
+    Track total token usage in the current audit context meta without writing system_log rows.
+    """
+    try:
+        _ptk, _ctk, ttk = _extract_llm_usage(obj)
+    except Exception:
+        ttk = None
+    incr_audit_meta_int("llm_total_tokens_sum", ttk)
 
 
 def _supports_response_format_json() -> bool:
@@ -212,7 +254,9 @@ def call_llm_json(prompt: str, model: str | None = None) -> str:
             timeout_seconds=_env_timeout("LLM_TIMEOUT_JSON", 90),
             response_format_json=_supports_response_format_json(),
         )
-        logger.debug("LLM(doubao,json) ok in %.2fs", time.time() - start)
+        dt = time.time() - start
+        logger.debug("LLM(doubao,json) ok in %.2fs", dt)
+        _accumulate_llm_usage(obj)
         return _extract_output_text(obj)
     except Exception as e:
         logger.error("LLM call failed (doubao,json): %s", e)
@@ -240,7 +284,9 @@ def call_llm_text(prompt: str, model: str | None = None) -> str:
             timeout_seconds=_env_timeout("LLM_TIMEOUT_TEXT", 90),
             response_format_json=False,
         )
-        logger.debug("LLM(doubao,text) ok in %.2fs", time.time() - start)
+        dt = time.time() - start
+        logger.debug("LLM(doubao,text) ok in %.2fs", dt)
+        _accumulate_llm_usage(obj)
         return _extract_output_text(obj)
     except Exception as e:
         logger.error("LLM call failed (doubao,text): %s", e)
@@ -280,6 +326,7 @@ def call_llm_structured_ex(
         )
         dt = time.time() - start
         logger.debug("LLM(doubao,structured) ok in %.2fs", dt)
+        _accumulate_llm_usage(obj)
         return _extract_output_text(obj), ""
     except Exception as e:
         logger.error("LLM call failed (doubao,structured): %s", e)
@@ -313,7 +360,9 @@ def call_llm_vision_text(
             timeout_seconds=_env_timeout("LLM_TIMEOUT_VISION", 120),
             response_format_json=False,
         )
-        logger.debug("LLM(doubao,vision) ok in %.2fs", time.time() - start)
+        dt = time.time() - start
+        logger.debug("LLM(doubao,vision) ok in %.2fs", dt)
+        _accumulate_llm_usage(obj)
         return _extract_output_text(obj)
     except Exception as e:
         logger.error("LLM call failed (doubao,vision): %s", e)

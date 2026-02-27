@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime
 from contextlib import contextmanager
 from typing import Any, Iterator
@@ -276,14 +277,15 @@ END$$;
     schema_ddl = """
  CREATE TABLE IF NOT EXISTS candidate (
    id               BIGSERIAL PRIMARY KEY,
-   name             TEXT NOT NULL,
-   phone            TEXT NOT NULL,
-   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  resume_bytes     BYTEA NULL,
-  resume_filename  TEXT NULL,
-  resume_mime      TEXT NULL,
-  resume_size      INT NULL,
-  resume_parsed    JSONB NULL,
+    name             TEXT NOT NULL,
+    phone            TEXT NOT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at       TIMESTAMPTZ NULL,
+   resume_bytes     BYTEA NULL,
+   resume_filename  TEXT NULL,
+   resume_mime      TEXT NULL,
+   resume_size      INT NULL,
+   resume_parsed    JSONB NULL,
   resume_parsed_at TIMESTAMPTZ NULL
  );
 
@@ -304,6 +306,8 @@ ALTER TABLE candidate ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
 UPDATE candidate SET created_at = NOW() WHERE created_at IS NULL;
 ALTER TABLE candidate ALTER COLUMN created_at SET DEFAULT NOW();
 ALTER TABLE candidate ALTER COLUMN created_at SET NOT NULL;
+
+ALTER TABLE candidate ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ NULL;
 
 ALTER TABLE candidate DROP COLUMN IF EXISTS updated_at;
 
@@ -327,6 +331,7 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
 
  CREATE INDEX IF NOT EXISTS idx_candidate_phone ON candidate(phone);
  CREATE INDEX IF NOT EXISTS idx_candidate_created_at ON candidate(created_at);
+ CREATE INDEX IF NOT EXISTS idx_candidate_deleted_at ON candidate(deleted_at);
 
   CREATE TABLE IF NOT EXISTS exam_paper (
     id BIGSERIAL PRIMARY KEY,
@@ -364,6 +369,28 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
   ALTER TABLE exam_paper ADD COLUMN IF NOT EXISTS invite_start_date DATE NULL;
   ALTER TABLE exam_paper ADD COLUMN IF NOT EXISTS invite_end_date DATE NULL;
   CREATE INDEX IF NOT EXISTS idx_exam_paper_invite_start_date ON exam_paper(invite_start_date);
+
+  CREATE TABLE IF NOT EXISTS system_log (
+    id BIGSERIAL PRIMARY KEY,
+    at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    actor TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    candidate_id BIGINT NULL,
+    exam_key TEXT NULL,
+    token TEXT NULL,
+    llm_prompt_tokens INT NULL,
+    llm_completion_tokens INT NULL,
+    llm_total_tokens INT NULL,
+    duration_seconds INT NULL,
+    ip TEXT NULL,
+    user_agent TEXT NULL,
+    meta JSONB NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_system_log_at ON system_log(at);
+  CREATE INDEX IF NOT EXISTS idx_system_log_event_type ON system_log(event_type);
+  CREATE INDEX IF NOT EXISTS idx_system_log_candidate_id ON system_log(candidate_id);
+  CREATE INDEX IF NOT EXISTS idx_system_log_exam_key ON system_log(exam_key);
+  CREATE INDEX IF NOT EXISTS idx_system_log_token ON system_log(token);
   """
     try:
         # PostgreSQL requires committing enum value changes before using them in
@@ -377,6 +404,12 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
         with conn_scope() as conn:
             with conn.cursor() as cur:
                 cur.execute(schema_ddl)
+        try:
+            n = backfill_system_log_llm_totals_from_meta()
+            if n > 0:
+                logger.info("Backfilled system_log llm_total_tokens from meta: %s rows", n)
+        except Exception:
+            logger.exception("Failed to backfill system_log llm_total_tokens from meta")
         logger.info("DB ready")
     except Exception as e:
         raise RuntimeError(
@@ -400,13 +433,15 @@ def list_candidates(
    name,
    phone,
    created_at,
-   (resume_bytes IS NOT NULL) AS has_resume
+    (resume_bytes IS NOT NULL) AS has_resume
   FROM candidate
-  """
+ WHERE deleted_at IS NULL
+   """
     params: list[Any] = []      # 最多返回多少条
     where_sql, where_params = _candidate_query_where_clause(query)
     if where_sql:
-        sql += where_sql
+        # _candidate_query_where_clause returns a " WHERE ..." fragment; we already have a base WHERE.
+        sql += " AND " + where_sql.strip().removeprefix("WHERE").removeprefix("where").strip()
         params.extend(where_params)
 
     if created_from is not None:
@@ -436,11 +471,11 @@ def list_candidates(
 
 # 创建候选人身份信息
 def count_candidates(*, query: str | None = None) -> int:
-    sql = "SELECT COUNT(*) FROM candidate"
+    sql = "SELECT COUNT(*) FROM candidate WHERE deleted_at IS NULL"
     params: list[Any] = []
     where_sql, where_params = _candidate_query_where_clause(query)
     if where_sql:
-        sql += where_sql
+        sql += " AND " + where_sql.strip().removeprefix("WHERE").removeprefix("where").strip()
         params.extend(where_params)
     with conn_scope() as conn:
         with conn.cursor() as cur:
@@ -451,11 +486,12 @@ def count_candidates(*, query: str | None = None) -> int:
 def get_candidate_by_phone(phone: str) -> dict[str, Any] | None:
     sql = """
  SELECT id, name, phone, created_at
- FROM candidate
-WHERE phone = %s
-ORDER BY id DESC
-LIMIT 1
-"""
+  FROM candidate
+ WHERE phone = %s
+   AND deleted_at IS NULL
+ ORDER BY id DESC
+ LIMIT 1
+ """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (str(phone or ""),))
@@ -478,11 +514,11 @@ def create_candidate(name: str, phone: str) -> int:
 # 候选人（考生）的 id查找到候选者的身份信息
 def get_candidate(candidate_id: int) -> dict[str, Any] | None:
     sql = """
- SELECT id, name, phone, created_at,
+ SELECT id, name, phone, created_at, deleted_at,
         resume_filename, resume_mime, resume_size, resume_parsed, resume_parsed_at
   FROM candidate
   WHERE id = %s
-  """
+   """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (int(candidate_id),))
@@ -616,15 +652,33 @@ def update_candidate(candidate_id: int, *, name: str, phone: str, created_at=Non
 
 # 根据id号删除候选者id
 def delete_candidate(candidate_id: int) -> None:
-    # Preserve exam history: candidates with exam_paper records cannot be deleted.
+    # Preserve exam history: if exam_paper exists, perform a "soft delete" by anonymizing
+    # the candidate record while keeping its id for FK references.
     sql_check = "SELECT 1 FROM exam_paper WHERE candidate_id=%s LIMIT 1"
-    sql = "DELETE FROM candidate WHERE id=%s"
+    sql_hard = "DELETE FROM candidate WHERE id=%s"
+    sql_soft = """
+ UPDATE candidate
+   SET
+     deleted_at=NOW(),
+     name=%s,
+     phone=%s,
+     resume_bytes=NULL,
+     resume_filename=NULL,
+     resume_mime=NULL,
+     resume_size=NULL,
+     resume_parsed=NULL,
+     resume_parsed_at=NULL
+ WHERE id=%s
+ """
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql_check, (int(candidate_id),))
             if cur.fetchone() is not None:
-                raise RuntimeError("candidate has exam_paper records; deletion is not allowed")
-            cur.execute(sql, (int(candidate_id),))
+                # Use a unique phone placeholder to free the original phone for future registrations.
+                placeholder_phone = f"DELETED_{int(candidate_id)}_{int(time.time())}"
+                cur.execute(sql_soft, ("已删除", placeholder_phone, int(candidate_id)))
+                return
+            cur.execute(sql_hard, (int(candidate_id),))
 
 
 # 通过姓名和电话验证候选者
@@ -797,23 +851,23 @@ def list_exam_papers(
     offset: int = 0,
 ) -> list[dict[str, Any]]:
     sql = """
- SELECT
-    ep.id AS attempt_id,
-    ep.candidate_id,
-    c.name,
-    ep.phone,
-    ep.exam_key,
-    ep.token,
-    ep.invite_start_date,
-    ep.invite_end_date,
-    ep.status,
-    ep.entered_at,
-    ep.finished_at,
-    ep.score,
-    ep.created_at
- FROM exam_paper ep
- JOIN candidate c ON c.id = ep.candidate_id
- """
+  SELECT
+     ep.id AS attempt_id,
+     ep.candidate_id,
+     c.name,
+     ep.phone,
+     ep.exam_key,
+     ep.token,
+     ep.invite_start_date,
+     ep.invite_end_date,
+     ep.status,
+     ep.entered_at,
+     ep.finished_at,
+     ep.score,
+     ep.created_at
+  FROM exam_paper ep
+  JOIN candidate c ON c.id = ep.candidate_id
+  """
     params: list[Any] = []
     where: list[str] = []
     q = str(query or "").strip()
@@ -836,6 +890,479 @@ def list_exam_papers(
     if offset:
         sql += " OFFSET %s"
         params.append(int(offset))
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def create_system_log(
+    *,
+    actor: str,
+    event_type: str,
+    candidate_id: int | None = None,
+    exam_key: str | None = None,
+    token: str | None = None,
+    llm_prompt_tokens: int | None = None,
+    llm_completion_tokens: int | None = None,
+    llm_total_tokens: int | None = None,
+    duration_seconds: int | None = None,
+    ip: str | None = None,
+    user_agent: str | None = None,
+    meta: dict[str, Any] | None = None,
+) -> int:
+    sql = """
+ INSERT INTO system_log(
+   actor, event_type, candidate_id, exam_key, token,
+   llm_prompt_tokens, llm_completion_tokens, llm_total_tokens, duration_seconds,
+   ip, user_agent, meta
+ )
+ VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+ RETURNING id
+ """
+    meta_param = None
+    if meta is not None:
+        meta_param = psycopg2.extras.Json(meta, dumps=lambda x: json.dumps(x, ensure_ascii=False))
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    str(actor or ""),
+                    str(event_type or ""),
+                    (int(candidate_id) if candidate_id is not None else None),
+                    (str(exam_key).strip() if exam_key else None),
+                    (str(token).strip() if token else None),
+                    (int(llm_prompt_tokens) if llm_prompt_tokens is not None else None),
+                    (int(llm_completion_tokens) if llm_completion_tokens is not None else None),
+                    (int(llm_total_tokens) if llm_total_tokens is not None else None),
+                    (int(duration_seconds) if duration_seconds is not None else None),
+                    (str(ip).strip() if ip else None),
+                    (str(user_agent).strip() if user_agent else None),
+                    meta_param,
+                ),
+            )
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
+
+
+def backfill_system_log_llm_totals_from_meta() -> int:
+    """
+    Best-effort backfill:
+
+    For historical rows written before we started persisting llm_total_tokens explicitly,
+    copy meta.llm_total_tokens_sum into the dedicated llm_total_tokens column.
+
+    This enables consistent UI display without changing existing meta payloads.
+    """
+    sql = """
+ UPDATE system_log
+ SET llm_total_tokens = (meta->>'llm_total_tokens_sum')::int
+ WHERE (llm_total_tokens IS NULL OR llm_total_tokens <= 0)
+   AND meta IS NOT NULL
+   AND (meta ? 'llm_total_tokens_sum')
+   AND (meta->>'llm_total_tokens_sum') ~ '^[0-9]+$'
+   AND (meta->>'llm_total_tokens_sum')::int > 0
+    """
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            return int(cur.rowcount or 0)
+
+
+def _system_log_where_clause(
+    *,
+    query: str | None = None,
+    event_type: str | None = None,
+    at_from: datetime | None = None,
+    at_to: datetime | None = None,
+    table_alias: str = "",
+    business_only: bool = False,
+) -> tuple[str, list[Any]]:
+    where: list[str] = []
+    params: list[Any] = []
+    a = str(table_alias or "").strip()
+    if a and not a.endswith("."):
+        a = a + "."
+
+    if business_only:
+        # Keep only business-relevant logs:
+        # - candidate.* ops
+        # - exam CRUD ops
+        # - assignment/invite + answering timeline
+        # - llm.usage only when it can be linked to candidate/exam/token context
+        llm_linked = (
+            f"({a}token IS NOT NULL AND {a}token <> '') OR "
+            f"{a}candidate_id IS NOT NULL OR "
+            f"({a}exam_key IS NOT NULL AND {a}exam_key <> '')"
+        )
+        where.append(
+            "("
+            f"{a}event_type LIKE 'candidate.%%' OR "
+            f"{a}event_type IN ('exam.upload','exam.update','exam.delete','exam.read',"
+            f"'assignment.create','exam.enter','exam.finish') OR "
+            f"({a}event_type='llm.usage' AND ({llm_linked}))"
+            ")"
+        )
+
+    t = str(event_type or "").strip()
+    if t:
+        where.append(f"{a}event_type=%s")
+        params.append(t)
+
+    if at_from is not None:
+        where.append(f"{a}at >= %s")
+        params.append(at_from)
+    if at_to is not None:
+        where.append(f"{a}at <= %s")
+        params.append(at_to)
+
+    q = str(query or "").strip()
+    if q:
+        ql = f"%{q}%"
+        where.append(
+            "("
+            f"{a}actor ILIKE %s OR {a}event_type ILIKE %s OR {a}exam_key ILIKE %s OR {a}token ILIKE %s OR "
+            f"CAST({a}candidate_id AS TEXT) ILIKE %s OR CAST({a}meta AS TEXT) ILIKE %s"
+            ")"
+        )
+        params.extend([ql, ql, ql, ql, ql, ql])
+
+    if not where:
+        return "", []
+    return " WHERE " + " AND ".join(where), params
+
+
+def count_system_logs(
+    *,
+    query: str | None = None,
+    event_type: str | None = None,
+    at_from: datetime | None = None,
+    at_to: datetime | None = None,
+    business_only: bool = False,
+) -> int:
+    sql = "SELECT COUNT(*) FROM system_log"
+    where_sql, params = _system_log_where_clause(
+        query=query,
+        event_type=event_type,
+        at_from=at_from,
+        at_to=at_to,
+        business_only=business_only,
+    )
+    if where_sql:
+        sql += where_sql
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            return int(cur.fetchone()[0])
+
+
+def list_system_logs(
+    *,
+    query: str | None = None,
+    event_type: str | None = None,
+    at_from: datetime | None = None,
+    at_to: datetime | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+    business_only: bool = False,
+) -> list[dict[str, Any]]:
+    sql = """
+ SELECT
+   sl.id,
+   sl.at,
+   sl.actor,
+   sl.event_type,
+   sl.candidate_id,
+   c.name AS candidate_name,
+   c.phone AS candidate_phone,
+   sl.exam_key,
+   sl.token,
+   sl.llm_prompt_tokens,
+   sl.llm_completion_tokens,
+   sl.llm_total_tokens,
+   sl.duration_seconds,
+   sl.ip,
+   sl.user_agent,
+   sl.meta
+ FROM system_log sl
+ LEFT JOIN candidate c ON c.id = sl.candidate_id
+ """
+    where_sql, params = _system_log_where_clause(
+        query=query,
+        event_type=event_type,
+        at_from=at_from,
+        at_to=at_to,
+        table_alias="sl",
+        business_only=business_only,
+    )
+    if where_sql:
+        sql += where_sql
+    sql += "\n ORDER BY id DESC\n"
+    if limit is not None:
+        sql += " LIMIT %s"
+        params.append(int(limit))
+    if offset:
+        sql += " OFFSET %s"
+        params.append(int(offset))
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def count_operation_logs() -> int:
+    """
+    Count business operation logs (exclude llm.usage rows).
+
+    Operations shown in UI:
+      - candidate.* (CRUD and related admin actions)
+      - exam.* (CRUD + public invite toggle)
+      - assignment timeline: assignment.create / exam.enter / exam.finish
+    """
+    sql = """
+ SELECT COUNT(*)
+ FROM system_log sl
+ WHERE (
+    sl.event_type LIKE 'candidate.%%' OR
+    sl.event_type LIKE 'exam.%%' OR
+    sl.event_type IN ('assignment.create','exam.enter','exam.finish')
+  ) AND sl.event_type <> 'llm.usage'
+  """
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            return int(cur.fetchone()[0])
+
+
+def list_operation_logs(*, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    """
+    List business operation logs (exclude llm.usage rows), newest first.
+    """
+    sql = """
+ SELECT
+    sl.id,
+    sl.at,
+    sl.actor,
+    sl.event_type,
+    sl.candidate_id,
+    c.name AS candidate_name,
+    c.phone AS candidate_phone,
+    sl.exam_key,
+    sl.token,
+    sl.llm_prompt_tokens,
+    sl.llm_completion_tokens,
+    sl.llm_total_tokens,
+    sl.duration_seconds,
+    sl.meta
+  FROM system_log sl
+  LEFT JOIN candidate c ON c.id = sl.candidate_id
+  WHERE (
+    sl.event_type LIKE 'candidate.%%' OR
+    sl.event_type LIKE 'exam.%%' OR
+    sl.event_type IN ('assignment.create','exam.enter','exam.finish')
+  ) AND sl.event_type <> 'llm.usage'
+  ORDER BY sl.id DESC
+  LIMIT %s
+  OFFSET %s
+  """
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (int(limit), int(offset)))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def list_operation_daily_counts(
+    *,
+    tz_offset_seconds: int,
+    at_from: datetime | None = None,
+    at_to: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Aggregate operation log density by day (local day buckets using a numeric UTC offset in seconds).
+
+    Notes:
+    - We intentionally use seconds instead of PostgreSQL's numeric time zone strings (e.g. '+08:00'),
+      because PostgreSQL interprets numeric zones using POSIX sign conventions (reversed vs the common ISO form).
+    """
+    sql = """
+ SELECT (((sl.at AT TIME ZONE 'UTC') + (%s * INTERVAL '1 second'))::date) AS day, COUNT(*) AS cnt
+ FROM system_log sl
+ WHERE (
+   sl.event_type LIKE 'candidate.%%' OR
+   sl.event_type LIKE 'exam.%%' OR
+   sl.event_type IN ('assignment.create','exam.enter','exam.finish')
+  ) AND sl.event_type <> 'llm.usage'
+  """
+    params: list[Any] = [int(tz_offset_seconds or 0)]
+    if at_from is not None:
+        sql += "\n AND sl.at >= %s"
+        params.append(at_from)
+    if at_to is not None:
+        sql += "\n AND sl.at <= %s"
+        params.append(at_to)
+    sql += "\n GROUP BY day\n ORDER BY day ASC\n"
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def count_operation_logs_by_category() -> dict[str, int]:
+    """
+    Count operation logs grouped into UI categories across the whole DB.
+
+    Categories:
+      - candidate: candidate.* ops
+      - exam: exam.* ops (excluding grading and assignment timeline)
+      - grading: exam.grade
+      - assignment: assignment.create / exam.enter / exam.finish
+    """
+    sql = """
+ SELECT
+    SUM(CASE WHEN sl.event_type LIKE 'candidate.%%' THEN 1 ELSE 0 END) AS candidate_cnt,
+    SUM(CASE WHEN sl.event_type LIKE 'exam.%%' AND sl.event_type NOT IN ('exam.grade','exam.enter','exam.finish') THEN 1 ELSE 0 END) AS exam_cnt,
+    SUM(CASE WHEN sl.event_type = 'exam.grade' THEN 1 ELSE 0 END) AS grading_cnt,
+    SUM(CASE WHEN sl.event_type IN ('assignment.create','exam.enter','exam.finish') THEN 1 ELSE 0 END) AS assignment_cnt
+  FROM system_log sl
+  WHERE (
+    sl.event_type LIKE 'candidate.%%' OR
+    sl.event_type LIKE 'exam.%%' OR
+    sl.event_type IN ('assignment.create','exam.enter','exam.finish')
+  ) AND sl.event_type <> 'llm.usage'
+  """
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            row = cur.fetchone() or {}
+            out: dict[str, int] = {"candidate": 0, "exam": 0, "grading": 0, "assignment": 0}
+            try:
+                out["candidate"] = int(row.get("candidate_cnt") or 0)
+            except Exception:
+                out["candidate"] = 0
+            try:
+                out["exam"] = int(row.get("exam_cnt") or 0)
+            except Exception:
+                out["exam"] = 0
+            try:
+                out["grading"] = int(row.get("grading_cnt") or 0)
+            except Exception:
+                out["grading"] = 0
+            try:
+                out["assignment"] = int(row.get("assignment_cnt") or 0)
+            except Exception:
+                out["assignment"] = 0
+            return out
+
+
+
+def list_system_log_type_counts(
+    *,
+    query: str | None = None,
+    event_type: str | None = None,
+    at_from: datetime | None = None,
+    at_to: datetime | None = None,
+    business_only: bool = False,
+) -> list[dict[str, Any]]:
+    sql = """
+ SELECT event_type, COUNT(*) AS cnt
+ FROM system_log
+ """
+    where_sql, params = _system_log_where_clause(
+        query=query,
+        event_type=event_type,
+        at_from=at_from,
+        at_to=at_to,
+        business_only=business_only,
+    )
+    if where_sql:
+        sql += where_sql
+    sql += "\n GROUP BY event_type\n ORDER BY cnt DESC, event_type ASC\n"
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def list_system_log_category_counts(
+    *,
+    query: str | None = None,
+    event_type: str | None = None,
+    at_from: datetime | None = None,
+    at_to: datetime | None = None,
+    business_only: bool = False,
+) -> list[dict[str, Any]]:
+    """
+    Aggregate logs into higher-level categories for UI legend.
+
+    Categories:
+      - candidate: candidate.* (and llm.usage tied to candidate)
+      - exam: exam CRUD (and llm.usage tied to exam)
+      - assignment: invitations + answering timeline (and llm.usage tied to token)
+      - ui: page views
+      - system: fallback/unknown
+    """
+    sql = """
+ SELECT
+   CASE
+     WHEN sl.event_type LIKE 'candidate.%%' THEN 'candidate'
+     WHEN sl.event_type IN ('exam.upload','exam.update','exam.delete','exam.read') THEN 'exam'
+     WHEN sl.event_type IN ('assignment.create','exam.enter','exam.finish') THEN 'assignment'
+     WHEN sl.event_type = 'llm.usage' THEN
+       CASE
+         WHEN sl.token IS NOT NULL AND sl.token <> '' THEN 'assignment'
+         WHEN sl.candidate_id IS NOT NULL THEN 'candidate'
+         WHEN sl.exam_key IS NOT NULL AND sl.exam_key <> '' THEN 'exam'
+         ELSE 'system'
+       END
+     WHEN sl.event_type IN ('ui.view','admin.view') THEN 'ui'
+     ELSE 'system'
+   END AS category,
+   COUNT(*) AS cnt
+ FROM system_log sl
+ """
+    where_sql, params = _system_log_where_clause(
+        query=query,
+        event_type=event_type,
+        at_from=at_from,
+        at_to=at_to,
+        table_alias="sl",
+        business_only=business_only,
+    )
+    if where_sql:
+        sql += where_sql
+    sql += "\n GROUP BY category\n ORDER BY cnt DESC, category ASC\n"
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def list_system_log_daily_counts(
+    *,
+    query: str | None = None,
+    event_type: str | None = None,
+    at_from: datetime | None = None,
+    at_to: datetime | None = None,
+    business_only: bool = False,
+) -> list[dict[str, Any]]:
+    """
+    Aggregate log density by day (UTC day buckets).
+    """
+    sql = """
+ SELECT (DATE_TRUNC('day', at))::date AS day, COUNT(*) AS cnt
+ FROM system_log
+ """
+    where_sql, params = _system_log_where_clause(
+        query=query,
+        event_type=event_type,
+        at_from=at_from,
+        at_to=at_to,
+        business_only=business_only,
+    )
+    if where_sql:
+        sql += where_sql
+    sql += "\n GROUP BY day\n ORDER BY day ASC\n"
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, tuple(params))
