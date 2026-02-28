@@ -183,10 +183,19 @@
         </div>
 
         <nav class="nav" aria-label="主导航">
-          <a class="nav-link" href="/admin#tab-exams">试卷管理</a>
-          <a class="nav-link active" href="/admin/candidates">候选人管理</a>
-          <a class="nav-link" href="/admin#tab-assign">答题邀请</a>
-          <a class="nav-link" href="/admin#tab-logs">系统日志</a>
+          <a class="nav-link" href="/admin#tab-exams"><span class="nav-ico exams" aria-hidden="true"></span>试卷管理</a>
+          <a class="nav-link active" href="/admin/candidates"><span class="nav-ico candidates" aria-hidden="true"></span>候选人管理</a>
+          <a class="nav-link" href="/admin#tab-assign"><span class="nav-ico assign" aria-hidden="true"></span>答题邀请</a>
+          <a class="nav-link" href="/admin#tab-logs"><span class="nav-ico logs" aria-hidden="true"></span>系统日志</a>
+          {% set _ss = system_status_summary if system_status_summary else {} %}
+          {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
+          {% set _badge = '' %}
+          {% if _lvl == 'warn' %}{% set _badge = '70%' %}{% endif %}
+          {% if _lvl == 'danger' %}{% set _badge = '90%' %}{% endif %}
+          {% if _lvl == 'critical' %}{% set _badge = '100%' %}{% endif %}
+          <a class="nav-link" href="/admin#tab-status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
+            <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
+          </a>
         </nav>
 
         <form method="post" action="/admin/logout" style="margin:0;">
@@ -195,9 +204,11 @@
       </div>
     </header>
 
-    <main class="container page">
+    <main class="container page" style="max-width:1080px;">
       {% for m in get_flashed_messages() %}
+      {% if m and (m|string)|trim %}
       <div class="flash">{{ m }}</div>
+      {% endif %}
       {% endfor %}
 
       <div class="surface admin-surface" role="region" aria-label="候选人管理">
@@ -329,71 +340,18 @@
           </div>
 
           {% set total_pages_display = total_pages if total_pages and total_pages > 0 else 1 %}
-          <div class="std-pager" aria-label="候选人分页">
-            <div class="per-page">
-              <span>20条/页</span>
-            </div>
-
-            <div class="pages" aria-label="页码">
-              {% if page > 1 %}
-                <a class="page-btn" href="/admin/candidates?page={{ page - 1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if created_from %}&created_from={{ created_from|urlencode }}{% endif %}{% if created_to %}&created_to={{ created_to|urlencode }}{% endif %}" aria-label="上一页">‹</a>
-              {% else %}
-                <span class="page-btn" style="opacity:.45; pointer-events:none;">‹</span>
-              {% endif %}
-
-              {% set totalp = total_pages_display %}
-              {% set cur = page %}
-              {% if totalp <= 9 %}
-                {% for p in range(1, totalp + 1) %}
-                  {% if p == cur %}
-                    <span class="page-btn active">{{ p }}</span>
-                  {% else %}
-                    <a class="page-btn" href="/admin/candidates?page={{ p }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if created_from %}&created_from={{ created_from|urlencode }}{% endif %}{% if created_to %}&created_to={{ created_to|urlencode }}{% endif %}">{{ p }}</a>
-                  {% endif %}
-                {% endfor %}
-              {% else %}
-                {% set start = cur - 2 %}
-                {% set end = cur + 2 %}
-                {% if start < 2 %}{% set start = 2 %}{% endif %}
-                {% if end > totalp - 1 %}{% set end = totalp - 1 %}{% endif %}
-                {% if cur <= 4 %}{% set start = 2 %}{% set end = 6 %}{% endif %}
-                {% if cur >= totalp - 3 %}{% set start = totalp - 5 %}{% set end = totalp - 1 %}{% endif %}
-
-                {% if 1 == cur %}
-                  <span class="page-btn active">1</span>
-                {% else %}
-                  <a class="page-btn" href="/admin/candidates?page=1{% if q %}&q={{ q|urlencode }}{% endif %}{% if created_from %}&created_from={{ created_from|urlencode }}{% endif %}{% if created_to %}&created_to={{ created_to|urlencode }}{% endif %}">1</a>
-                {% endif %}
-
-                {% if start > 2 %}<span class="dots">…</span>{% endif %}
-                {% for p in range(start, end + 1) %}
-                  {% if p == cur %}
-                    <span class="page-btn active">{{ p }}</span>
-                  {% else %}
-                    <a class="page-btn" href="/admin/candidates?page={{ p }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if created_from %}&created_from={{ created_from|urlencode }}{% endif %}{% if created_to %}&created_to={{ created_to|urlencode }}{% endif %}">{{ p }}</a>
-                  {% endif %}
-                {% endfor %}
-                {% if end < totalp - 1 %}<span class="dots">…</span>{% endif %}
-
-                {% if totalp == cur %}
-                  <span class="page-btn active">{{ totalp }}</span>
-                {% else %}
-                  <a class="page-btn" href="/admin/candidates?page={{ totalp }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if created_from %}&created_from={{ created_from|urlencode }}{% endif %}{% if created_to %}&created_to={{ created_to|urlencode }}{% endif %}">{{ totalp }}</a>
-                {% endif %}
-              {% endif %}
-
-              {% if page < total_pages_display %}
-                <a class="page-btn" href="/admin/candidates?page={{ page + 1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if created_from %}&created_from={{ created_from|urlencode }}{% endif %}{% if created_to %}&created_to={{ created_to|urlencode }}{% endif %}" aria-label="下一页">›</a>
-              {% else %}
-                <span class="page-btn" style="opacity:.45; pointer-events:none;">›</span>
-              {% endif %}
-            </div>
-
-            <div class="jump" aria-label="跳转页">
-              <span>跳转至</span>
-              <input id="cand_page_jump" type="number" min="1" max="{{ total_pages_display }}" placeholder="{{ page }}" inputmode="numeric" />
-              <button class="btn" type="button" id="cand_page_go">前往</button>
-            </div>
+          <div class="tri-pager" aria-label="候选人分页">
+            <span class="page-info">第 {{ page }} / {{ total_pages_display }} 页（共 {{ total }} 条）</span>
+            {% if page > 1 %}
+              <a class="tri-btn" href="/admin/candidates?page={{ page - 1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if created_from %}&created_from={{ created_from|urlencode }}{% endif %}{% if created_to %}&created_to={{ created_to|urlencode }}{% endif %}" aria-label="上一页" title="上一页">▲</a>
+            {% else %}
+              <span class="tri-btn disabled" aria-hidden="true">▲</span>
+            {% endif %}
+            {% if page < total_pages_display %}
+              <a class="tri-btn" href="/admin/candidates?page={{ page + 1 }}{% if q %}&q={{ q|urlencode }}{% endif %}{% if created_from %}&created_from={{ created_from|urlencode }}{% endif %}{% if created_to %}&created_to={{ created_to|urlencode }}{% endif %}" aria-label="下一页" title="下一页">▼</a>
+            {% else %}
+              <span class="tri-btn disabled" aria-hidden="true">▼</span>
+            {% endif %}
           </div>
         </section>
       </div>
@@ -402,8 +360,6 @@
     <script>
       // Live fuzzy search (debounced) for candidates.
       const qInput = document.getElementById("q");
-      const candJump = document.getElementById("cand_page_jump");
-      const candGo = document.getElementById("cand_page_go");
       if (qInput && qInput.form) {
         let t = null;
         qInput.addEventListener("input", () => {
@@ -416,20 +372,6 @@
             u.searchParams.delete("page");
             window.location.href = u.toString();
           }, 300);
-        });
-      }
-      if (candGo && candJump) {
-        const go = () => {
-          const raw = (candJump.value || "").trim();
-          const n = parseInt(raw, 10);
-          if (!Number.isFinite(n) || n <= 0) return;
-          const u = new URL(window.location.href);
-          u.searchParams.set("page", String(n));
-          window.location.href = u.toString();
-        };
-        candGo.addEventListener("click", go);
-        candJump.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") go();
         });
       }
 
@@ -526,5 +468,6 @@
           });
         });
 	    </script>
+      <script src="{{ url_for('static', filename='system_status.js') }}"></script>
 	  </body>
 	</html>

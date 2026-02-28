@@ -33,10 +33,12 @@ from config import ADMIN_PASSWORD, ADMIN_USERNAME, BASE_DIR, SECRET_KEY, STORAGE
 from db import (
     create_candidate,
     create_exam_paper,
+    create_system_log,
     count_exam_papers,
     count_operation_logs,
     count_operation_logs_by_category,
     delete_candidate,
+    has_system_alert,
     get_exam_paper_by_token,
     get_candidate,
     get_candidate_by_phone,
@@ -46,6 +48,7 @@ from db import (
     list_exam_papers,
     list_operation_daily_counts,
     list_operation_logs,
+    list_system_status_daily_metrics,
     mark_exam_deleted,
     rename_exam_key,
     set_exam_paper_entered_at,
@@ -68,6 +71,7 @@ from services.assignment_service import (
     save_assignment,
 )
 from services.aliyun_dypns import check_sms_verify_code, send_sms_verify_code
+from services.audit_context import audit_context, get_audit_context
 from services.grading_service import generate_candidate_remark, grade_attempt
 from services.resume_service import (
     clean_projects_raw_for_display,
@@ -80,6 +84,7 @@ from services.resume_service import (
     parse_resume_name_llm,
     split_projects_raw_into_blocks,
 )
+from services.system_log import log_event
 from services.university_tags import classify_university
 from storage.json_store import ensure_dirs, read_json, write_json
 from web.auth import admin_required
@@ -146,6 +151,190 @@ def _parse_date_ymd(s: str) -> date | None:
         return date.fromisoformat(t)
     except Exception:
         return None
+
+
+def _system_status_cfg_path() -> Path:
+    return STORAGE_DIR / "system_status.json"
+
+
+def _load_system_status_cfg() -> dict[str, int]:
+    """
+    Load daily thresholds for system status page.
+    Stored under storage/system_status.json (JSON).
+    """
+    try:
+        obj = read_json(_system_status_cfg_path())
+    except Exception:
+        obj = {}
+    if not isinstance(obj, dict):
+        obj = {}
+    llm = _safe_int(obj.get("llm_tokens_limit"), 0)
+    sms = _safe_int(obj.get("sms_calls_limit"), 0)
+    return {"llm_tokens_limit": max(0, llm), "sms_calls_limit": max(0, sms)}
+
+
+def _save_system_status_cfg(cfg: dict[str, object]) -> dict[str, int]:
+    out = _load_system_status_cfg()
+    if isinstance(cfg, dict):
+        if "llm_tokens_limit" in cfg:
+            out["llm_tokens_limit"] = max(0, _safe_int(cfg.get("llm_tokens_limit"), 0))
+        if "sms_calls_limit" in cfg:
+            out["sms_calls_limit"] = max(0, _safe_int(cfg.get("sms_calls_limit"), 0))
+    try:
+        write_json(_system_status_cfg_path(), out)
+    except Exception:
+        pass
+    return out
+
+
+def _level_from_ratio(ratio: float) -> tuple[str, int]:
+    r = float(ratio or 0.0)
+    if r >= 1.0:
+        return "critical", 3
+    if r >= 0.9:
+        return "danger", 2
+    if r >= 0.7:
+        return "warn", 1
+    return "ok", 0
+
+
+def _safe_ratio(used: int, limit: int) -> float:
+    try:
+        u = int(used or 0)
+    except Exception:
+        u = 0
+    try:
+        l = int(limit or 0)
+    except Exception:
+        l = 0
+    if u <= 0:
+        return 0.0
+    if l <= 0:
+        return 0.0
+    return float(u) / float(l)
+
+
+def _status_overall_level(items: list[tuple[str, int]]) -> str:
+    """
+    items: list of (level_key, severity_int)
+    """
+    best = ("ok", 0)
+    for k, s in items or []:
+        if int(s) > int(best[1]):
+            best = (str(k), int(s))
+    return str(best[0])
+
+
+def _compute_system_status_range(*, start_day: date, end_day: date) -> dict[str, object]:
+    """
+    Compute daily system status metrics for [start_day, end_day] inclusive (local).
+    """
+    now_local = datetime.now().astimezone()
+    local_tz = now_local.tzinfo
+    today_local = now_local.date()
+
+    sday = start_day if isinstance(start_day, date) else today_local
+    eday = end_day if isinstance(end_day, date) else today_local
+    if eday > today_local:
+        eday = today_local
+    if sday > eday:
+        sday = eday
+
+    start_local_dt = datetime.combine(sday, dt_time.min, tzinfo=local_tz)
+    end_local_dt = datetime.combine(eday, dt_time.max, tzinfo=local_tz)
+    try:
+        tz_offset_seconds = int((now_local.utcoffset() or timedelta(0)).total_seconds())
+    except Exception:
+        tz_offset_seconds = 0
+
+    rows = list_system_status_daily_metrics(
+        tz_offset_seconds=tz_offset_seconds,
+        at_from=start_local_dt.astimezone(timezone.utc),
+        at_to=end_local_dt.astimezone(timezone.utc),
+    )
+    m: dict[str, dict[str, int]] = {}
+    for r in rows or []:
+        k = str(r.get("day") or "")[:10]
+        if not k:
+            continue
+        m[k] = {
+            "exams_new": int(r.get("exams_new") or 0),
+            "invites_new": int(r.get("invites_new") or 0),
+            "candidates_new": int(r.get("candidates_new") or 0),
+            "llm_tokens": int(r.get("llm_tokens") or 0),
+            "sms_calls": int(r.get("sms_calls") or 0),
+        }
+
+    days: list[str] = []
+    items: list[dict[str, int | str]] = []
+    span = max(0, min(180, (eday - sday).days))
+    for i in range(span + 1):
+        d = sday + timedelta(days=i)
+        ds = d.isoformat()
+        days.append(ds)
+        it = m.get(ds) or {}
+        items.append(
+            {
+                "day": ds,
+                "exams_new": int(it.get("exams_new") or 0),
+                "invites_new": int(it.get("invites_new") or 0),
+                "candidates_new": int(it.get("candidates_new") or 0),
+                "llm_tokens": int(it.get("llm_tokens") or 0),
+                "sms_calls": int(it.get("sms_calls") or 0),
+            }
+        )
+
+    return {"days": days, "items": items, "range_start": sday.isoformat(), "range_end": eday.isoformat()}
+
+
+def _compute_system_status_summary() -> dict[str, object]:
+    cfg = _load_system_status_cfg()
+    today = datetime.now().astimezone().date()
+    data = _compute_system_status_range(start_day=today, end_day=today)
+    it0 = (data.get("items") or [{}])[0] if isinstance(data.get("items"), list) else {}
+    used_llm = int(it0.get("llm_tokens") or 0)
+    used_sms = int(it0.get("sms_calls") or 0)
+
+    llm_limit = int(cfg.get("llm_tokens_limit") or 0)
+    sms_limit = int(cfg.get("sms_calls_limit") or 0)
+
+    llm_ratio = _safe_ratio(used_llm, llm_limit)
+    sms_ratio = _safe_ratio(used_sms, sms_limit)
+
+    llm_level, llm_sev = _level_from_ratio(llm_ratio)
+    sms_level, sms_sev = _level_from_ratio(sms_ratio)
+    overall = _status_overall_level([(llm_level, llm_sev), (sms_level, sms_sev)])
+
+    day = str(today.isoformat())
+    for kind, level, used, limit, ratio in (
+        ("llm_tokens", llm_level, used_llm, llm_limit, llm_ratio),
+        ("sms_calls", sms_level, used_sms, sms_limit, sms_ratio),
+    ):
+        if level in {"warn", "danger", "critical"}:
+            try:
+                if not has_system_alert(day=day, kind=kind, level=level):
+                    create_system_log(
+                        actor="system",
+                        event_type="system.alert",
+                        meta={
+                            "day": day,
+                            "kind": kind,
+                            "level": level,
+                            "used": int(used or 0),
+                            "limit": int(limit or 0),
+                            "ratio": float(ratio or 0.0),
+                        },
+                    )
+            except Exception:
+                pass
+
+    return {
+        "day": day,
+        "config": cfg,
+        "overall_level": overall,
+        "llm": {"used": used_llm, "limit": llm_limit, "ratio": llm_ratio, "level": llm_level},
+        "sms": {"used": used_sms, "limit": sms_limit, "ratio": sms_ratio, "level": sms_level},
+    }
 
 
 def _invite_window_state(assignment: dict, *, now: datetime | None = None) -> tuple[str, date | None, date | None]:
@@ -920,6 +1109,18 @@ def create_app() -> Flask:
         return redirect(url_for("admin_login"))     # 没登录就跳转到登录页面，通过这个函数反向推测url路径，可以在修改路由后方便修改页面
 
     # ---------------- Admin ----------------
+    @app.context_processor
+    def _inject_system_status():
+        try:
+            if not session.get("admin_logged_in"):
+                return {}
+        except Exception:
+            return {}
+        try:
+            return {"system_status_summary": _compute_system_status_summary()}
+        except Exception:
+            return {"system_status_summary": {}}
+
     # get是从后端调用数据和页面的
     @app.get("/admin/login")    # 注册一个路由，调用下面函数
     def admin_login():
@@ -941,6 +1142,29 @@ def create_app() -> Flask:
     def admin_logout():     
         session.clear()     # 把session里的所有数据清空
         return redirect(url_for("admin_login"))     # 重新回到登录页面对应的路由
+
+    @app.get("/admin/api/system-status/summary")
+    @admin_required
+    def admin_system_status_summary_api():
+        return jsonify(_compute_system_status_summary())
+
+    @app.get("/admin/api/system-status")
+    @admin_required
+    def admin_system_status_api():
+        today = datetime.now().astimezone().date()
+        start_day = _parse_date_ymd(request.args.get("start") or "") or (today - timedelta(days=29))
+        end_day = _parse_date_ymd(request.args.get("end") or "") or today
+        data = _compute_system_status_range(start_day=start_day, end_day=end_day)
+        return jsonify({"ok": True, "config": _load_system_status_cfg(), "data": data})
+
+    @app.post("/admin/api/system-status/config")
+    @admin_required
+    def admin_system_status_config_api():
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            body = {}
+        cfg = _save_system_status_cfg(body)
+        return jsonify({"ok": True, "config": cfg, "summary": _compute_system_status_summary()})
 
     @app.get("/admin")     # 进入到登录主页面
     @admin_required     # session.get("admin_logged_in")只有管理员登录后才能查看这个页面
@@ -1138,7 +1362,7 @@ def create_app() -> Flask:
         try:
             log_counts = count_operation_logs_by_category()
         except Exception:
-            log_counts = {"candidate": 0, "exam": 0, "grading": 0, "assignment": 0}
+            log_counts = {"candidate": 0, "exam": 0, "grading": 0, "assignment": 0, "system": 0}
 
         try:
             total_logs = int(count_operation_logs() or 0)
@@ -1222,6 +1446,8 @@ def create_app() -> Flask:
                 return "candidate", "候选者操作"
             if et in {"assignment.create", "exam.enter", "exam.finish"}:
                 return "assignment", "答题邀约"
+            if et == "system.alert" or et.startswith("sms."):
+                return "system", "系统"
             if et == "exam.grade":
                 return "grading", "判卷操作"
             if et.startswith("exam."):
@@ -1252,12 +1478,17 @@ def create_app() -> Flask:
             if et.startswith("candidate."):
                 op = et.split(".", 1)[1] if "." in et else et
                 if op == "read":
-                    return f"查看候选人 {who}".strip()
+                    n2 = str(meta.get("name") or "").strip()
+                    p2 = _normalize_phone(str(meta.get("phone") or "").strip())
+                    who2 = " ".join([x for x in [n2, p2] if x]) or who
+                    return f"查看候选人 {who2}".strip()
                 if op == "create":
                     n2 = str(meta.get("name") or "").strip()
                     p2 = _normalize_phone(str(meta.get("phone") or "").strip())
                     who2 = " ".join([x for x in [n2, p2] if x]) or who
                     return f"新增候选人 {who2}".strip()
+                if op == "list":
+                    return "查看候选人列表"
                 if op == "update":
                     field = str(meta.get("field") or "").strip()
                     fp = f"（{field}）" if field else ""
@@ -1286,6 +1517,34 @@ def create_app() -> Flask:
                     score_part = f"（得分 {str(score).strip()}）" if score is not None else ""
                 return f"判卷完成 {who2} → 试卷 {ek}{score_part}".strip()
 
+            if et == "sms.send":
+                tail = str(meta.get("phone_tail") or "").strip()
+                ok = meta.get("ok")
+                ok_text = "成功" if ok is True else ("失败" if ok is False else "完成")
+                err = str(meta.get("error") or "").strip()
+                err_part = f"（{err}）" if err else ""
+                tail_part = f"（尾号 {tail}）" if tail else ""
+                return f"短信验证码发送{tail_part}：{ok_text}{err_part}".strip()
+
+            if et == "system.alert":
+                kind = str(meta.get("kind") or "").strip() or "unknown"
+                level = str(meta.get("level") or "").strip() or "warn"
+                used = meta.get("used")
+                limit = meta.get("limit")
+                ratio = meta.get("ratio")
+                try:
+                    pct = f"{round(float(ratio) * 100):d}%"
+                except Exception:
+                    pct = ""
+                used_part = ""
+                try:
+                    if used is not None and limit is not None:
+                        used_part = f"（{int(used)}/{int(limit)}）"
+                except Exception:
+                    used_part = ""
+                pct_part = f" {pct}" if pct else ""
+                return f"系统告警：{kind} {level}{pct_part}{used_part}".strip()
+
             if et.startswith("exam."):
                 op = et.split(".", 1)[1] if "." in et else et
                 if op == "read":
@@ -1300,12 +1559,148 @@ def create_app() -> Flask:
 
             return et
 
+        def _type_label_v2(et: str) -> tuple[str, str]:
+            et = str(et or "").strip()
+            if et.startswith("candidate."):
+                return "candidate", "候选人操作"
+            if et in {"assignment.create", "assignment.verify", "exam.enter", "exam.finish"}:
+                return "assignment", "答题邀约操作"
+            if et == "exam.grade":
+                return "grading", "判卷操作"
+            if et == "system.alert" or et.startswith("sms."):
+                return "system", "系统"
+            if et.startswith("exam."):
+                return "exam", "试卷操作"
+            return "system", "系统"
+
+        def _safe_int2(v: Any) -> int | None:
+            if v is None or v == "":
+                return None
+            try:
+                return int(v)
+            except Exception:
+                return None
+
+        def _join_plus2(*parts: str) -> str:
+            items = [str(x or "").strip() for x in parts]
+            items = [x for x in items if x]
+            return "+".join(items)
+
+        def _pick_name_phone2(it: dict[str, Any], meta: dict[str, Any]) -> tuple[str, str]:
+            n = str(meta.get("name") or it.get("candidate_name") or "").strip()
+            p = _normalize_phone(str(meta.get("phone") or it.get("candidate_phone") or "").strip())
+            return n, p
+
+        def _exam_id_text2(meta: dict[str, Any], exam_key: str) -> str:
+            # User requirement: "试卷id" means exam_key (not sort-id).
+            return str(exam_key or "").strip() or "未知试卷"
+
+        def _detail_text_v2(it: dict[str, Any]) -> str:
+            et = str(it.get("event_type") or "").strip()
+            meta = it.get("meta") if isinstance(it.get("meta"), dict) else {}
+            exam_key = str(it.get("exam_key") or "").strip()
+            exam_id = _exam_id_text2(meta, exam_key)
+            name, phone = _pick_name_phone2(it, meta)
+            who_plus = _join_plus2(name, phone, exam_id)
+            public_invite = bool(meta.get("public_invite"))
+
+            if et.startswith("candidate."):
+                op = et.split(".", 1)[1] if "." in et else et
+                if op == "read":
+                    return f"查看{name or '候选人'}详细信息".strip()
+                if op == "create":
+                    return f"新增{_join_plus2(name, phone)}".strip("+")
+                if op == "delete":
+                    return f"删除{_join_plus2(name, phone)}".strip("+")
+                if op in {"resume.parse", "resume_parse"}:
+                    try:
+                        tt = int(it.get("llm_total_tokens") or 0)
+                    except Exception:
+                        tt = 0
+                    try:
+                        is_reparse = bool(meta.get("reparse"))
+                    except Exception:
+                        is_reparse = False
+                    if is_reparse:
+                        return f"重新上传解析简历，花费token量：{tt}" if tt > 0 else "重新上传解析简历"
+                    return f"解析简历消耗token量：{tt}" if tt > 0 else "解析简历消耗token量"
+                return f"候选人操作{op}".strip()
+
+            if et == "assignment.verify":
+                try:
+                    sms_cnt = int(meta.get("sms_send_count") or 0)
+                except Exception:
+                    sms_cnt = 0
+                prefix = "公开邀约+" if public_invite else ""
+                return f"{prefix}{who_plus}，消耗短信认证{sms_cnt}次".strip()
+
+            if et == "exam.enter":
+                prefix = "公开邀约" if public_invite else ""
+                return f"{prefix}进入答题{who_plus}".strip()
+
+            if et == "exam.finish":
+                prefix = "公开邀约" if public_invite else ""
+                return f"{prefix}提交答题{who_plus}".strip()
+
+            if et == "exam.grade":
+                score = meta.get("score")
+                try:
+                    s2 = int(score or 0)
+                except Exception:
+                    s2 = _safe_int2(score) or 0
+                try:
+                    tt = int(it.get("llm_total_tokens") or 0)
+                except Exception:
+                    tt = 0
+                tok_part = f"，消耗token量：{tt}" if tt > 0 else ""
+                return f"判卷完成{_join_plus2(name, phone, exam_id)}（得分：{s2}）{tok_part}".strip()
+
+            if et == "system.alert":
+                kind = str(meta.get("kind") or "").strip() or "unknown"
+                kind_label = kind
+                if kind == "sms_calls":
+                    kind_label = "短信认证"
+                elif kind == "llm_tokens":
+                    kind_label = "大模型token"
+                level = str(meta.get("level") or "").strip() or "warn"
+                used_i = _safe_int2(meta.get("used")) or 0
+                limit_i = _safe_int2(meta.get("limit")) or 0
+                try:
+                    pct_i = int(round(float(meta.get("ratio") or 0.0) * 100))
+                except Exception:
+                    pct_i = 0
+                used_part = f" ({used_i}/{limit_i})" if limit_i > 0 else ""
+                return f"系统告警： {kind_label}达到阈值 {level} {pct_i}%{used_part}".strip()
+
+            if et.startswith("exam."):
+                op = et.split(".", 1)[1] if "." in et else et
+                if op == "read":
+                    return f"查看试卷{exam_id}".strip()
+                if op == "result":
+                    return f"查看{_join_plus2(name, phone, exam_id)}的结果".strip("+")
+                if op == "upload":
+                    return f"上传试卷{exam_id}".strip()
+                if op == "update":
+                    return f"修改试卷{exam_id}".strip()
+                if op == "delete":
+                    return f"删除试卷{exam_id}".strip()
+                if op == "public_invite.enable":
+                    return f"试卷{exam_id}打开公开邀约".strip()
+                if op == "public_invite.disable":
+                    return f"试卷{exam_id}关闭公开邀约".strip()
+                return f"试卷操作{op}({exam_id})".strip()
+
+            if et == "assignment.create":
+                return f"答题邀约{_join_plus2(name, phone, exam_id)}".strip("+")
+
+            return et
+
         for it in ops:
             et = str(it.get("event_type") or "").strip()
-            k, label = _type_label(et)
+            k, label = _type_label_v2(et)
             it["type_key"] = k
             it["type_label"] = label
-            it["detail_text"] = _detail_text(it)
+            it["detail_text"] = _detail_text_v2(it)
 
         return render_template(
             "admin_dashboard.html",
@@ -1462,6 +1857,10 @@ def create_app() -> Flask:
                 flash(f"解析失败：{e}（line={e.line}）")
                 return redirect(url_for("admin_dashboard"))
             flash(f"上传并解析成功：{exam_key}")
+            try:
+                log_event("exam.upload", actor="admin", exam_key=str(exam_key or "").strip(), meta={"filename": md_name})
+            except Exception:
+                pass
             sort_id = _sort_id_from_exam_key(exam_key)
             if sort_id:
                 return redirect(url_for("admin_exam_detail_by_sort_id", exam_id=sort_id))
@@ -1475,6 +1874,10 @@ def create_app() -> Flask:
             flash(f"解析失败：{e}（line={e.line}）")
             return redirect(url_for("admin_dashboard"))
         flash(f"上传并解析成功：{exam_key}")
+        try:
+            log_event("exam.upload", actor="admin", exam_key=str(exam_key or "").strip(), meta={"filename": str(file.filename or "")})
+        except Exception:
+            pass
         sort_id = _sort_id_from_exam_key(exam_key)
         if sort_id:
             return redirect(url_for("admin_exam_detail_by_sort_id", exam_id=sort_id))
@@ -1487,6 +1890,10 @@ def create_app() -> Flask:
         sort_id = _sort_id_from_exam_key(exam_key)
         if sort_id:
             return redirect(url_for("admin_exam_detail_by_sort_id", exam_id=sort_id))
+        try:
+            log_event("exam.read", actor="admin", exam_key=str(exam_key or "").strip(), meta={"path": request.path})
+        except Exception:
+            pass
         spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
         if not spec_path.exists():
             abort(404)
@@ -1538,6 +1945,10 @@ def create_app() -> Flask:
         exam_key = _exam_key_from_sort_id(exam_id)
         if not exam_key:
             abort(404)
+        try:
+            log_event("exam.read", actor="admin", exam_key=str(exam_key or "").strip(), meta={"path": request.path})
+        except Exception:
+            pass
         spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
         if not spec_path.exists():
             abort(404)
@@ -1617,9 +2028,17 @@ def create_app() -> Flask:
             flash(f"保存失败：{e}")
             return redirect(url_for("admin_exam_edit_by_sort_id", exam_id=int(exam_id)))
         flash("已保存并重新解析")
+        try:
+            log_event("exam.update", actor="admin", exam_key=str(new_exam_key or "").strip(), meta={"from_exam_key": str(exam_key or "").strip()})
+        except Exception:
+            pass
         new_sort_id = _sort_id_from_exam_key(new_exam_key)
         if new_sort_id:
             return redirect(url_for("admin_exam_detail_by_sort_id", exam_id=int(new_sort_id)))
+        try:
+            log_event("exam.update", actor="admin", exam_key=str(new_exam_key or "").strip(), meta={"from_exam_key": str(exam_key or "").strip()})
+        except Exception:
+            pass
         return redirect(url_for("admin_exam_detail", exam_key=new_exam_key))
 
     @app.get("/admin/exams/<int:exam_id>/paper")
@@ -1628,6 +2047,10 @@ def create_app() -> Flask:
         exam_key = _exam_key_from_sort_id(exam_id)
         if not exam_key:
             abort(404)
+        try:
+            log_event("exam.read", actor="admin", exam_key=str(exam_key or "").strip(), meta={"path": request.path, "view": "paper"})
+        except Exception:
+            pass
         public_path = STORAGE_DIR / "exams" / exam_key / "public.json"
         spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
         if not public_path.exists() or not spec_path.exists():
@@ -1716,6 +2139,10 @@ def create_app() -> Flask:
         sort_id = _sort_id_from_exam_key(exam_key)
         if sort_id:
             return redirect(url_for("admin_exam_paper_by_sort_id", exam_id=sort_id))
+        try:
+            log_event("exam.read", actor="admin", exam_key=str(exam_key or "").strip(), meta={"path": request.path, "view": "paper"})
+        except Exception:
+            pass
         public_path = STORAGE_DIR / "exams" / exam_key / "public.json"
         spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
         if not public_path.exists() or not spec_path.exists():
@@ -1765,6 +2192,10 @@ def create_app() -> Flask:
             return redirect(url_for("admin_exam_detail", exam_key=exam_key))
 
         # Success: keep UI quiet (no flash), user can see result from list refresh.
+        try:
+            log_event("exam.delete", actor="admin", exam_key=str(exam_key or "").strip(), meta={"affected": int(affected or 0)})
+        except Exception:
+            pass
         return redirect(url_for("admin_dashboard") + "#tab-exams")
 
     @app.post("/admin/exams/<exam_key>/public-invite")
@@ -1792,6 +2223,15 @@ def create_app() -> Flask:
 
         cfg = set_public_invite_enabled(ek, enabled)
         public_token = str(cfg.get("token") or "").strip()
+        try:
+            log_event(
+                "exam.public_invite.enable" if enabled else "exam.public_invite.disable",
+                actor="admin",
+                exam_key=str(ek or "").strip(),
+                meta={"public_token": public_token},
+            )
+        except Exception:
+            pass
         base_url = request.url_root.rstrip("/")
         public_url = f"{base_url}/p/{public_token}" if public_token else ""
         qr_url = url_for("public_invite_qr", public_token=public_token) if public_token else ""
@@ -1870,6 +2310,20 @@ def create_app() -> Flask:
         c = get_candidate(candidate_id)
         if not c:
             abort(404)
+
+        try:
+            log_event(
+                "candidate.read",
+                actor="admin",
+                candidate_id=int(candidate_id),
+                meta={
+                    "path": request.path,
+                    "name": str(c.get("name") or "").strip(),
+                    "phone": str(c.get("phone") or "").strip(),
+                },
+            )
+        except Exception:
+            pass
 
         parsed = c.get("resume_parsed") or {}
         if not isinstance(parsed, dict):
@@ -2299,6 +2753,7 @@ def create_app() -> Flask:
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
         mime = str(getattr(file, "mimetype", "") or "")
+        resume_llm_total_tokens = 0
 
         # Keep behavior aligned with /admin/candidates/resume/upload:
         # - Parse identity from resume, but DO NOT change candidate phone.
@@ -2323,27 +2778,43 @@ def create_app() -> Flask:
         # If phone is missing/invalid, fallback to LLM (blocking), same as upload.
         if not _is_valid_phone(parsed_phone):
             try:
-                ident = parse_resume_identity_llm(text or "") or {}
-                parsed_name = str(ident.get("name") or "").strip()
-                parsed_phone = _normalize_phone(str(ident.get("phone") or "").strip())
-                conf2 = ident.get("confidence") or {}
-                phone_conf = _safe_int((conf2.get("phone") if isinstance(conf2, dict) else 0) or 0, 0)
-                name_conf = _safe_int((conf2.get("name") if isinstance(conf2, dict) else 0) or 0, 0)
-                method["identity"] = "llm"
-                method["name"] = "llm"
+                with audit_context(meta={}):
+                    ident = parse_resume_identity_llm(text or "") or {}
+                    parsed_name = str(ident.get("name") or "").strip()
+                    parsed_phone = _normalize_phone(str(ident.get("phone") or "").strip())
+                    conf2 = ident.get("confidence") or {}
+                    phone_conf = _safe_int((conf2.get("phone") if isinstance(conf2, dict) else 0) or 0, 0)
+                    name_conf = _safe_int((conf2.get("name") if isinstance(conf2, dict) else 0) or 0, 0)
+                    method["identity"] = "llm"
+                    method["name"] = "llm"
+                    try:
+                        ctx = get_audit_context()
+                        m = ctx.get("meta")
+                        if isinstance(m, dict):
+                            resume_llm_total_tokens += int(m.get("llm_total_tokens_sum") or 0)
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
         # If we have phone but name is missing, do a small LLM call to fill name.
         if _is_valid_phone(parsed_phone) and not _is_valid_name(parsed_name):
             try:
-                nm = parse_resume_name_llm(text or "") or {}
-                n2 = str(nm.get("name") or "").strip()
-                n2_conf = _safe_int(nm.get("confidence") or 0, 0)
-                if _is_valid_name(n2):
-                    parsed_name = n2
-                    name_conf = max(_safe_int(name_conf, 0), _safe_int(n2_conf, 0))
-                    method["name"] = "llm"
+                with audit_context(meta={}):
+                    nm = parse_resume_name_llm(text or "") or {}
+                    n2 = str(nm.get("name") or "").strip()
+                    n2_conf = _safe_int(nm.get("confidence") or 0, 0)
+                    if _is_valid_name(n2):
+                        parsed_name = n2
+                        name_conf = max(_safe_int(name_conf, 0), _safe_int(n2_conf, 0))
+                        method["name"] = "llm"
+                    try:
+                        ctx = get_audit_context()
+                        m = ctx.get("meta")
+                        if isinstance(m, dict):
+                            resume_llm_total_tokens += int(m.get("llm_total_tokens_sum") or 0)
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
@@ -2371,9 +2842,17 @@ def create_app() -> Flask:
         details: dict[str, Any] = {}
         details_error = ""
         try:
-            parsed_details = parse_resume_details_llm(text or "")
-            if isinstance(parsed_details, dict):
-                details = parsed_details
+            with audit_context(meta={}):
+                parsed_details = parse_resume_details_llm(text or "")
+                if isinstance(parsed_details, dict):
+                    details = parsed_details
+                try:
+                    ctx = get_audit_context()
+                    m = ctx.get("meta")
+                    if isinstance(m, dict):
+                        resume_llm_total_tokens += int(m.get("llm_total_tokens_sum") or 0)
+                except Exception:
+                    pass
         except Exception as e:
             logger.exception("Resume details parse failed (cid=%s)", candidate_id)
             details_error = f"{type(e).__name__}: {e}"
@@ -2418,6 +2897,16 @@ def create_app() -> Flask:
             flash("重新解析失败（数据库写入失败）")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
+        try:
+            log_event(
+                "candidate.resume.parse",
+                actor="admin",
+                candidate_id=int(candidate_id),
+                llm_total_tokens=(int(resume_llm_total_tokens or 0) or None),
+                meta={"reparse": True},
+            )
+        except Exception:
+            pass
         flash("重新上传成功")
         return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
@@ -2444,6 +2933,10 @@ def create_app() -> Flask:
 
         try:
             cid = create_candidate(name=name, phone=phone)
+            try:
+                log_event("candidate.create", actor="admin", candidate_id=int(cid), meta={"name": name, "phone": phone})
+            except Exception:
+                pass
         except Exception:
             flash("手机号已存在或写入失败")
             return redirect(url_for("admin_candidates"))
@@ -2523,7 +3016,16 @@ def create_app() -> Flask:
             name_conf = max(0, min(100, _safe_int(name_conf, 0)))
             return parsed_name, phone, name_conf, phone_conf, method
 
-        parsed_name, phone, name_conf, phone_conf, method = _parse_identity(text or "")
+        resume_llm_total_tokens = 0
+        with audit_context(meta={}):
+            parsed_name, phone, name_conf, phone_conf, method = _parse_identity(text or "")
+            try:
+                ctx = get_audit_context()
+                m = ctx.get("meta")
+                if isinstance(m, dict):
+                    resume_llm_total_tokens += int(m.get("llm_total_tokens_sum") or 0)
+            except Exception:
+                pass
 
         if not _is_valid_phone(phone):
             flash("未识别到有效手机号，无法入库（请检查简历内容或换可复制文本）")
@@ -2573,9 +3075,17 @@ def create_app() -> Flask:
         details: dict[str, Any] = {}
         details_error = ""
         try:
-            parsed_details = parse_resume_details_llm(text or "")
-            if isinstance(parsed_details, dict):
-                details = parsed_details
+            with audit_context(meta={}):
+                parsed_details = parse_resume_details_llm(text or "")
+                if isinstance(parsed_details, dict):
+                    details = parsed_details
+                try:
+                    ctx = get_audit_context()
+                    m = ctx.get("meta")
+                    if isinstance(m, dict):
+                        resume_llm_total_tokens += int(m.get("llm_total_tokens_sum") or 0)
+                except Exception:
+                    pass
         except Exception as e:
             logger.exception("Resume details parse failed (cid=%s)", cid)
             details_error = f"{type(e).__name__}: {e}"
@@ -2610,6 +3120,21 @@ def create_app() -> Flask:
             logger.exception("Update candidate resume failed (cid=%s)", cid)
             flash("简历保存失败（数据库写入失败）")
             return redirect(url_for("admin_candidates"))
+
+        try:
+            log_event(
+                "candidate.resume.parse",
+                actor="admin",
+                candidate_id=int(cid),
+                llm_total_tokens=(int(resume_llm_total_tokens or 0) or None),
+            )
+        except Exception:
+            pass
+        if created:
+            try:
+                log_event("candidate.create", actor="admin", candidate_id=int(cid), meta={"name": name, "phone": phone})
+            except Exception:
+                pass
 
         msg = "简历上传成功，候选人已创建" if created else "简历上传成功，已更新候选人简历"
         if name == "未知":
@@ -2646,6 +3171,19 @@ def create_app() -> Flask:
             return redirect(url_for("admin_candidates"))
         try:
             archive = _augment_archive_with_spec(archive)
+        except Exception:
+            pass
+        try:
+            ek = str(((archive or {}).get("exam") or {}).get("exam_key") or "").strip()
+            tok = str((archive or {}).get("token") or "").strip()
+            log_event(
+                "exam.result",
+                actor="admin",
+                candidate_id=int(candidate_id),
+                exam_key=(ek or None),
+                token=(tok or None),
+                meta={"name": str(c.get("name") or "").strip(), "phone": str(c.get("phone") or "").strip()},
+            )
         except Exception:
             pass
         return render_template("admin_candidate_attempt.html", archive=archive)
@@ -2689,6 +3227,19 @@ def create_app() -> Flask:
             archive = _augment_archive_with_spec(archive)
         except Exception:
             pass
+        try:
+            ek = str(((archive or {}).get("exam") or {}).get("exam_key") or "").strip()
+            tok = str((archive or {}).get("token") or "").strip()
+            log_event(
+                "exam.result",
+                actor="admin",
+                candidate_id=int(candidate_id),
+                exam_key=(ek or None),
+                token=(tok or None),
+                meta={"name": str(c.get("name") or "").strip(), "phone": str(c.get("phone") or "").strip()},
+            )
+        except Exception:
+            pass
         return render_template("admin_candidate_attempt.html", archive=archive)
 
     # 修改候选人信息
@@ -2708,6 +3259,15 @@ def create_app() -> Flask:
             return redirect(url_for("admin_candidates"))
         try:
             delete_candidate(candidate_id)
+            try:
+                log_event(
+                    "candidate.delete",
+                    actor="admin",
+                    candidate_id=int(candidate_id),
+                    meta={"name": str(c.get("name") or "").strip(), "phone": str(c.get("phone") or "").strip()},
+                )
+            except Exception:
+                pass
         except Exception:
             flash("删除失败")
             return redirect(url_for("admin_candidates"))
@@ -2796,6 +3356,17 @@ def create_app() -> Flask:
             )
         except Exception:
             logger.exception("Create exam_paper failed (candidate_id=%s, exam_key=%s)", candidate_id, exam_key)
+        try:
+            log_event(
+                "assignment.create",
+                actor="admin",
+                candidate_id=int(candidate_id),
+                exam_key=str(exam_key or "").strip(),
+                token=str(result.get("token") or "").strip() or None,
+                meta={"invite_start_date": (sd.isoformat() if sd else None), "invite_end_date": (ed.isoformat() if ed else None)},
+            )
+        except Exception:
+            pass
         return render_template(
             "admin_assignment_created.html",
             exam_key=exam_key,
@@ -2818,6 +3389,32 @@ def create_app() -> Flask:
     @admin_required
     def admin_result(token: str):
         assignment = load_assignment(token)
+        try:
+            cid = int((assignment or {}).get("candidate_id") or 0)
+        except Exception:
+            cid = 0
+        try:
+            ek = str((assignment or {}).get("exam_key") or "").strip()
+        except Exception:
+            ek = ""
+        meta: dict[str, Any] | None = None
+        if cid > 0:
+            try:
+                c = get_candidate(cid) or {}
+                meta = {"name": str(c.get("name") or "").strip(), "phone": str(c.get("phone") or "").strip()}
+            except Exception:
+                meta = None
+        try:
+            log_event(
+                "exam.result",
+                actor="admin",
+                candidate_id=(cid if cid > 0 else None),
+                exam_key=(ek or None),
+                token=(str(token or "").strip() or None),
+                meta=meta,
+            )
+        except Exception:
+            pass
         return render_template("admin_result.html", assignment=assignment)
 
     @app.get("/admin/attempt/<token>")
@@ -2844,8 +3441,60 @@ def create_app() -> Flask:
                     archive = _augment_archive_with_spec(archive)
                 except Exception:
                     pass
+                try:
+                    ek = str(((archive or {}).get("exam") or {}).get("exam_key") or "").strip()
+                except Exception:
+                    ek = ""
+                try:
+                    cid = int(((archive or {}).get("candidate") or {}).get("id") or 0)
+                except Exception:
+                    cid = 0
+                meta: dict[str, Any] | None = None
+                if cid > 0:
+                    try:
+                        c = get_candidate(cid) or {}
+                        meta = {"name": str(c.get("name") or "").strip(), "phone": str(c.get("phone") or "").strip()}
+                    except Exception:
+                        meta = None
+                try:
+                    log_event(
+                        "exam.result",
+                        actor="admin",
+                        candidate_id=(cid if cid > 0 else None),
+                        exam_key=(ek or None),
+                        token=(str(token or "").strip() or None),
+                        meta=meta,
+                    )
+                except Exception:
+                    pass
                 return render_template("admin_candidate_attempt.html", archive=archive)
 
+        try:
+            cid = int((assignment or {}).get("candidate_id") or 0)
+        except Exception:
+            cid = 0
+        try:
+            ek = str((assignment or {}).get("exam_key") or "").strip()
+        except Exception:
+            ek = ""
+        meta: dict[str, Any] | None = None
+        if cid > 0:
+            try:
+                c = get_candidate(cid) or {}
+                meta = {"name": str(c.get("name") or "").strip(), "phone": str(c.get("phone") or "").strip()}
+            except Exception:
+                meta = None
+        try:
+            log_event(
+                "exam.result",
+                actor="admin",
+                candidate_id=(cid if cid > 0 else None),
+                exam_key=(ek or None),
+                token=(str(token or "").strip() or None),
+                meta=meta,
+            )
+        except Exception:
+            pass
         return render_template("admin_result.html", assignment=assignment)
 
     # ---------------- Candidate ----------------
@@ -3107,6 +3756,10 @@ def create_app() -> Flask:
         name = (request.form.get("name") or "").strip()
         phone = _normalize_phone(request.form.get("phone") or "")
         sms_code = (request.form.get("sms_code") or "").strip()
+        log_candidate_id = 0
+        log_exam_key = ""
+        log_public_invite = False
+        log_sms_send_count = 0
         if not _is_valid_name(name) or not _is_valid_phone(phone):
             if wants_json:
                 return jsonify({"ok": False, "error": "姓名或手机号格式不正确。"}), 400
@@ -3270,9 +3923,37 @@ def create_app() -> Flask:
                     verify["locked"] = True
 
             assignment["verify"] = verify
+            if ok:
+                try:
+                    log_candidate_id = int(candidate_id or 0)
+                except Exception:
+                    log_candidate_id = 0
+                log_exam_key = str(assignment.get("exam_key") or "").strip()
+                log_public_invite = bool(assignment.get("public_invite"))
+                try:
+                    sms = assignment.get("sms_verify") or {}
+                    log_sms_send_count = int((sms.get("send_count") or 0) if isinstance(sms, dict) else 0)
+                except Exception:
+                    log_sms_send_count = 0
             save_assignment(token, assignment)
 
         if ok:
+            try:
+                log_event(
+                    "assignment.verify",
+                    actor="candidate",
+                    candidate_id=(int(log_candidate_id) if int(log_candidate_id or 0) > 0 else None),
+                    exam_key=(log_exam_key or None),
+                    token=(token or None),
+                    meta={
+                        "name": name,
+                        "phone": phone,
+                        "public_invite": bool(log_public_invite),
+                        "sms_send_count": int(log_sms_send_count or 0),
+                    },
+                )
+            except Exception:
+                pass
             if wants_json:
                 return jsonify({"ok": True, "redirect": url_for("public_exam_page", token=token)})
             return redirect(url_for("public_exam_page", token=token))
@@ -3341,6 +4022,22 @@ def create_app() -> Flask:
                 timing["start_at"] = now.isoformat()
                 try:
                     set_exam_paper_entered_at(token, now)
+                except Exception:
+                    pass
+                try:
+                    ek2 = str(assignment.get("exam_key") or "").strip()
+                    log_event(
+                        "exam.enter",
+                        actor="candidate",
+                        candidate_id=int(candidate_id),
+                        exam_key=(ek2 or None),
+                        token=(token or None),
+                        meta={
+                            "name": str(c.get("name") or "").strip(),
+                            "phone": str(c.get("phone") or "").strip(),
+                            "public_invite": bool(assignment.get("public_invite")),
+                        },
+                    )
                 except Exception:
                     pass
             # Transition status to "in_exam" once the candidate enters the exam page.
@@ -3679,6 +4376,47 @@ def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) 
     except Exception:
         logger.exception("Update exam_paper grading state failed (token=%s)", token)
 
+    try:
+        cid2 = int(assignment.get("candidate_id") or 0)
+    except Exception:
+        cid2 = 0
+    try:
+        ek2 = str(assignment.get("exam_key") or "").strip()
+    except Exception:
+        ek2 = ""
+    name2 = ""
+    phone2 = ""
+    if cid2 > 0:
+        try:
+            c2 = get_candidate(cid2) or {}
+            name2 = str(c2.get("name") or "").strip()
+            phone2 = str(c2.get("phone") or "").strip()
+        except Exception:
+            name2 = ""
+            phone2 = ""
+    if not phone2:
+        try:
+            sms2 = assignment.get("sms_verify") or {}
+            if isinstance(sms2, dict):
+                phone2 = str(sms2.get("phone") or "").strip()
+        except Exception:
+            pass
+    try:
+        log_event(
+            "exam.finish",
+            actor="candidate",
+            candidate_id=(cid2 if cid2 > 0 else None),
+            exam_key=(ek2 or None),
+            token=(str(token or "").strip() or None),
+            meta={
+                "name": name2,
+                "phone": phone2,
+                "public_invite": bool(assignment.get("public_invite")),
+            },
+        )
+    except Exception:
+        pass
+
 
 def _parse_iso_dt(value: str | None) -> datetime | None:
     if not value:
@@ -3735,12 +4473,21 @@ def _grade_assignment_background(token: str) -> None:
         save_assignment(token, assignment)
         snapshot = dict(assignment)
 
+    grading_llm_total_tokens = 0
     try:
         spec = read_json(STORAGE_DIR / "exams" / snapshot["exam_key"] / "spec.json")
-        grading = grade_attempt(spec, snapshot)
-        if isinstance(grading, dict):
-            grading["status"] = "done"
-        remark = generate_candidate_remark(spec, snapshot, grading) if grading else ""
+        with audit_context(meta={}):
+            grading = grade_attempt(spec, snapshot)
+            if isinstance(grading, dict):
+                grading["status"] = "done"
+            remark = generate_candidate_remark(spec, snapshot, grading) if grading else ""
+            try:
+                ctx = get_audit_context()
+                m = ctx.get("meta")
+                if isinstance(m, dict):
+                    grading_llm_total_tokens = int(m.get("llm_total_tokens_sum") or 0)
+            except Exception:
+                grading_llm_total_tokens = 0
     except Exception as e:
         logger.exception("Background grading failed (token=%s)", token)
         with assignment_locked(token):
@@ -3781,6 +4528,30 @@ def _grade_assignment_background(token: str) -> None:
         )
     except Exception:
         logger.exception("Update exam_paper graded result failed (token=%s)", token)
+    try:
+        cid2 = int((assignment or {}).get("candidate_id") or 0)
+    except Exception:
+        cid2 = 0
+    try:
+        ek2 = str((assignment or {}).get("exam_key") or "").strip()
+    except Exception:
+        ek2 = ""
+    try:
+        score2 = int((grading or {}).get("total") or 0)
+    except Exception:
+        score2 = 0
+    try:
+        log_event(
+            "exam.grade",
+            actor="system",
+            candidate_id=(cid2 if cid2 > 0 else None),
+            exam_key=(ek2 or None),
+            token=(str(token or "").strip() or None),
+            llm_total_tokens=(int(grading_llm_total_tokens or 0) or None),
+            meta={"score": score2, "public_invite": bool((assignment or {}).get("public_invite"))},
+        )
+    except Exception:
+        pass
     try:
         _archive_candidate_attempt(assignment, spec=spec)
     except Exception:

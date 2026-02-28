@@ -1000,7 +1000,7 @@ def _system_log_where_clause(
             "("
             f"{a}event_type LIKE 'candidate.%%' OR "
             f"{a}event_type IN ('exam.upload','exam.update','exam.delete','exam.read',"
-            f"'assignment.create','exam.enter','exam.finish') OR "
+            f"'assignment.create','assignment.verify','exam.enter','exam.finish') OR "
             f"({a}event_type='llm.usage' AND ({llm_linked}))"
             ")"
         )
@@ -1118,17 +1118,20 @@ def count_operation_logs() -> int:
     Operations shown in UI:
       - candidate.* (CRUD and related admin actions)
       - exam.* (CRUD + public invite toggle)
-      - assignment timeline: assignment.create / exam.enter / exam.finish
+      - assignment timeline: assignment.create / assignment.verify / exam.enter / exam.finish
+      - system: sms.send / system.alert
     """
     sql = """
  SELECT COUNT(*)
  FROM system_log sl
  WHERE (
-    sl.event_type LIKE 'candidate.%%' OR
-    sl.event_type LIKE 'exam.%%' OR
-    sl.event_type IN ('assignment.create','exam.enter','exam.finish')
-  ) AND sl.event_type <> 'llm.usage'
-  """
+     sl.event_type LIKE 'candidate.%%' OR
+     sl.event_type LIKE 'exam.%%' OR
+     sl.event_type = 'sms.send' OR
+     sl.event_type = 'system.alert' OR
+     sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
+   ) AND sl.event_type <> 'llm.usage'
+   """
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql)
@@ -1160,7 +1163,9 @@ def list_operation_logs(*, limit: int = 50, offset: int = 0) -> list[dict[str, A
   WHERE (
     sl.event_type LIKE 'candidate.%%' OR
     sl.event_type LIKE 'exam.%%' OR
-    sl.event_type IN ('assignment.create','exam.enter','exam.finish')
+    sl.event_type = 'sms.send' OR
+    sl.event_type = 'system.alert' OR
+    sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
   ) AND sl.event_type <> 'llm.usage'
   ORDER BY sl.id DESC
   LIMIT %s
@@ -1188,11 +1193,13 @@ def list_operation_daily_counts(
     sql = """
  SELECT (((sl.at AT TIME ZONE 'UTC') + (%s * INTERVAL '1 second'))::date) AS day, COUNT(*) AS cnt
  FROM system_log sl
- WHERE (
-   sl.event_type LIKE 'candidate.%%' OR
-   sl.event_type LIKE 'exam.%%' OR
-   sl.event_type IN ('assignment.create','exam.enter','exam.finish')
-  ) AND sl.event_type <> 'llm.usage'
+  WHERE (
+    sl.event_type LIKE 'candidate.%%' OR
+    sl.event_type LIKE 'exam.%%' OR
+    sl.event_type = 'sms.send' OR
+    sl.event_type = 'system.alert' OR
+    sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
+   ) AND sl.event_type <> 'llm.usage'
   """
     params: list[Any] = [int(tz_offset_seconds or 0)]
     if at_from is not None:
@@ -1208,34 +1215,104 @@ def list_operation_daily_counts(
             return [dict(r) for r in cur.fetchall()]
 
 
+def list_system_status_daily_metrics(
+    *,
+    tz_offset_seconds: int,
+    at_from: datetime | None = None,
+    at_to: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Aggregate "system status" metrics by day (local day buckets using a numeric UTC offset in seconds).
+
+    Metrics:
+      - exams_new: exam.upload count
+      - invites_new: assignment.create count
+      - candidates_new: candidate.create count
+      - llm_tokens: SUM(llm_total_tokens) across rows (best-effort)
+      - sms_calls: sms.send count (SMS auth cost)
+    """
+    sql = """
+ SELECT
+   (((sl.at AT TIME ZONE 'UTC') + (%s * INTERVAL '1 second'))::date) AS day,
+   SUM(CASE WHEN sl.event_type = 'exam.upload' THEN 1 ELSE 0 END) AS exams_new,
+   SUM(CASE WHEN sl.event_type = 'assignment.create' THEN 1 ELSE 0 END) AS invites_new,
+   SUM(CASE WHEN sl.event_type = 'candidate.create' THEN 1 ELSE 0 END) AS candidates_new,
+   SUM(COALESCE(sl.llm_total_tokens, 0)) AS llm_tokens,
+   SUM(CASE WHEN sl.event_type = 'sms.send' THEN 1 ELSE 0 END) AS sms_calls
+ FROM system_log sl
+ WHERE sl.event_type <> 'llm.usage'
+"""
+    params: list[Any] = [int(tz_offset_seconds or 0)]
+    if at_from is not None:
+        sql += "\n AND sl.at >= %s"
+        params.append(at_from)
+    if at_to is not None:
+        sql += "\n AND sl.at <= %s"
+        params.append(at_to)
+    sql += "\n GROUP BY day\n ORDER BY day ASC\n"
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def has_system_alert(*, day: str, kind: str, level: str) -> bool:
+    """
+    Best-effort dedupe guard for system status alerts.
+    Checks existing system_log rows where event_type='system.alert' and meta contains day/kind/level.
+    """
+    d = str(day or "").strip()
+    k = str(kind or "").strip()
+    lv = str(level or "").strip()
+    if not d or not k or not lv:
+        return False
+    sql = """
+ SELECT 1
+ FROM system_log sl
+ WHERE sl.event_type = 'system.alert'
+   AND COALESCE(sl.meta->>'day','') = %s
+   AND COALESCE(sl.meta->>'kind','') = %s
+   AND COALESCE(sl.meta->>'level','') = %s
+ LIMIT 1
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (d, k, lv))
+            return bool(cur.fetchone())
+
+
 def count_operation_logs_by_category() -> dict[str, int]:
     """
     Count operation logs grouped into UI categories across the whole DB.
 
-    Categories:
-      - candidate: candidate.* ops
-      - exam: exam.* ops (excluding grading and assignment timeline)
-      - grading: exam.grade
-      - assignment: assignment.create / exam.enter / exam.finish
+     Categories:
+       - candidate: candidate.* ops
+       - exam: exam.* ops (excluding grading and assignment timeline)
+       - grading: exam.grade
+       - assignment: assignment.create / assignment.verify / exam.enter / exam.finish
+       - system: system.alert + sms.* (ops not covered above)
     """
     sql = """
  SELECT
     SUM(CASE WHEN sl.event_type LIKE 'candidate.%%' THEN 1 ELSE 0 END) AS candidate_cnt,
     SUM(CASE WHEN sl.event_type LIKE 'exam.%%' AND sl.event_type NOT IN ('exam.grade','exam.enter','exam.finish') THEN 1 ELSE 0 END) AS exam_cnt,
     SUM(CASE WHEN sl.event_type = 'exam.grade' THEN 1 ELSE 0 END) AS grading_cnt,
-    SUM(CASE WHEN sl.event_type IN ('assignment.create','exam.enter','exam.finish') THEN 1 ELSE 0 END) AS assignment_cnt
+    SUM(CASE WHEN sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish') THEN 1 ELSE 0 END) AS assignment_cnt,
+    SUM(CASE WHEN sl.event_type = 'system.alert' OR sl.event_type LIKE 'sms.%%' THEN 1 ELSE 0 END) AS system_cnt
   FROM system_log sl
   WHERE (
     sl.event_type LIKE 'candidate.%%' OR
     sl.event_type LIKE 'exam.%%' OR
-    sl.event_type IN ('assignment.create','exam.enter','exam.finish')
+    sl.event_type LIKE 'sms.%%' OR
+    sl.event_type = 'system.alert' OR
+    sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
   ) AND sl.event_type <> 'llm.usage'
-  """
+   """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql)
             row = cur.fetchone() or {}
-            out: dict[str, int] = {"candidate": 0, "exam": 0, "grading": 0, "assignment": 0}
+            out: dict[str, int] = {"candidate": 0, "exam": 0, "grading": 0, "assignment": 0, "system": 0}
             try:
                 out["candidate"] = int(row.get("candidate_cnt") or 0)
             except Exception:
@@ -1252,6 +1329,10 @@ def count_operation_logs_by_category() -> dict[str, int]:
                 out["assignment"] = int(row.get("assignment_cnt") or 0)
             except Exception:
                 out["assignment"] = 0
+            try:
+                out["system"] = int(row.get("system_cnt") or 0)
+            except Exception:
+                out["system"] = 0
             return out
 
 
@@ -1307,7 +1388,7 @@ def list_system_log_category_counts(
    CASE
      WHEN sl.event_type LIKE 'candidate.%%' THEN 'candidate'
      WHEN sl.event_type IN ('exam.upload','exam.update','exam.delete','exam.read') THEN 'exam'
-     WHEN sl.event_type IN ('assignment.create','exam.enter','exam.finish') THEN 'assignment'
+     WHEN sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish') THEN 'assignment'
      WHEN sl.event_type = 'llm.usage' THEN
        CASE
          WHEN sl.token IS NOT NULL AND sl.token <> '' THEN 'assignment'

@@ -86,7 +86,9 @@
     <div class="surface card" role="region" aria-label="候选人身份验证">
       <div class="section">
         {% for m in get_flashed_messages() %}
+        {% if m and (m|string)|trim %}
         <div class="flash error">{{ m }}</div>
+        {% endif %}
         {% endfor %}
 
         {% if locked %}

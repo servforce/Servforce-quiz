@@ -457,6 +457,121 @@
       /* Logs: hide header + filter area (keep page clean). */
       #tab-logs .panel-head,
       #tab-logs .section-head.attempt-head { display: none; }
+      /* We reuse `.assign-attempts` wrapper, but its default margin-top leaves a blank block on logs tab. */
+      #tab-logs .assign-attempts { margin: 0; }
+
+      /* System Status */
+      #tab-status { font-size: 18px; }
+      /* Hard requirement: status white background should fill the whole available surface (blue frame). */
+      /* Also remove the top "empty bands" inside status tab. */
+      #tab-status.panel { padding-top: 0; }
+      #tab-status .status-wrap { max-width: none; width: 100%; margin: 0; padding: 0 2px 18px; }
+      #tab-status .log-box { border-radius: 16px; background: rgba(248, 250, 252, 0.90); padding: 16px 16px; }
+      /* Reduce perceived "empty band" at the top of the daily stats box. */
+      #tab-status .log-box[aria-label="按天统计"] { padding-top: 10px; }
+      #tab-status .log-box-head { display:grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; margin-bottom: 10px; }
+      #tab-status .log-box-title { font-weight: 950; margin: 0; font-size: 19px; line-height: 1.2; }
+      /* Keep titles in one line (e.g. "系统统计（按天）"). */
+      #tab-status .log-box-head > div { min-width: 0; }
+      #tab-status .log-box-head .log-box-title { white-space: nowrap; }
+      #tab-status .status-head {
+        padding: 16px 18px;
+        border-radius: 18px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        background: rgba(255, 255, 255, 0.78);
+        margin: 0 0 12px;
+        font-weight: 950;
+        text-align: center;
+        font-size: 22px;
+      }
+      #tab-status .status-head.level-ok { border-color: rgba(22, 163, 74, 0.35); background: rgba(22, 163, 74, 0.10); color: #166534; }
+      #tab-status .status-head.level-warn { border-color: rgba(249, 115, 22, 0.40); background: rgba(249, 115, 22, 0.10); }
+      #tab-status .status-head.level-danger { border-color: rgba(220, 38, 38, 0.40); background: rgba(220, 38, 38, 0.10); }
+      #tab-status .status-head.level-critical { border-color: rgba(220, 38, 38, 0.55); background: rgba(220, 38, 38, 0.14); }
+      #tab-status .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      #tab-status .kpi { padding: 14px 14px; border-radius: 16px; border: 1px solid rgba(15, 23, 42, 0.10); background: rgba(255, 255, 255, 0.55); }
+      #tab-status .k-title { font-weight: 950; color: rgba(15, 23, 42, 0.75); margin-bottom: 6px; }
+      #tab-status .k-main { font-size: 34px; font-weight: 1100; letter-spacing: -0.02em; }
+      #tab-status .k-sub { margin-top: 4px; color: rgba(15, 23, 42, 0.62); font-size: 16px; font-weight: 950; }
+      #tab-status .status-form { display:flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+      /* Threshold settings: title on the left, controls on the right (like other header bars). */
+      #tab-status .status-cfg-box .log-box-head { margin-bottom: 0; }
+      #tab-status .status-cfg-box .log-box-title { margin: 0; }
+      #tab-status .status-cfg-box .status-form { justify-content: flex-end; align-items: flex-end; }
+      #tab-status .status-cfg-box .status-form .field label {
+        font-size: 15px;
+        font-weight: 900;
+        color: rgba(15, 23, 42, 0.75);
+      }
+      #tab-status .status-cfg-box .status-form .input { font-size: 17px; }
+      #tab-status .status-cfg-box .status-form .btn { font-size: 17px; }
+      /* We reuse `.assign-attempts` for layout, but its global margin-top is too big for status tab. */
+      #tab-status .assign-attempts { margin: 0; }
+      #tab-status .assign-attempts .log-box:first-child { margin-top: 0; }
+      #tab-status table.status-table { width: 100%; min-width: 980px; border-collapse: collapse; }
+      #tab-status table.status-table th { text-align:left; font-size: 16px; color: rgba(15, 23, 42, 0.92); font-weight: 950; padding: 10px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.10); }
+      #tab-status table.status-table td { padding: 14px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); font-weight: 700; font-size: 18px; color: rgba(15, 23, 42, 0.65); }
+      #tab-status #status_pager[hidden] { display: none !important; }
+
+      /* Status range filter: tidy, grouped controls (avoid "floating" inputs). */
+      #tab-status .density-filter {
+        display:flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px;
+        margin: 0;
+        width: auto;
+        max-width: none;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        border-radius: 14px;
+        padding: 8px 10px;
+      }
+      #tab-status .density-filter .field { margin: 0; }
+      #tab-status .density-filter .field.field-sm { flex: 0 0 auto; }
+      #tab-status .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 38px; font-size: 16px; }
+      /* Date proxy (yyyy/mm/dd) for system status filters. */
+      #tab-status .density-filter .range-group { display:flex; align-items: flex-end; gap: 10px; width: auto; }
+      #tab-status .density-filter .field.field-sm { flex: 0 0 auto; width: 176px; }
+      #tab-status .density-filter .date-proxy { position: relative; width: 100%; }
+      #tab-status .density-filter .date-proxy .date-display { padding-right: 42px; cursor: pointer; }
+      #tab-status .density-filter .date-proxy .date-native {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+      #tab-status .density-filter .date-proxy .date-btn {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.65);
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: rgba(15, 23, 42, 0.75);
+      }
+      #tab-status .density-filter .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
+      #tab-status .density-filter .range-sep { padding: 0 2px; height: 40px; line-height: 40px; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
+      #tab-status .density-filter .actions { display: inline-flex; gap: 10px; align-items: flex-end; flex: 0 0 auto; }
+      #tab-status .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: 16px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+      #tab-status .density-filter .btn[type="submit"] { background: rgba(37, 99, 235, 0.10); border-color: rgba(37, 99, 235, 0.20); }
+      @media (max-width: 1100px) {
+        #tab-status .log-box-head { grid-template-columns: 1fr; align-items: stretch; }
+        #tab-status .density-filter { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
+        #tab-status .density-filter .range-group { flex-wrap: wrap; }
+      }
+
+      @media (max-width: 980px) {
+        #tab-status .status-grid { grid-template-columns: 1fr; }
+      }
     </style>
   </head>
   <body>
@@ -468,10 +583,19 @@
         </div>
 
         <nav class="nav" aria-label="主导航">
-          <a class="nav-link active" href="#tab-exams" data-nav="exams">试卷管理</a>
-          <a class="nav-link" href="/admin/candidates">候选人管理</a>
-          <a class="nav-link" href="#tab-assign" data-nav="assign">答题邀请</a>
-          <a class="nav-link" href="#tab-logs" data-nav="logs">系统日志</a>
+          <a class="nav-link active" href="#tab-exams" data-nav="exams"><span class="nav-ico exams" aria-hidden="true"></span>试卷管理</a>
+          <a class="nav-link" href="/admin/candidates"><span class="nav-ico candidates" aria-hidden="true"></span>候选人管理</a>
+          <a class="nav-link" href="#tab-assign" data-nav="assign"><span class="nav-ico assign" aria-hidden="true"></span>答题邀请</a>
+          <a class="nav-link" href="#tab-logs" data-nav="logs"><span class="nav-ico logs" aria-hidden="true"></span>系统日志</a>
+          {% set _ss = system_status_summary if system_status_summary else {} %}
+          {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
+          {% set _badge = '' %}
+          {% if _lvl == 'warn' %}{% set _badge = '70%' %}{% endif %}
+          {% if _lvl == 'danger' %}{% set _badge = '90%' %}{% endif %}
+          {% if _lvl == 'critical' %}{% set _badge = '100%' %}{% endif %}
+          <a class="nav-link" href="#tab-status" data-nav="status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
+            <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
+          </a>
         </nav>
 
         <form method="post" action="/admin/logout" style="margin:0;">
@@ -480,9 +604,11 @@
       </div>
     </header>
 
-    <main class="container page">
+    <main class="container page" style="max-width:1080px;">
       {% for m in get_flashed_messages() %}
+      {% if m and (m|string)|trim %}
       <div class="flash">{{ m }}</div>
+      {% endif %}
       {% endfor %}
 
       <div class="surface admin-surface" role="region" aria-label="后台内容">
@@ -564,71 +690,18 @@
           {% set exams_qs_extra = "" %}
           {% if exam_q %}{% set exams_qs_extra = exams_qs_extra ~ "&exam_q=" ~ (exam_q|urlencode) %}{% endif %}
           {% set total_exam_pages_display = total_exam_pages if total_exam_pages and total_exam_pages > 0 else 1 %}
-          <div class="std-pager" aria-label="试卷分页">
-            <div class="per-page">
-              <span>20条/页</span>
-            </div>
-
-            <div class="pages" aria-label="页码">
-              {% if exam_page > 1 %}
-                <a class="page-btn" href="/admin?exam_page={{ exam_page - 1 }}{{ exams_qs_extra }}#tab-exams" aria-label="上一页">‹</a>
-              {% else %}
-                <span class="page-btn" style="opacity:.45; pointer-events:none;">‹</span>
-              {% endif %}
-
-              {% set total = total_exam_pages_display %}
-              {% set cur = exam_page %}
-              {% if total <= 9 %}
-                {% for p in range(1, total + 1) %}
-                  {% if p == cur %}
-                    <span class="page-btn active">{{ p }}</span>
-                  {% else %}
-                    <a class="page-btn" href="/admin?exam_page={{ p }}{{ exams_qs_extra }}#tab-exams">{{ p }}</a>
-                  {% endif %}
-                {% endfor %}
-              {% else %}
-                {% set start = cur - 2 %}
-                {% set end = cur + 2 %}
-                {% if start < 2 %}{% set start = 2 %}{% endif %}
-                {% if end > total - 1 %}{% set end = total - 1 %}{% endif %}
-                {% if cur <= 4 %}{% set start = 2 %}{% set end = 6 %}{% endif %}
-                {% if cur >= total - 3 %}{% set start = total - 5 %}{% set end = total - 1 %}{% endif %}
-
-                {% if 1 == cur %}
-                  <span class="page-btn active">1</span>
-                {% else %}
-                  <a class="page-btn" href="/admin?exam_page=1{{ exams_qs_extra }}#tab-exams">1</a>
-                {% endif %}
-
-                {% if start > 2 %}<span class="dots">…</span>{% endif %}
-                {% for p in range(start, end + 1) %}
-                  {% if p == cur %}
-                    <span class="page-btn active">{{ p }}</span>
-                  {% else %}
-                    <a class="page-btn" href="/admin?exam_page={{ p }}{{ exams_qs_extra }}#tab-exams">{{ p }}</a>
-                  {% endif %}
-                {% endfor %}
-                {% if end < total - 1 %}<span class="dots">…</span>{% endif %}
-
-                {% if total == cur %}
-                  <span class="page-btn active">{{ total }}</span>
-                {% else %}
-                  <a class="page-btn" href="/admin?exam_page={{ total }}{{ exams_qs_extra }}#tab-exams">{{ total }}</a>
-                {% endif %}
-              {% endif %}
-
-              {% if exam_page < total_exam_pages_display %}
-                <a class="page-btn" href="/admin?exam_page={{ exam_page + 1 }}{{ exams_qs_extra }}#tab-exams" aria-label="下一页">›</a>
-              {% else %}
-                <span class="page-btn" style="opacity:.45; pointer-events:none;">›</span>
-              {% endif %}
-            </div>
-
-            <div class="jump" aria-label="跳转页">
-              <span>跳转至</span>
-              <input id="exam_page_jump" type="number" min="1" max="{{ total_exam_pages_display }}" placeholder="{{ exam_page }}" inputmode="numeric" />
-              <button class="btn" type="button" id="exam_page_go">前往</button>
-            </div>
+          <div class="tri-pager" aria-label="试卷分页">
+            <span class="page-info">第 {{ exam_page }} / {{ total_exam_pages_display }} 页（共 {{ total_exams }} 条）</span>
+            {% if exam_page > 1 %}
+              <a class="tri-btn" href="/admin?exam_page={{ exam_page - 1 }}{{ exams_qs_extra }}#tab-exams" aria-label="上一页" title="上一页">▲</a>
+            {% else %}
+              <span class="tri-btn disabled" aria-hidden="true">▲</span>
+            {% endif %}
+            {% if exam_page < total_exam_pages_display %}
+              <a class="tri-btn" href="/admin?exam_page={{ exam_page + 1 }}{{ exams_qs_extra }}#tab-exams" aria-label="下一页" title="下一页">▼</a>
+            {% else %}
+              <span class="tri-btn disabled" aria-hidden="true">▼</span>
+            {% endif %}
           </div>
         </section>
 
@@ -823,71 +896,18 @@
             {% if attempt_start_to %}{% set attempt_qs_extra = attempt_qs_extra ~ "&attempt_start_to=" ~ (attempt_start_to|urlencode) %}{% endif %}
 
             {% set total_attempt_pages_display = total_attempt_pages if total_attempt_pages and total_attempt_pages > 0 else 1 %}
-            <div class="std-pager" aria-label="答题情况分页">
-              <div class="per-page">
-                <span>20条/页</span>
-              </div>
-
-              <div class="pages" aria-label="页码">
-                {% if attempt_page > 1 %}
-                  <a class="page-btn" href="/admin?attempt_page={{ attempt_page - 1 }}{{ attempt_qs_extra }}#tab-assign" aria-label="上一页">‹</a>
-                {% else %}
-                  <span class="page-btn" style="opacity:.45; pointer-events:none;">‹</span>
-                {% endif %}
-
-                {% set totalp = total_attempt_pages_display %}
-                {% set cur = attempt_page %}
-                {% if totalp <= 9 %}
-                  {% for p in range(1, totalp + 1) %}
-                    {% if p == cur %}
-                      <span class="page-btn active">{{ p }}</span>
-                    {% else %}
-                      <a class="page-btn" href="/admin?attempt_page={{ p }}{{ attempt_qs_extra }}#tab-assign">{{ p }}</a>
-                    {% endif %}
-                  {% endfor %}
-                {% else %}
-                  {% set start = cur - 2 %}
-                  {% set end = cur + 2 %}
-                  {% if start < 2 %}{% set start = 2 %}{% endif %}
-                  {% if end > totalp - 1 %}{% set end = totalp - 1 %}{% endif %}
-                  {% if cur <= 4 %}{% set start = 2 %}{% set end = 6 %}{% endif %}
-                  {% if cur >= totalp - 3 %}{% set start = totalp - 5 %}{% set end = totalp - 1 %}{% endif %}
-
-                  {% if 1 == cur %}
-                    <span class="page-btn active">1</span>
-                  {% else %}
-                    <a class="page-btn" href="/admin?attempt_page=1{{ attempt_qs_extra }}#tab-assign">1</a>
-                  {% endif %}
-
-                  {% if start > 2 %}<span class="dots">…</span>{% endif %}
-                  {% for p in range(start, end + 1) %}
-                    {% if p == cur %}
-                      <span class="page-btn active">{{ p }}</span>
-                    {% else %}
-                      <a class="page-btn" href="/admin?attempt_page={{ p }}{{ attempt_qs_extra }}#tab-assign">{{ p }}</a>
-                    {% endif %}
-                  {% endfor %}
-                  {% if end < totalp - 1 %}<span class="dots">…</span>{% endif %}
-
-                  {% if totalp == cur %}
-                    <span class="page-btn active">{{ totalp }}</span>
-                  {% else %}
-                    <a class="page-btn" href="/admin?attempt_page={{ totalp }}{{ attempt_qs_extra }}#tab-assign">{{ totalp }}</a>
-                  {% endif %}
-                {% endif %}
-
-                {% if attempt_page < total_attempt_pages_display %}
-                  <a class="page-btn" href="/admin?attempt_page={{ attempt_page + 1 }}{{ attempt_qs_extra }}#tab-assign" aria-label="下一页">›</a>
-                {% else %}
-                  <span class="page-btn" style="opacity:.45; pointer-events:none;">›</span>
-                {% endif %}
-              </div>
-
-              <div class="jump" aria-label="跳转页">
-                <span>跳转至</span>
-                <input id="attempt_page_jump" type="number" min="1" max="{{ total_attempt_pages_display }}" placeholder="{{ attempt_page }}" inputmode="numeric" />
-                <button class="btn" type="button" id="attempt_page_go">前往</button>
-              </div>
+            <div class="tri-pager" aria-label="答题情况分页">
+              <span class="page-info">第 {{ attempt_page }} / {{ total_attempt_pages_display }} 页（共 {{ total_attempts }} 条）</span>
+              {% if attempt_page > 1 %}
+                <a class="tri-btn" href="/admin?attempt_page={{ attempt_page - 1 }}{{ attempt_qs_extra }}#tab-assign" aria-label="上一页" title="上一页">▲</a>
+              {% else %}
+                <span class="tri-btn disabled" aria-hidden="true">▲</span>
+              {% endif %}
+              {% if attempt_page < total_attempt_pages_display %}
+                <a class="tri-btn" href="/admin?attempt_page={{ attempt_page + 1 }}{{ attempt_qs_extra }}#tab-assign" aria-label="下一页" title="下一页">▼</a>
+              {% else %}
+                <span class="tri-btn disabled" aria-hidden="true">▼</span>
+              {% endif %}
             </div>
           </div>
         </section>
@@ -924,6 +944,11 @@
                   <span>答题邀约</span>
                   <span class="legend-cnt">{{ log_counts.assignment if log_counts else 0 }}</span>
                 </div>
+                <div class="legend-item" title="system">
+                  <span class="legend-dot" style="background: #0f172a;"></span>
+                  <span>系统</span>
+                  <span class="legend-cnt">{{ log_counts.system if log_counts else 0 }}</span>
+                </div>
               </div>
             </div>
 
@@ -944,7 +969,7 @@
                   <div class="range-group" aria-label="时间范围">
                     <div class="field field-sm">
                       <div class="date-proxy">
-                        <input id="chart_start_display" class="input date-display" type="text" value="" placeholder="开始日期" readonly aria-label="开始日期" />
+                        <input id="chart_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="开始日期" />
                         <input id="chart_start" class="input date-native" type="date" name="chart_start" value="{{ chart_range_start or '' }}" tabindex="-1" aria-hidden="true" />
                         <button class="date-btn" type="button" data-for="chart_start" aria-label="选择开始(起)日期">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -959,7 +984,7 @@
 
                     <div class="field field-sm">
                       <div class="date-proxy">
-                        <input id="chart_end_display" class="input date-display" type="text" value="" placeholder="结束日期" readonly aria-label="结束日期" />
+                        <input id="chart_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="结束日期" />
                         <input id="chart_end" class="input date-native" type="date" name="chart_end" value="{{ chart_range_end or '' }}" tabindex="-1" aria-hidden="true" />
                         <button class="date-btn" type="button" data-for="chart_end" aria-label="选择结束(止)日期">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1045,47 +1070,147 @@
                 </table>
               </div>
 
-              <div class="std-pager" aria-label="日志分页">
-                <div class="per-page"><span>{{ log_per_page or 50 }}条/页</span></div>
-                {% set total_log_pages_display = total_log_pages if total_log_pages and total_log_pages > 0 else 1 %}
-                {% set log_qs_extra = "" %}
-                {% if exam_q %}{% set log_qs_extra = log_qs_extra ~ "&exam_q=" ~ (exam_q|urlencode) %}{% endif %}
-                {% if exam_page %}{% set log_qs_extra = log_qs_extra ~ "&exam_page=" ~ exam_page %}{% endif %}
-                {% if attempt_q %}{% set log_qs_extra = log_qs_extra ~ "&attempt_q=" ~ (attempt_q|urlencode) %}{% endif %}
-                {% if attempt_page %}{% set log_qs_extra = log_qs_extra ~ "&attempt_page=" ~ attempt_page %}{% endif %}
-                {% if attempt_start_from %}{% set log_qs_extra = log_qs_extra ~ "&attempt_start_from=" ~ (attempt_start_from|urlencode) %}{% endif %}
-                {% if attempt_start_to %}{% set log_qs_extra = log_qs_extra ~ "&attempt_start_to=" ~ (attempt_start_to|urlencode) %}{% endif %}
-                {% if assign_exam_key %}{% set log_qs_extra = log_qs_extra ~ "&assign_exam_key=" ~ (assign_exam_key|urlencode) %}{% endif %}
-                {% if assign_candidate_id %}{% set log_qs_extra = log_qs_extra ~ "&assign_candidate_id=" ~ (assign_candidate_id|urlencode) %}{% endif %}
-                {% if chart_range_start %}{% set log_qs_extra = log_qs_extra ~ "&chart_start=" ~ (chart_range_start|urlencode) %}{% endif %}
-                {% if chart_range_end %}{% set log_qs_extra = log_qs_extra ~ "&chart_end=" ~ (chart_range_end|urlencode) %}{% endif %}
-                <div class="pages" aria-label="页码">
-                  {% if log_page and log_page > 1 %}
-                    <a class="page-btn" href="/admin?log_page={{ log_page - 1 }}{{ log_qs_extra }}#tab-logs" aria-label="上一页">‹</a>
-                  {% else %}
-                    <span class="page-btn" style="opacity:.45; pointer-events:none;">‹</span>
-                  {% endif %}
+              {% set total_log_pages_display = total_log_pages if total_log_pages and total_log_pages > 0 else 1 %}
+              {% set log_qs_extra = "" %}
+              {% if exam_q %}{% set log_qs_extra = log_qs_extra ~ "&exam_q=" ~ (exam_q|urlencode) %}{% endif %}
+              {% if exam_page %}{% set log_qs_extra = log_qs_extra ~ "&exam_page=" ~ exam_page %}{% endif %}
+              {% if attempt_q %}{% set log_qs_extra = log_qs_extra ~ "&attempt_q=" ~ (attempt_q|urlencode) %}{% endif %}
+              {% if attempt_page %}{% set log_qs_extra = log_qs_extra ~ "&attempt_page=" ~ attempt_page %}{% endif %}
+              {% if attempt_start_from %}{% set log_qs_extra = log_qs_extra ~ "&attempt_start_from=" ~ (attempt_start_from|urlencode) %}{% endif %}
+              {% if attempt_start_to %}{% set log_qs_extra = log_qs_extra ~ "&attempt_start_to=" ~ (attempt_start_to|urlencode) %}{% endif %}
+              {% if assign_exam_key %}{% set log_qs_extra = log_qs_extra ~ "&assign_exam_key=" ~ (assign_exam_key|urlencode) %}{% endif %}
+              {% if assign_candidate_id %}{% set log_qs_extra = log_qs_extra ~ "&assign_candidate_id=" ~ (assign_candidate_id|urlencode) %}{% endif %}
+              {% if chart_range_start %}{% set log_qs_extra = log_qs_extra ~ "&chart_start=" ~ (chart_range_start|urlencode) %}{% endif %}
+              {% if chart_range_end %}{% set log_qs_extra = log_qs_extra ~ "&chart_end=" ~ (chart_range_end|urlencode) %}{% endif %}
+              <div class="tri-pager" aria-label="日志分页">
+                <span class="page-info">第 {{ log_page or 1 }} / {{ total_log_pages_display }} 页（共 {{ total_logs }} 条）</span>
+                {% if log_page and log_page > 1 %}
+                  <a class="tri-btn" href="/admin?log_page={{ log_page - 1 }}{{ log_qs_extra }}#tab-logs" aria-label="上一页" title="上一页">▲</a>
+                {% else %}
+                  <span class="tri-btn disabled" aria-hidden="true">▲</span>
+                {% endif %}
+                {% if log_page and (log_page < total_log_pages_display) %}
+                  <a class="tri-btn" href="/admin?log_page={{ log_page + 1 }}{{ log_qs_extra }}#tab-logs" aria-label="下一页" title="下一页">▼</a>
+                {% else %}
+                  <span class="tri-btn disabled" aria-hidden="true">▼</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </section>
 
-                  <span class="page-btn active">{{ log_page or 1 }}</span>
+        <section id="tab-status" class="panel" role="tabpanel" aria-label="系统状态">
+          <div class="status-wrap">
+            <div id="status_head" class="status-head level-ok" aria-live="polite">
+              <div id="status_head_text">加载中…</div>
+            </div>
 
-                  {% if log_page and (log_page < total_log_pages_display) %}
-                    <a class="page-btn" href="/admin?log_page={{ log_page + 1 }}{{ log_qs_extra }}#tab-logs" aria-label="下一页">›</a>
-                  {% else %}
-                    <span class="page-btn" style="opacity:.45; pointer-events:none;">›</span>
-                  {% endif %}
+            <div class="assign-attempts" role="region" aria-label="系统状态内容">
+              <div class="log-box" aria-label="今日用量">
+                <div class="log-box-title">今日用量</div>
+                <div class="status-grid">
+                  <div class="kpi" aria-label="大模型 Token">
+                    <div class="k-title">大模型 Token</div>
+                    <div class="k-main"><span id="kpi_llm_used">—</span></div>
+                    <div class="k-sub">阈值：<span id="kpi_llm_limit">—</span>，占用：<span id="kpi_llm_ratio">—</span></div>
+                  </div>
+                  <div class="kpi" aria-label="短信认证消耗">
+                    <div class="k-title">短信认证消耗</div>
+                    <div class="k-main"><span id="kpi_sms_used">—</span></div>
+                    <div class="k-sub">阈值：<span id="kpi_sms_limit">—</span>，占用：<span id="kpi_sms_ratio">—</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="log-box status-cfg-box" aria-label="阈值设置">
+                <div class="log-box-head">
+                  <div>
+                    <div class="log-box-title">阈值设置（按天）</div>
+                  </div>
+                  <form id="status_cfg_form" class="status-form" autocomplete="off">
+                    <div class="field field-sm">
+                      <label for="llm_tokens_limit">大模型 Token 阈值</label>
+                      <input id="llm_tokens_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 200000" />
+                    </div>
+                    <div class="field field-sm">
+                      <label for="sms_calls_limit">短信认证阈值</label>
+                      <input id="sms_calls_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 1000" />
+                    </div>
+                    <button id="status_cfg_save" class="btn btn-primary" type="submit">保存</button>
+                    <span id="status_cfg_msg" class="muted" style="font-weight:900;"></span>
+                  </form>
+                </div>
+              </div>
+
+              <div class="log-box" aria-label="按天统计">
+                <div class="log-box-head">
+                  <div>
+                    <div class="log-box-title">系统统计（按天）</div>
+                  </div>
+                  <form id="status_range_form" class="density-filter" aria-label="选择系统统计时间范围">
+                    <div class="range-group" aria-label="时间范围">
+                      <div class="field field-sm">
+                        <div class="date-proxy">
+                          <input id="status_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="开始日期" />
+                          <input id="status_start" class="input date-native" type="date" aria-label="开始日期" tabindex="-1" aria-hidden="true" />
+                          <button class="date-btn" type="button" data-for="status_start" aria-label="选择开始(起)日期">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                              <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="range-sep" aria-hidden="true">—</div>
+                      <div class="field field-sm">
+                        <div class="date-proxy">
+                          <input id="status_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="结束日期" />
+                          <input id="status_end" class="input date-native" type="date" aria-label="结束日期" tabindex="-1" aria-hidden="true" />
+                          <button class="date-btn" type="button" data-for="status_end" aria-label="选择结束(止)日期">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                              <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="actions">
+                        <button class="btn" type="submit">查询</button>
+                        <button class="btn" type="button" id="status_range_reset">重置</button>
+                      </div>
+                    </div>
+                  </form>
                 </div>
 
-                <div class="jump" aria-label="跳转页">
-                  <span>跳转至</span>
-                  <input
-                    id="log_page_jump"
-                    type="number"
-                    min="1"
-                    max="{{ total_log_pages_display }}"
-                    placeholder="{{ log_page or 1 }}"
-                    inputmode="numeric"
-                  />
-                  <button class="btn" type="button" id="log_page_go">前往</button>
+                <div class="table-scroll">
+                  <table class="status-table" aria-label="系统状态统计表（按天）">
+                    <colgroup>
+                      <col style="width: 120px;" />
+                      <col style="width: 110px;" />
+                      <col style="width: 110px;" />
+                      <col style="width: 110px;" />
+                      <col style="width: 150px;" />
+                      <col style="width: 110px;" />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>日期</th>
+                        <th>新试卷</th>
+                        <th>新邀请</th>
+                        <th>新候选</th>
+                        <th>大模型 Token</th>
+                        <th>短信次数</th>
+                      </tr>
+                    </thead>
+                    <tbody id="status_table_body">
+                      <tr><td colspan="6" class="muted" style="padding:16px;">暂无数据</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div id="status_pager" class="tri-pager inline" hidden>
+                  <span id="status_page_info" class="page-info"></span>
+                  <button id="status_page_prev" class="tri-btn" type="button" aria-label="上一页" title="上一页">▲</button>
+                  <button id="status_page_next" class="tri-btn" type="button" aria-label="下一页" title="下一页">▼</button>
                 </div>
               </div>
             </div>
@@ -1102,6 +1227,7 @@
         ["exams", document.getElementById("tab-exams")],
         ["assign", document.getElementById("tab-assign")],
         ["logs", document.getElementById("tab-logs")],
+        ["status", document.getElementById("tab-status")],
       ]);
       const navLinks = Array.from(document.querySelectorAll("[data-nav]"));
 
@@ -1125,6 +1251,7 @@
         const h = (location.hash || "").toLowerCase();
         if (h.includes("assign")) return "assign";
         if (h.includes("logs")) return "logs";
+        if (h.includes("status")) return "status";
         if (h.includes("exams")) return "exams";
         return "exams";
       }
@@ -1142,8 +1269,6 @@
 
       // Live fuzzy search (debounced) for exams.
       const examQ = document.getElementById("exam_q");
-      const examJump = document.getElementById("exam_page_jump");
-      const examGo = document.getElementById("exam_page_go");
       if (examQ && examQ.form) {
         let t = null;
         examQ.addEventListener("input", () => {
@@ -1159,26 +1284,9 @@
           }, 300);
         });
       }
-      if (examGo && examJump) {
-        const go = () => {
-          const raw = (examJump.value || "").trim();
-          const n = parseInt(raw, 10);
-          if (!Number.isFinite(n) || n <= 0) return;
-          const u = new URL(window.location.href);
-          u.searchParams.set("exam_page", String(n));
-          u.hash = "#tab-exams";
-          window.location.href = u.toString();
-        };
-        examGo.addEventListener("click", go);
-        examJump.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") go();
-        });
-      }
 
       // Live fuzzy search (debounced) for attempt table (name/phone/exam).
       const attemptQ = document.getElementById("attempt_q");
-      const attemptJump = document.getElementById("attempt_page_jump");
-      const attemptGo = document.getElementById("attempt_page_go");
       if (attemptQ) {
         let t3 = null;
         attemptQ.addEventListener("input", () => {
@@ -1194,43 +1302,305 @@
           }, 260);
         });
       }
-      if (attemptGo && attemptJump) {
-        const go2 = () => {
-          const raw = (attemptJump.value || "").trim();
-          const n = parseInt(raw, 10);
-          if (!Number.isFinite(n) || n <= 0) return;
-          const u = new URL(window.location.href);
-          u.searchParams.set("attempt_page", String(n));
-          u.hash = "#tab-assign";
-          window.location.href = u.toString();
-        };
-        attemptGo.addEventListener("click", go2);
-        attemptJump.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") go2();
-        });
-      }
-
-      // Logs pager jump.
-      const logJump = document.getElementById("log_page_jump");
-      const logGo = document.getElementById("log_page_go");
-      if (logGo && logJump) {
-        const go3 = () => {
-          const raw = (logJump.value || "").trim();
-          const n = parseInt(raw, 10);
-          if (!Number.isFinite(n) || n <= 0) return;
-          const u = new URL(window.location.href);
-          u.searchParams.set("log_page", String(n));
-          u.hash = "#tab-logs";
-          window.location.href = u.toString();
-        };
-        logGo.addEventListener("click", go3);
-        logJump.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") go3();
-        });
-      }
 
       // Disable floating "toast" flash messages on this page.
       const toast = (_msg) => {};
+
+      // System status tab (today + range).
+      (() => {
+        const PER_PAGE = 20;
+        const elAlert = document.getElementById("status_head");
+        const elAlertText = document.getElementById("status_head_text");
+        const elLlmUsed = document.getElementById("kpi_llm_used");
+        const elLlmLimit = document.getElementById("kpi_llm_limit");
+        const elLlmRatio = document.getElementById("kpi_llm_ratio");
+        const elSmsUsed = document.getElementById("kpi_sms_used");
+        const elSmsLimit = document.getElementById("kpi_sms_limit");
+        const elSmsRatio = document.getElementById("kpi_sms_ratio");
+
+        const elLlmLimitInput = document.getElementById("llm_tokens_limit");
+        const elSmsLimitInput = document.getElementById("sms_calls_limit");
+        const elCfgForm = document.getElementById("status_cfg_form");
+        const elCfgSave = document.getElementById("status_cfg_save");
+        const elCfgMsg = document.getElementById("status_cfg_msg");
+
+        const elRangeForm = document.getElementById("status_range_form");
+        const elStartDisplay = document.getElementById("status_start_display");
+        const elStart = document.getElementById("status_start");
+        const elEndDisplay = document.getElementById("status_end_display");
+        const elEnd = document.getElementById("status_end");
+        const elReset = document.getElementById("status_range_reset");
+        const elTbody = document.getElementById("status_table_body");
+        const elPager = document.getElementById("status_pager");
+        const elPageInfo = document.getElementById("status_page_info");
+        const elPrev = document.getElementById("status_page_prev");
+        const elNext = document.getElementById("status_page_next");
+
+        const pad2 = (n) => String(n).padStart(2, "0");
+        const fmtYmd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        const fmtPct = (ratio) => {
+          const r = typeof ratio === "number" ? ratio : parseFloat(String(ratio || "0"));
+          if (!Number.isFinite(r) || r <= 0) return "0%";
+          return `${Math.round(r * 100)}%`;
+        };
+        const levelText = (lvl) => {
+          const k = String(lvl || "ok");
+          if (k === "warn") return "预警（70%）";
+          if (k === "danger") return "高危（90%）";
+          if (k === "critical") return "超限（100%）";
+          return "正常";
+        };
+
+        const setAlert = (summary) => {
+          const overall = String(summary && summary.overall_level ? summary.overall_level : "ok");
+          if (elAlert) {
+            elAlert.classList.remove("level-ok", "level-warn", "level-danger", "level-critical");
+            elAlert.classList.add(`level-${overall}`);
+          }
+          const parts = [];
+          const llm = summary && summary.llm ? summary.llm : null;
+          const sms = summary && summary.sms ? summary.sms : null;
+          if (llm && String(llm.level || "ok") !== "ok") parts.push(`大模型 Token：${levelText(llm.level)}（${fmtPct(llm.ratio)}）`);
+          if (sms && String(sms.level || "ok") !== "ok") parts.push(`短信认证：${levelText(sms.level)}（${fmtPct(sms.ratio)}）`);
+          if (elAlertText) elAlertText.textContent = parts.length ? (`当前预警：${parts.join("；")}`) : "今日用量正常";
+        };
+
+        const setKpis = (summary) => {
+          const llm = summary && summary.llm ? summary.llm : {};
+          const sms = summary && summary.sms ? summary.sms : {};
+          if (elLlmUsed) elLlmUsed.textContent = String(llm.used ?? "0");
+          if (elLlmLimit) elLlmLimit.textContent = String(llm.limit ?? "0");
+          if (elLlmRatio) elLlmRatio.textContent = fmtPct(llm.ratio);
+          if (elSmsUsed) elSmsUsed.textContent = String(sms.used ?? "0");
+          if (elSmsLimit) elSmsLimit.textContent = String(sms.limit ?? "0");
+          if (elSmsRatio) elSmsRatio.textContent = fmtPct(sms.ratio);
+          setAlert(summary);
+        };
+
+        let allItems = [];
+        let page = 1;
+
+        const totalPages = () => {
+          const n = Array.isArray(allItems) ? allItems.length : 0;
+          return Math.max(1, Math.ceil(n / PER_PAGE));
+        };
+
+        const clampPage = () => {
+          const tp = totalPages();
+          if (!Number.isFinite(page) || page <= 0) page = 1;
+          if (page > tp) page = tp;
+        };
+
+        const renderPager = () => {
+          const n = Array.isArray(allItems) ? allItems.length : 0;
+          const tp = totalPages();
+          clampPage();
+          if (!elPager) return;
+          if (n <= PER_PAGE) {
+            elPager.hidden = true;
+            return;
+          }
+          elPager.hidden = false;
+          if (elPageInfo) elPageInfo.textContent = `第 ${page} / ${tp} 页（共 ${n} 条）`;
+          if (elPrev) elPrev.disabled = page <= 1;
+          if (elNext) elNext.disabled = page >= tp;
+        };
+
+        const renderTable = (data) => {
+          const items = data && Array.isArray(data.items) ? data.items : [];
+          if (!elTbody) return;
+          if (!items.length) {
+            elTbody.innerHTML = '<tr><td colspan="6" class="muted" style="padding:16px;">暂无数据</td></tr>';
+            if (elPager) elPager.hidden = true;
+            return;
+          }
+          allItems = items.slice().reverse(); // newest first
+          page = 1;
+          renderPager();
+
+          const startIdx = (page - 1) * PER_PAGE;
+          const endIdx = startIdx + PER_PAGE;
+          const rows = allItems
+            .slice(startIdx, endIdx)
+            .map((it) => {
+              const day = String(it.day || "");
+              const examsNew = Number(it.exams_new || 0);
+              const invitesNew = Number(it.invites_new || 0);
+              const candidatesNew = Number(it.candidates_new || 0);
+              const llmTokens = Number(it.llm_tokens || 0);
+              const smsCalls = Number(it.sms_calls || 0);
+              return `<tr>
+                <td>${day}</td>
+                <td>${examsNew}</td>
+                <td>${invitesNew}</td>
+                <td>${candidatesNew}</td>
+                <td>${llmTokens}</td>
+                <td>${smsCalls}</td>
+              </tr>`;
+            })
+            .join("");
+          elTbody.innerHTML = rows;
+        };
+
+        const renderCurrentPage = () => {
+          if (!elTbody) return;
+          clampPage();
+          const startIdx = (page - 1) * PER_PAGE;
+          const endIdx = startIdx + PER_PAGE;
+          const rows = (allItems || [])
+            .slice(startIdx, endIdx)
+            .map((it) => {
+              const day = String(it.day || "");
+              const examsNew = Number(it.exams_new || 0);
+              const invitesNew = Number(it.invites_new || 0);
+              const candidatesNew = Number(it.candidates_new || 0);
+              const llmTokens = Number(it.llm_tokens || 0);
+              const smsCalls = Number(it.sms_calls || 0);
+              return `<tr>
+                <td>${day}</td>
+                <td>${examsNew}</td>
+                <td>${invitesNew}</td>
+                <td>${candidatesNew}</td>
+                <td>${llmTokens}</td>
+                <td>${smsCalls}</td>
+              </tr>`;
+            })
+            .join("");
+          elTbody.innerHTML = rows;
+          renderPager();
+        };
+
+        const fetchJson = async (url, opts) => {
+          try {
+            const res = await fetch(url, opts || {});
+            if (!res.ok) return null;
+            return await res.json();
+          } catch (_) {
+            return null;
+          }
+        };
+
+        const loadRange = async ({ start, end } = {}) => {
+          const u = new URL(window.location.origin + "/admin/api/system-status");
+          if (start) u.searchParams.set("start", start);
+          if (end) u.searchParams.set("end", end);
+          const j = await fetchJson(u.toString());
+          if (!j || !j.ok) return;
+          const cfg = j.config || {};
+          if (elLlmLimitInput && (elLlmLimitInput.value === "" || elLlmLimitInput.value == null)) elLlmLimitInput.value = String(cfg.llm_tokens_limit ?? "");
+          if (elSmsLimitInput && (elSmsLimitInput.value === "" || elSmsLimitInput.value == null)) elSmsLimitInput.value = String(cfg.sms_calls_limit ?? "");
+          renderTable(j.data || {});
+        };
+
+        const loadSummary = async () => {
+          const j = await fetchJson("/admin/api/system-status/summary");
+          if (j) setKpis(j);
+        };
+
+        const ensureDefaultRange = () => {
+          if (!elStart || !elEnd) return;
+          if (elStart.value && elEnd.value) return;
+          const now = new Date();
+          const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          // Default: last ~20 days inclusive (today + previous 19 days).
+          const start = new Date(end.getTime() - 19 * 24 * 3600 * 1000);
+          const s = fmtYmd(start);
+          const e = fmtYmd(end);
+          elStart.value = s;
+          elEnd.value = e;
+          const fmtDisplay = (v) => (v ? String(v).replaceAll("-", "/") : "");
+          if (elStartDisplay) elStartDisplay.value = fmtDisplay(s);
+          if (elEndDisplay) elEndDisplay.value = fmtDisplay(e);
+        };
+
+        const activeNow = () => (location.hash || "").toLowerCase().includes("status");
+
+        window.addEventListener("system-status:update", (ev) => {
+          if (!activeNow()) return;
+          if (!ev || !ev.detail) return;
+          setKpis(ev.detail);
+        });
+
+        if (elRangeForm) {
+          elRangeForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            ensureDefaultRange();
+            await loadRange({ start: elStart ? elStart.value : "", end: elEnd ? elEnd.value : "" });
+          });
+        }
+        if (elReset) {
+          elReset.addEventListener("click", async () => {
+            if (elStart) elStart.value = "";
+            if (elEnd) elEnd.value = "";
+            if (elStartDisplay) elStartDisplay.value = "";
+            if (elEndDisplay) elEndDisplay.value = "";
+            ensureDefaultRange();
+            await loadRange({ start: elStart ? elStart.value : "", end: elEnd ? elEnd.value : "" });
+          });
+        }
+
+        if (elPrev) {
+          elPrev.addEventListener("click", () => {
+            page = Math.max(1, (page || 1) - 1);
+            renderCurrentPage();
+          });
+        }
+        if (elNext) {
+          elNext.addEventListener("click", () => {
+            page = Math.min(totalPages(), (page || 1) + 1);
+            renderCurrentPage();
+          });
+        }
+
+        if (elCfgForm) {
+          elCfgForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const llmLim = elLlmLimitInput ? parseInt((elLlmLimitInput.value || "").trim() || "0", 10) : 0;
+            const smsLim = elSmsLimitInput ? parseInt((elSmsLimitInput.value || "").trim() || "0", 10) : 0;
+            if (elCfgMsg) elCfgMsg.textContent = "";
+            if (elCfgSave) {
+              try {
+                elCfgSave.disabled = true;
+                elCfgSave.textContent = "保存中…";
+              } catch (_) {}
+            }
+            const j = await fetchJson("/admin/api/system-status/config", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ llm_tokens_limit: llmLim, sms_calls_limit: smsLim }),
+            });
+            if (elCfgSave) {
+              try {
+                elCfgSave.disabled = false;
+                elCfgSave.textContent = "保存";
+              } catch (_) {}
+            }
+            if (!j || !j.ok) {
+              if (elCfgMsg) elCfgMsg.textContent = "保存失败，请重试";
+              return;
+            }
+            const cfg = j.config || {};
+            if (elLlmLimitInput) elLlmLimitInput.value = String(cfg.llm_tokens_limit ?? "");
+            if (elSmsLimitInput) elSmsLimitInput.value = String(cfg.sms_calls_limit ?? "");
+            if (j.summary) setKpis(j.summary);
+            if (elCfgMsg) elCfgMsg.textContent = "已保存（状态实时更新）";
+          });
+        }
+
+        const onEnter = async () => {
+          if (!activeNow()) return;
+          ensureDefaultRange();
+          await loadRange({ start: elStart ? elStart.value : "", end: elEnd ? elEnd.value : "" });
+          await loadSummary();
+        };
+        window.addEventListener("hashchange", onEnter);
+        window.addEventListener("focus", onEnter);
+        window.addEventListener("pageshow", onEnter);
+        document.addEventListener("visibilitychange", () => {
+          if (!document.hidden) onEnter();
+        });
+        onEnter();
+      })();
 
       // Auto-refresh logs tab on a fixed interval.
       // This fixes the common case: keep the dashboard open while operations happen elsewhere (public invite flow).
@@ -1469,6 +1839,8 @@
       initDateProxy("attempt_start_to");
       initDateProxy("chart_start");
       initDateProxy("chart_end");
+      initDateProxy("status_start");
+      initDateProxy("status_end");
       document.querySelectorAll("button.date-btn[data-for]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const id = btn.getAttribute("data-for");

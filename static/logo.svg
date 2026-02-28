@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none" role="img" aria-label="Servforce Quiz logo">
+  <defs>
+    <linearGradient id="g1" x1="18" y1="14" x2="118" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="0.52" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <radialGradient id="g2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(40 34) rotate(60) scale(90 78)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="s" x="-20" y="-20" width="168" height="168" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#020617" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#s)">
+    <rect x="12" y="12" width="104" height="104" rx="30" fill="url(#g1)"/>
+    <rect x="12" y="12" width="104" height="104" rx="30" fill="url(#g2)"/>
+  </g>
+
+  <!-- Monogram: stylized "S" + dot to hint "Q" -->
+  <path
+    d="M82.8 44.2c-2.6-6.6-10.1-11.2-19.9-11.2-11.8 0-20.4 6.6-20.4 15.8 0 7.6 6.1 11.8 16.7 14.0l6.6 1.3c6.7 1.3 9.6 3.4 9.6 6.8 0 4.3-4.6 7.4-11.6 7.4-6.6 0-11.6-2.4-13.2-6.9"
+    stroke="#FFFFFF"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.98"
+  />
+  <circle cx="88.8" cy="79.6" r="5.8" fill="#FFFFFF" opacity="0.98"/>
+</svg>

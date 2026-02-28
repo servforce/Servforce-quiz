@@ -136,7 +136,9 @@
 
     <main class="container exam-frame page">
       {% for m in get_flashed_messages() %}
+      {% if m and (m|string)|trim %}
       <div class="flash error">{{ m }}</div>
+      {% endif %}
       {% endfor %}
 
       <div class="floating-time-card" role="region" aria-label="时间浮窗">

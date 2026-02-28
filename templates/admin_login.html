@@ -12,10 +12,9 @@
       .hero {
         border-radius: var(--radius);
         padding: 28px 26px;
-        color: rgba(229, 231, 235, 0.92);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(255, 255, 255, 0.06);
-        backdrop-filter: blur(10px);
+        color: rgba(15, 23, 42, 0.92);
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.92);
         box-shadow: var(--shadow-soft);
         overflow: hidden;
         position: relative;
@@ -24,24 +23,36 @@
         content: "";
         position: absolute;
         inset: -2px;
-        background: linear-gradient(135deg, rgba(37, 99, 235, 0.45), rgba(124, 58, 237, 0.35), rgba(16, 185, 129, 0.15));
-        filter: blur(40px);
-        opacity: 0.55;
+        background: radial-gradient(900px 420px at 12% 18%, rgba(37, 99, 235, 0.16), transparent 60%),
+          radial-gradient(700px 380px at 88% 22%, rgba(124, 58, 237, 0.14), transparent 58%),
+          radial-gradient(700px 420px at 30% 90%, rgba(16, 185, 129, 0.10), transparent 60%);
+        filter: blur(28px);
+        opacity: 0.75;
       }
       .hero > * { position: relative; }
-      .logo { width: 40px; height: 40px; border-radius: 14px; background: linear-gradient(135deg, var(--brand), var(--brand2)); box-shadow: 0 12px 26px rgba(37, 99, 235, 0.35); }
-      .brand-title { font-weight: 900; color: rgba(255, 255, 255, 0.92); }
-      .brand-sub { font-size: 13px; color: rgba(229, 231, 235, 0.75); margin-top: 2px; }
-      .hero h1 { font-size: 28px; margin: 10px 0 8px; line-height: 1.2; color: rgba(255, 255, 255, 0.96); }
-      .hero p { margin: 0; color: rgba(229, 231, 235, 0.82); line-height: 1.7; font-size: 14px; }
-      .pill { margin-top: 18px; display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.16); font-size: 13px; }
+      .logo {
+        width: 40px;
+        height: 40px;
+        border-radius: 14px;
+        background-color: #ffffff;
+        background-image: url("{{ url_for('static', filename='logo.svg') }}");
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+        box-shadow: 0 12px 26px rgba(2, 6, 23, 0.14);
+      }
+      .brand-title { font-weight: 950; color: rgba(15, 23, 42, 0.92); }
+      .brand-sub { font-size: 13px; color: rgba(71, 85, 105, 0.92); margin-top: 2px; }
+      .hero h1 { font-size: 28px; margin: 10px 0 8px; line-height: 1.2; color: rgba(15, 23, 42, 0.96); letter-spacing: -0.01em; }
+      .hero p { margin: 0; color: rgba(71, 85, 105, 0.92); line-height: 1.7; font-size: 14px; }
+      .pill { margin-top: 18px; display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 999px; background: rgba(15, 23, 42, 0.04); border: 1px solid rgba(15, 23, 42, 0.08); font-size: 13px; }
       .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(34, 197, 94, 0.95); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.16); }
-      .card { border-radius: var(--radius); background: var(--card); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: var(--shadow); overflow: hidden; }
+      .card { border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden; }
       .card-inner { padding: 22px 22px 18px; }
       .hint { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
       .field { margin-bottom: 12px; }
       .btn { width: 100%; }
-      .footer { padding: 12px 22px 16px; border-top: 1px solid rgba(15, 23, 42, 0.08); color: var(--muted); font-size: 12px; background: rgba(255, 255, 255, 0.75); }
+      .footer { padding: 12px 22px 16px; border-top: 1px solid rgba(15, 23, 42, 0.08); color: var(--muted); font-size: 12px; background: rgba(255, 255, 255, 0.85); }
       @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } .hero { display: none; } }
     </style>
   </head>
@@ -65,7 +76,9 @@
           <h2>管理员登录</h2>
 
           {% for m in get_flashed_messages() %}
+          {% if m and (m|string)|trim %}
           <div class="flash">{{ m }}</div>
+          {% endif %}
           {% endfor %}
 
           <form method="post" action="/admin/login">

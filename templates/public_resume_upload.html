@@ -77,7 +77,9 @@
     <div class="surface card" role="region" aria-label="上传简历">
       <div class="section">
         {% for m in get_flashed_messages() %}
+        {% if m and (m|string)|trim %}
         <div class="flash error">{{ m }}</div>
+        {% endif %}
         {% endfor %}
 
         <div class="hero" aria-label="提示">
