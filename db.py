@@ -1119,7 +1119,7 @@ def count_operation_logs() -> int:
       - candidate.* (CRUD and related admin actions)
       - exam.* (CRUD + public invite toggle)
       - assignment timeline: assignment.create / assignment.verify / exam.enter / exam.finish
-      - system: sms.send / system.alert
+      - system: system.alert
     """
     sql = """
  SELECT COUNT(*)
@@ -1127,7 +1127,6 @@ def count_operation_logs() -> int:
  WHERE (
      sl.event_type LIKE 'candidate.%%' OR
      sl.event_type LIKE 'exam.%%' OR
-     sl.event_type = 'sms.send' OR
      sl.event_type = 'system.alert' OR
      sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
    ) AND sl.event_type <> 'llm.usage'
@@ -1163,7 +1162,6 @@ def list_operation_logs(*, limit: int = 50, offset: int = 0) -> list[dict[str, A
   WHERE (
     sl.event_type LIKE 'candidate.%%' OR
     sl.event_type LIKE 'exam.%%' OR
-    sl.event_type = 'sms.send' OR
     sl.event_type = 'system.alert' OR
     sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
   ) AND sl.event_type <> 'llm.usage'
@@ -1174,6 +1172,51 @@ def list_operation_logs(*, limit: int = 50, offset: int = 0) -> list[dict[str, A
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (int(limit), int(offset)))
+            return [dict(r) for r in cur.fetchall()]
+
+
+def list_operation_logs_after_id(*, after_id: int, limit: int = 50) -> list[dict[str, Any]]:
+    """
+    List business operation logs with id > after_id (exclude llm.usage rows), newest first.
+
+    Used by the admin dashboard to poll incremental updates without a full page reload.
+    """
+    try:
+        aid = int(after_id or 0)
+    except Exception:
+        aid = 0
+    aid = max(0, aid)
+    lim = max(1, min(100, int(limit or 50)))
+    sql = """
+ SELECT
+    sl.id,
+    sl.at,
+    sl.actor,
+    sl.event_type,
+    sl.candidate_id,
+    c.name AS candidate_name,
+    c.phone AS candidate_phone,
+    sl.exam_key,
+    sl.token,
+    sl.llm_prompt_tokens,
+    sl.llm_completion_tokens,
+    sl.llm_total_tokens,
+    sl.duration_seconds,
+    sl.meta
+  FROM system_log sl
+  LEFT JOIN candidate c ON c.id = sl.candidate_id
+  WHERE sl.id > %s AND (
+    sl.event_type LIKE 'candidate.%%' OR
+    sl.event_type LIKE 'exam.%%' OR
+    sl.event_type = 'system.alert' OR
+    sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
+  ) AND sl.event_type <> 'llm.usage'
+  ORDER BY sl.id DESC
+  LIMIT %s
+ """
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (aid, lim))
             return [dict(r) for r in cur.fetchall()]
 
 
@@ -1189,6 +1232,7 @@ def list_operation_daily_counts(
     Notes:
     - We intentionally use seconds instead of PostgreSQL's numeric time zone strings (e.g. '+08:00'),
       because PostgreSQL interprets numeric zones using POSIX sign conventions (reversed vs the common ISO form).
+    - Keep event scope aligned with legend categories, including sms.* as part of "system".
     """
     sql = """
  SELECT (((sl.at AT TIME ZONE 'UTC') + (%s * INTERVAL '1 second'))::date) AS day, COUNT(*) AS cnt
@@ -1196,7 +1240,7 @@ def list_operation_daily_counts(
   WHERE (
     sl.event_type LIKE 'candidate.%%' OR
     sl.event_type LIKE 'exam.%%' OR
-    sl.event_type = 'sms.send' OR
+    sl.event_type LIKE 'sms.%%' OR
     sl.event_type = 'system.alert' OR
     sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
    ) AND sl.event_type <> 'llm.usage'
@@ -1229,7 +1273,7 @@ def list_system_status_daily_metrics(
       - invites_new: assignment.create count
       - candidates_new: candidate.create count
       - llm_tokens: SUM(llm_total_tokens) across rows (best-effort)
-      - sms_calls: sms.send count (SMS auth cost)
+      - sms_calls: (tracked outside system_log)
     """
     sql = """
  SELECT
@@ -1238,7 +1282,7 @@ def list_system_status_daily_metrics(
    SUM(CASE WHEN sl.event_type = 'assignment.create' THEN 1 ELSE 0 END) AS invites_new,
    SUM(CASE WHEN sl.event_type = 'candidate.create' THEN 1 ELSE 0 END) AS candidates_new,
    SUM(COALESCE(sl.llm_total_tokens, 0)) AS llm_tokens,
-   SUM(CASE WHEN sl.event_type = 'sms.send' THEN 1 ELSE 0 END) AS sms_calls
+   0 AS sms_calls
  FROM system_log sl
  WHERE sl.event_type <> 'llm.usage'
 """
@@ -1279,6 +1323,137 @@ def has_system_alert(*, day: str, kind: str, level: str) -> bool:
         with conn.cursor() as cur:
             cur.execute(sql, (d, k, lv))
             return bool(cur.fetchone())
+
+
+def touch_system_alert(*, day: str, kind: str, level: str, used: int, limit: int, ratio: float) -> None:
+    """
+    Update an existing system.alert row (same day/kind/level) to reflect the latest snapshot.
+
+    We treat system.alert as a *state* (threshold reached) rather than an immutable historical record,
+    so the UI can show the current ratio without requiring multiple rows per day.
+    """
+    d = str(day or "").strip()
+    k = str(kind or "").strip()
+    lv = str(level or "").strip()
+    if not d or not k or not lv:
+        return
+    try:
+        u = int(used or 0)
+    except Exception:
+        u = 0
+    try:
+        l = int(limit or 0)
+    except Exception:
+        l = 0
+    try:
+        r = float(ratio or 0.0)
+    except Exception:
+        r = 0.0
+
+    sql = """
+ UPDATE system_log sl
+    SET at = NOW(),
+        meta = COALESCE(sl.meta, '{}'::jsonb) || jsonb_build_object(
+          'day', %s,
+          'kind', %s,
+          'level', %s,
+          'used', %s,
+          'limit', %s,
+          'ratio', %s
+        )
+  WHERE sl.event_type = 'system.alert'
+    AND COALESCE(sl.meta->>'day','') = %s
+    AND COALESCE(sl.meta->>'kind','') = %s
+    AND COALESCE(sl.meta->>'level','') = %s
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (d, k, lv, u, l, r, d, k, lv))
+
+
+def estimate_sms_calls_for_day(*, day: str, tz_offset_seconds: int) -> int:
+    """
+    Best-effort estimation of "sms verification usage" for a given local day bucket.
+
+    We no longer persist per-call sms.send logs to the DB. For historical backfill and UX consistency,
+    we derive usage from:
+      1) legacy system_log rows where event_type='sms.send' (count)
+      2) assignment.verify meta.sms_send_count (sum; only recorded when verification succeeds)
+
+    To avoid double counting for old data sets that may have both, we take the maximum of the two.
+    """
+    d = str(day or "").strip()[:10]
+    try:
+        off = int(tz_offset_seconds or 0)
+    except Exception:
+        off = 0
+    if not d:
+        return 0
+    sql = """
+ SELECT
+   GREATEST(
+     COALESCE(SUM(CASE WHEN sl.event_type = 'sms.send' THEN 1 ELSE 0 END), 0),
+     COALESCE(SUM(CASE WHEN sl.event_type = 'assignment.verify' THEN COALESCE(NULLIF(sl.meta->>'sms_send_count','')::int, 0) ELSE 0 END), 0)
+   ) AS sms_calls
+ FROM system_log sl
+ WHERE (((sl.at AT TIME ZONE 'UTC') + (%s * INTERVAL '1 second'))::date) = (%s::date)
+   AND sl.event_type <> 'llm.usage'
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (off, d))
+            row = cur.fetchone() or {}
+            try:
+                return max(0, int(row.get("sms_calls") or 0))
+            except Exception:
+                return 0
+
+
+def list_estimated_sms_calls_daily_counts(
+    *,
+    tz_offset_seconds: int,
+    at_from: datetime | None = None,
+    at_to: datetime | None = None,
+) -> dict[str, int]:
+    """
+    Best-effort estimation of sms verification usage grouped by local day bucket.
+
+    See estimate_sms_calls_for_day() for rationale. This is the batched version used for
+    system status range queries to avoid N-per-day DB round trips.
+    """
+    sql = """
+ SELECT
+   (((sl.at AT TIME ZONE 'UTC') + (%s * INTERVAL '1 second'))::date) AS day,
+   GREATEST(
+     COALESCE(SUM(CASE WHEN sl.event_type = 'sms.send' THEN 1 ELSE 0 END), 0),
+     COALESCE(SUM(CASE WHEN sl.event_type = 'assignment.verify' THEN COALESCE(NULLIF(sl.meta->>'sms_send_count','')::int, 0) ELSE 0 END), 0)
+   ) AS sms_calls
+ FROM system_log sl
+ WHERE sl.event_type IN ('sms.send','assignment.verify')
+   AND sl.event_type <> 'llm.usage'
+"""
+    params: list[Any] = [int(tz_offset_seconds or 0)]
+    if at_from is not None:
+        sql += "\n AND sl.at >= %s"
+        params.append(at_from)
+    if at_to is not None:
+        sql += "\n AND sl.at <= %s"
+        params.append(at_to)
+    sql += "\n GROUP BY day\n ORDER BY day ASC\n"
+
+    out: dict[str, int] = {}
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            for r in cur.fetchall() or []:
+                day = str(r.get("day") or "")[:10]
+                if not day:
+                    continue
+                try:
+                    out[day] = max(0, int(r.get("sms_calls") or 0))
+                except Exception:
+                    out[day] = 0
+    return out
 
 
 def count_operation_logs_by_category() -> dict[str, int]:

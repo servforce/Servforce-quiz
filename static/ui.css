@@ -149,10 +149,10 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 14px;
+  padding: 12px 16px;
   border-radius: 12px;
   color: rgba(71, 85, 105, 0.92);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
   border: 1px solid transparent;
   white-space: nowrap;
@@ -166,8 +166,8 @@ code {
 
 /* Topbar nav icons */
 .nav-ico {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: inline-block;
   flex: 0 0 auto;
   background-color: currentColor;
@@ -206,11 +206,11 @@ code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 18px;
-  min-width: 18px;
-  padding: 0 7px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 900;
   line-height: 1;
   border: 1px solid rgba(15, 23, 42, 0.12);

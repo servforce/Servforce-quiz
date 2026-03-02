@@ -141,9 +141,12 @@
           {% set _ss = system_status_summary if system_status_summary else {} %}
           {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
           {% set _badge = '' %}
-          {% if _lvl == 'warn' %}{% set _badge = '70%' %}{% endif %}
-          {% if _lvl == 'danger' %}{% set _badge = '90%' %}{% endif %}
-          {% if _lvl == 'critical' %}{% set _badge = '100%' %}{% endif %}
+          {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
+          {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
+          {% set _r_max = _r_llm if _r_llm > _r_sms else _r_sms %}
+          {% set _pct = (_r_max * 100) | round(0) | int %}
+          {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
+          {% if _lvl != 'ok' %}{% set _badge = _pct ~ '%' %}{% endif %}
           <a class="nav-link" href="/admin#tab-status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
             <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
           </a>

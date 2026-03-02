@@ -36,7 +36,7 @@
         background: rgba(255, 255, 255, 0.92);
       }
 
-      .exam-search { margin: 0; display: flex; gap: 10px; align-items: flex-end; flex: 1; min-width: 280px; flex-wrap: wrap; }
+      .exam-search { margin: 6px 0 8px; display: flex; gap: 10px; align-items: flex-end; flex: 1; min-width: 280px; flex-wrap: wrap; }
       .exam-search { max-width: 100%; }
       /* Make the search box about quarter-width (while staying responsive). */
       .exam-search .field { margin: 0; flex: 0 1 360px; min-width: 220px; max-width: 25%; }
@@ -196,8 +196,8 @@
       }
       #tab-exams input[type="file"].file-input { padding: 6px 10px; line-height: 1.2; }
       #tab-exams .btn { height: 40px; font-size: 16px; border-radius: 14px; }
-      #tab-exams table.exam-table { font-size: 18px; }
-      #tab-exams table.exam-table th { font-size: 16px; }
+      #tab-exams table.exam-table { font-size: 19px; }
+      #tab-exams table.exam-table th { font-size: 17px; }
       #tab-exams .public-invite-toggle {
         width: 54px;
         height: 30px;
@@ -411,6 +411,21 @@
         border-color: transparent;
       }
       .density-bar.zero:hover { background: transparent; }
+      .density-tip {
+        position: fixed;
+        z-index: 60;
+        padding: 6px 10px;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.92);
+        color: rgba(255, 255, 255, 0.96);
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.2px;
+        white-space: nowrap;
+        pointer-events: none;
+        transform: translate(-50%, -120%);
+        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+      }
       .density-x { display:flex; gap: 10px; padding: 0 4px 8px; }
       .density-x span { width: 22px; font-size: 13px; color: rgba(15, 23, 42, 0.55); text-align: center; }
 
@@ -590,9 +605,12 @@
           {% set _ss = system_status_summary if system_status_summary else {} %}
           {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
           {% set _badge = '' %}
-          {% if _lvl == 'warn' %}{% set _badge = '70%' %}{% endif %}
-          {% if _lvl == 'danger' %}{% set _badge = '90%' %}{% endif %}
-          {% if _lvl == 'critical' %}{% set _badge = '100%' %}{% endif %}
+          {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
+          {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
+          {% set _r_max = _r_llm if _r_llm > _r_sms else _r_sms %}
+          {% set _pct = (_r_max * 100) | round(0) | int %}
+          {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
+          {% if _lvl != 'ok' %}{% set _badge = _pct ~ '%' %}{% endif %}
           <a class="nav-link" href="#tab-status" data-nav="status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
             <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
           </a>
@@ -1052,7 +1070,7 @@
                       <th>详情</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody id="logs_table_body">
                     {% for it in (logs or []) %}
                     <tr>
                       <td>{{ it.id }}</td>
@@ -1317,6 +1335,7 @@
         const elSmsUsed = document.getElementById("kpi_sms_used");
         const elSmsLimit = document.getElementById("kpi_sms_limit");
         const elSmsRatio = document.getElementById("kpi_sms_ratio");
+        const elNavBadge = document.querySelector("[data-system-status-badge]");
 
         const elLlmLimitInput = document.getElementById("llm_tokens_limit");
         const elSmsLimitInput = document.getElementById("sms_calls_limit");
@@ -1345,9 +1364,9 @@
         };
         const levelText = (lvl) => {
           const k = String(lvl || "ok");
-          if (k === "warn") return "预警（70%）";
-          if (k === "danger") return "高危（90%）";
-          if (k === "critical") return "超限（100%）";
+          if (k === "warn") return "预警";
+          if (k === "danger") return "高危";
+          if (k === "critical") return "超限";
           return "正常";
         };
 
@@ -1360,9 +1379,29 @@
           const parts = [];
           const llm = summary && summary.llm ? summary.llm : null;
           const sms = summary && summary.sms ? summary.sms : null;
-          if (llm && String(llm.level || "ok") !== "ok") parts.push(`大模型 Token：${levelText(llm.level)}（${fmtPct(llm.ratio)}）`);
-          if (sms && String(sms.level || "ok") !== "ok") parts.push(`短信认证：${levelText(sms.level)}（${fmtPct(sms.ratio)}）`);
+          if (llm && String(llm.level || "ok") !== "ok") parts.push(`大模型 Token：${fmtPct(llm.ratio)}`);
+          if (sms && String(sms.level || "ok") !== "ok") parts.push(`短信认证：${fmtPct(sms.ratio)}`);
           if (elAlertText) elAlertText.textContent = parts.length ? (`当前预警：${parts.join("；")}`) : "今日用量正常";
+        };
+
+        const setNavBadge = (summary) => {
+          if (!elNavBadge) return;
+          const overall = String(summary && summary.overall_level ? summary.overall_level : "ok");
+          try {
+            elNavBadge.classList.remove("level-ok", "level-warn", "level-danger", "level-critical");
+            elNavBadge.classList.add(`level-${overall}`);
+          } catch (_) {}
+          if (overall === "ok") {
+            elNavBadge.textContent = "";
+            return;
+          }
+          const llm = summary && summary.llm ? summary.llm : {};
+          const sms = summary && summary.sms ? summary.sms : {};
+          const r1 = typeof llm.ratio === "number" ? llm.ratio : parseFloat(String(llm.ratio || "0"));
+          const r2 = typeof sms.ratio === "number" ? sms.ratio : parseFloat(String(sms.ratio || "0"));
+          const maxr = Math.max(Number.isFinite(r1) ? r1 : 0, Number.isFinite(r2) ? r2 : 0);
+          const pct = Math.min(100, Math.max(0, Math.round(maxr * 100)));
+          elNavBadge.textContent = `${pct}%`;
         };
 
         const setKpis = (summary) => {
@@ -1375,6 +1414,7 @@
           if (elSmsLimit) elSmsLimit.textContent = String(sms.limit ?? "0");
           if (elSmsRatio) elSmsRatio.textContent = fmtPct(sms.ratio);
           setAlert(summary);
+          setNavBadge(summary);
         };
 
         let allItems = [];
@@ -1583,15 +1623,17 @@
             if (elLlmLimitInput) elLlmLimitInput.value = String(cfg.llm_tokens_limit ?? "");
             if (elSmsLimitInput) elSmsLimitInput.value = String(cfg.sms_calls_limit ?? "");
             if (j.summary) setKpis(j.summary);
-            if (elCfgMsg) elCfgMsg.textContent = "已保存（状态实时更新）";
+            if (elCfgMsg) elCfgMsg.textContent = "";
           });
         }
 
         const onEnter = async () => {
           if (!activeNow()) return;
           ensureDefaultRange();
+          // Load summary first (fast) so KPIs and the alert banner render immediately,
+          // while the range table can keep loading in the background.
+          try { loadSummary(); } catch (_) {}
           await loadRange({ start: elStart ? elStart.value : "", end: elEnd ? elEnd.value : "" });
-          await loadSummary();
         };
         window.addEventListener("hashchange", onEnter);
         window.addEventListener("focus", onEnter);
@@ -1603,80 +1645,107 @@
       })();
 
       // Auto-refresh logs tab on a fixed interval.
-      // This fixes the common case: keep the dashboard open while operations happen elsewhere (public invite flow).
-      // Default: refresh every 10 seconds. You can override with ?logs_refresh=15 (3..120).
+      // This fixes the common case: keep the dashboard open while operations happen elsewhere (public invite flow),
+      // and see new logs without manually refreshing the whole page.
       (() => {
-        const RELOAD_COOLDOWN_MS = 1500;
-        const LAST_RELOAD_KEY = "admin_logs_last_reload_at";
+        const POLL_SECONDS = 2;
+        const tbody = document.getElementById("logs_table_body");
+        if (!tbody) return;
 
-        const refreshSeconds = () => {
-          const u = new URL(window.location.href);
-          const raw = (u.searchParams.get("logs_refresh") || "10").trim();
-          const n = parseInt(raw, 10);
-          if (!Number.isFinite(n)) return 10;
-          return Math.max(3, Math.min(120, n));
-        };
-
-        const canReload = () => {
-          try {
-            const raw = window.sessionStorage ? window.sessionStorage.getItem(LAST_RELOAD_KEY) : "";
-            const last = parseInt(String(raw || "0"), 10);
-            if (!Number.isFinite(last) || last <= 0) return true;
-            return (Date.now() - last) > RELOAD_COOLDOWN_MS;
-          } catch (_) {
-            return true;
-          }
-        };
-
-        const markReload = () => {
-          try {
-            if (!window.sessionStorage) return;
-            window.sessionStorage.setItem(LAST_RELOAD_KEY, String(Date.now()));
-          } catch (_) {}
-        };
-
-        const shouldReloadNow = () => {
-          const onLogs = (location.hash || "").toLowerCase().includes("logs");
-          if (!onLogs) return false;
+        const isOnLogs = () => (location.hash || "").toLowerCase().includes("logs");
+        const isPage1 = () => {
           const u = new URL(window.location.href);
           const lp = (u.searchParams.get("log_page") || "1").trim();
           return lp === "" || lp === "1";
         };
 
-        let timer = null;
-        const stop = () => {
-          if (!timer) return;
-          try { window.clearInterval(timer); } catch (_) {}
-          timer = null;
+        const currentMaxId = () => {
+          try {
+            const firstRow = tbody.querySelector("tr");
+            if (!firstRow) return 0;
+            const td = firstRow.querySelector("td");
+            if (!td) return 0;
+            const n = parseInt((td.textContent || "").trim(), 10);
+            return Number.isFinite(n) ? n : 0;
+          } catch (_) {
+            return 0;
+          }
         };
 
-        const tick = () => {
+        const escapeText = (s) => String(s == null ? "" : s);
+        const makeCell = (text, className) => {
+          const td = document.createElement("td");
+          if (className) td.className = className;
+          td.textContent = escapeText(text);
+          return td;
+        };
+
+        const prependRow = (it) => {
+          // Remove empty placeholder row if it exists.
+          try {
+            const onlyRow = tbody.querySelector("tr");
+            const muted = onlyRow ? onlyRow.querySelector("td.muted") : null;
+            if (muted) tbody.innerHTML = "";
+          } catch (_) {}
+
+          const tr = document.createElement("tr");
+          tr.appendChild(makeCell(it.id, ""));
+          tr.appendChild(makeCell(it.at, "nowrap"));
+
+          const tdType = document.createElement("td");
+          const pill = document.createElement("span");
+          pill.className = `type-pill cat-${escapeText(it.type_key || "system")}`;
+          pill.textContent = escapeText(it.type_label || "");
+          tdType.appendChild(pill);
+          tr.appendChild(tdType);
+
+          tr.appendChild(makeCell(it.detail_text, "ellipsis"));
+          tbody.insertBefore(tr, tbody.firstChild);
+        };
+
+        const fetchJson = async (url) => {
+          try {
+            const res = await fetch(url, { method: "GET", headers: { Accept: "application/json" } });
+            if (!res.ok) return null;
+            return await res.json();
+          } catch (_) {
+            return null;
+          }
+        };
+
+        let inFlight = false;
+        const tick = async () => {
+          if (inFlight) return;
           if (document.hidden) return;
-          if (!shouldReloadNow()) return;
-          if (!canReload()) return;
-          markReload();
-          const u = new URL(window.location.href);
-          u.searchParams.delete("log_page");
-          u.hash = "#tab-logs";
-          window.location.replace(u.toString());
+          if (!isOnLogs() || !isPage1()) return;
+          const afterId = currentMaxId();
+          if (!afterId) return;
+          inFlight = true;
+          try {
+            const j = await fetchJson(`/admin/api/operation-logs/updates?after_id=${encodeURIComponent(String(afterId))}&limit=20`);
+            if (!j || !j.ok) return;
+            const items = Array.isArray(j.items) ? j.items : [];
+            if (!items.length) return;
+            // Keep newest-first view: server returns id ASC; prepend reverse order.
+            for (let i = items.length - 1; i >= 0; i--) prependRow(items[i]);
+          } finally {
+            inFlight = false;
+          }
         };
 
-        const start = () => {
-          stop();
-          timer = window.setInterval(() => {
-            tick();
-          }, refreshSeconds() * 1000);
-        };
-
-        start();
-        // When user returns from other pages (e.g. viewing result), reload immediately so logs feel "real-time".
-        window.addEventListener("hashchange", () => { tick(); start(); });
-        window.addEventListener("focus", () => { tick(); start(); });
-        window.addEventListener("pageshow", () => { tick(); start(); });
+        tick();
+        const timer = window.setInterval(tick, Math.max(2, POLL_SECONDS) * 1000);
+        window.addEventListener("hashchange", tick);
+        window.addEventListener("focus", tick);
+        window.addEventListener("pageshow", tick);
         document.addEventListener("visibilitychange", () => {
-          if (!document.hidden) { tick(); start(); }
+          if (!document.hidden) tick();
         });
-        window.addEventListener("beforeunload", stop);
+        window.addEventListener("beforeunload", () => {
+          try {
+            window.clearInterval(timer);
+          } catch (_) {}
+        });
       })();
 
       // Clickable rows (except clicking buttons/links in the action column).

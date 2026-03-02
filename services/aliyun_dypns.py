@@ -132,25 +132,7 @@ def send_sms_verify_code(phone: str) -> dict[str, Any]:
     try:
         res = _rpc_call("SendSmsVerifyCode", extra=extra)
     except Exception as e:
-        try:
-            p = str(phone or "").strip()
-            tail = p[-4:] if len(p) >= 4 else p
-            log_event("sms.send", meta={"ok": False, "phone_tail": tail, "error": f"{type(e).__name__}: {e}"})
-        except Exception:
-            pass
         raise
-    try:
-        p = str(phone or "").strip()
-        tail = p[-4:] if len(p) >= 4 else p
-        http_status = None
-        try:
-            http_status = int(res.get("_http_status") or 0) if isinstance(res, dict) else 0
-        except Exception:
-            http_status = 0
-        ok = bool(http_status and http_status < 400)
-        log_event("sms.send", meta={"ok": ok, "phone_tail": tail, "http_status": http_status})
-    except Exception:
-        pass
     return res
 
 
@@ -177,23 +159,5 @@ def check_sms_verify_code(phone: str, code: str) -> dict[str, Any]:
     try:
         res = _rpc_call("CheckSmsVerifyCode", extra=extra)
     except Exception as e:
-        try:
-            p = str(phone or "").strip()
-            tail = p[-4:] if len(p) >= 4 else p
-            log_event("sms.verify", meta={"ok": False, "phone_tail": tail, "error": f"{type(e).__name__}: {e}"})
-        except Exception:
-            pass
         raise
-    try:
-        p = str(phone or "").strip()
-        tail = p[-4:] if len(p) >= 4 else p
-        http_status = None
-        try:
-            http_status = int(res.get("_http_status") or 0) if isinstance(res, dict) else 0
-        except Exception:
-            http_status = 0
-        ok = bool(http_status and http_status < 400)
-        log_event("sms.verify", meta={"ok": ok, "phone_tail": tail, "http_status": http_status})
-    except Exception:
-        pass
     return res

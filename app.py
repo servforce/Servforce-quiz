@@ -39,6 +39,7 @@ from db import (
     count_operation_logs_by_category,
     delete_candidate,
     has_system_alert,
+    touch_system_alert,
     get_exam_paper_by_token,
     get_candidate,
     get_candidate_by_phone,
@@ -46,8 +47,10 @@ from db import (
     init_db,
     list_candidates,
     list_exam_papers,
+    list_estimated_sms_calls_daily_counts,
     list_operation_daily_counts,
     list_operation_logs,
+    list_operation_logs_after_id,
     list_system_status_daily_metrics,
     mark_exam_deleted,
     rename_exam_key,
@@ -85,6 +88,7 @@ from services.resume_service import (
     split_projects_raw_into_blocks,
 )
 from services.system_log import log_event
+from services.system_metrics import get_daily_metric, incr_sms_calls_and_alert
 from services.university_tags import classify_university
 from storage.json_store import ensure_dirs, read_json, write_json
 from web.auth import admin_required
@@ -252,6 +256,14 @@ def _compute_system_status_range(*, start_day: date, end_day: date) -> dict[str,
         at_from=start_local_dt.astimezone(timezone.utc),
         at_to=end_local_dt.astimezone(timezone.utc),
     )
+    try:
+        sms_est_map = list_estimated_sms_calls_daily_counts(
+            tz_offset_seconds=tz_offset_seconds,
+            at_from=start_local_dt.astimezone(timezone.utc),
+            at_to=end_local_dt.astimezone(timezone.utc),
+        )
+    except Exception:
+        sms_est_map = {}
     m: dict[str, dict[str, int]] = {}
     for r in rows or []:
         k = str(r.get("day") or "")[:10]
@@ -273,14 +285,28 @@ def _compute_system_status_range(*, start_day: date, end_day: date) -> dict[str,
         ds = d.isoformat()
         days.append(ds)
         it = m.get(ds) or {}
+        # Override llm/sms usage with file-based daily counters so we can avoid persisting per-call logs.
+        try:
+            llm_used2 = int(get_daily_metric(day=ds, key="llm_tokens") or 0)
+        except Exception:
+            llm_used2 = 0
+        try:
+            sms_used2 = int(get_daily_metric(day=ds, key="sms_calls") or 0)
+        except Exception:
+            sms_used2 = 0
+        if sms_used2 <= 0:
+            try:
+                sms_used2 = int(sms_est_map.get(ds) or 0)
+            except Exception:
+                sms_used2 = 0
         items.append(
             {
                 "day": ds,
                 "exams_new": int(it.get("exams_new") or 0),
                 "invites_new": int(it.get("invites_new") or 0),
                 "candidates_new": int(it.get("candidates_new") or 0),
-                "llm_tokens": int(it.get("llm_tokens") or 0),
-                "sms_calls": int(it.get("sms_calls") or 0),
+                "llm_tokens": int(llm_used2) if llm_used2 > 0 else int(it.get("llm_tokens") or 0),
+                "sms_calls": int(sms_used2) if sms_used2 > 0 else int(it.get("sms_calls") or 0),
             }
         )
 
@@ -312,7 +338,16 @@ def _compute_system_status_summary() -> dict[str, object]:
     ):
         if level in {"warn", "danger", "critical"}:
             try:
-                if not has_system_alert(day=day, kind=kind, level=level):
+                if has_system_alert(day=day, kind=kind, level=level):
+                    touch_system_alert(
+                        day=day,
+                        kind=kind,
+                        level=level,
+                        used=int(used or 0),
+                        limit=int(limit or 0),
+                        ratio=float(ratio or 0.0),
+                    )
+                else:
                     create_system_log(
                         actor="system",
                         event_type="system.alert",
@@ -335,6 +370,148 @@ def _compute_system_status_summary() -> dict[str, object]:
         "llm": {"used": used_llm, "limit": llm_limit, "ratio": llm_ratio, "level": llm_level},
         "sms": {"used": used_sms, "limit": sms_limit, "ratio": sms_ratio, "level": sms_level},
     }
+
+
+def _oplog_type_label_v2(et: str) -> tuple[str, str]:
+    et = str(et or "").strip()
+    if et.startswith("candidate."):
+        return "candidate", "候选人操作"
+    if et in {"assignment.create", "assignment.verify", "exam.enter", "exam.finish"}:
+        return "assignment", "答题邀约操作"
+    if et == "exam.grade":
+        return "grading", "判卷操作"
+    if et == "system.alert" or et.startswith("sms."):
+        return "system", "系统"
+    if et.startswith("exam."):
+        return "exam", "试卷操作"
+    return "system", "系统"
+
+
+def _oplog_safe_int2(v: Any) -> int | None:
+    if v is None or v == "":
+        return None
+    try:
+        return int(v)
+    except Exception:
+        return None
+
+
+def _oplog_join_plus2(*parts: str) -> str:
+    items = [str(x or "").strip() for x in parts]
+    items = [x for x in items if x]
+    return "+".join(items)
+
+
+def _oplog_pick_name_phone2(it: dict[str, Any], meta: dict[str, Any]) -> tuple[str, str]:
+    n = str(meta.get("name") or it.get("candidate_name") or "").strip()
+    p = _normalize_phone(str(meta.get("phone") or it.get("candidate_phone") or "").strip())
+    return n, p
+
+
+def _oplog_exam_id_text2(meta: dict[str, Any], exam_key: str) -> str:
+    # User requirement: "试卷id" means exam_key (not sort-id).
+    return str(exam_key or "").strip() or "未知试卷"
+
+
+def _oplog_detail_text_v2(it: dict[str, Any]) -> str:
+    et = str(it.get("event_type") or "").strip()
+    meta = it.get("meta") if isinstance(it.get("meta"), dict) else {}
+    exam_key = str(it.get("exam_key") or "").strip()
+    exam_id = _oplog_exam_id_text2(meta, exam_key)
+    name, phone = _oplog_pick_name_phone2(it, meta)
+    who_plus = _oplog_join_plus2(name, phone, exam_id)
+    public_invite = bool(meta.get("public_invite"))
+
+    if et.startswith("candidate."):
+        op = et.split(".", 1)[1] if "." in et else et
+        if op == "read":
+            return f"查看{name or '候选人'}详细信息".strip()
+        if op == "create":
+            return f"新增{_oplog_join_plus2(name, phone)}".strip("+")
+        if op == "delete":
+            return f"删除{_oplog_join_plus2(name, phone)}".strip("+")
+        if op in {"resume.parse", "resume_parse"}:
+            try:
+                tt = int(it.get("llm_total_tokens") or 0)
+            except Exception:
+                tt = 0
+            try:
+                is_reparse = bool(meta.get("reparse"))
+            except Exception:
+                is_reparse = False
+            if is_reparse:
+                return f"重新上传解析简历，花费token量：{tt}" if tt > 0 else "重新上传解析简历"
+            return f"解析简历消耗token量：{tt}" if tt > 0 else "解析简历消耗token量"
+        return f"候选人操作{op}".strip()
+
+    if et == "assignment.verify":
+        try:
+            sms_cnt = int(meta.get("sms_send_count") or 0)
+        except Exception:
+            sms_cnt = 0
+        prefix = "公开邀约+" if public_invite else ""
+        return f"{prefix}{who_plus}，消耗短信认证{sms_cnt}次".strip()
+
+    if et == "exam.enter":
+        prefix = "公开邀约" if public_invite else ""
+        return f"{prefix}进入答题{who_plus}".strip()
+
+    if et == "exam.finish":
+        prefix = "公开邀约" if public_invite else ""
+        return f"{prefix}提交答题{who_plus}".strip()
+
+    if et == "exam.grade":
+        score = meta.get("score")
+        try:
+            s2 = int(score or 0)
+        except Exception:
+            s2 = _oplog_safe_int2(score) or 0
+        try:
+            tt = int(it.get("llm_total_tokens") or 0)
+        except Exception:
+            tt = 0
+        tok_part = f"，消耗token量：{tt}" if tt > 0 else ""
+        return f"判卷完成{_oplog_join_plus2(name, phone, exam_id)}（得分：{s2}）{tok_part}".strip()
+
+    if et == "system.alert":
+        kind = str(meta.get("kind") or "").strip() or "unknown"
+        kind_label = kind
+        if kind == "sms_calls":
+            kind_label = "短信认证"
+        elif kind == "llm_tokens":
+            kind_label = "大模型token"
+        level = str(meta.get("level") or "").strip() or "warn"
+        used_i = _oplog_safe_int2(meta.get("used")) or 0
+        limit_i = _oplog_safe_int2(meta.get("limit")) or 0
+        try:
+            pct_i = int(round(float(meta.get("ratio") or 0.0) * 100))
+        except Exception:
+            pct_i = 0
+        used_part = f" ({used_i}/{limit_i})" if limit_i > 0 else ""
+        return f"系统告警： {kind_label}达到阈值 {level} {pct_i}%{used_part}".strip()
+
+    if et.startswith("exam."):
+        op = et.split(".", 1)[1] if "." in et else et
+        if op == "read":
+            return f"查看试卷{exam_id}".strip()
+        if op == "result":
+            return f"查看{_oplog_join_plus2(name, phone, exam_id)}的结果".strip("+")
+        if op == "upload":
+            return f"上传试卷{exam_id}".strip()
+        if op == "update":
+            return f"修改试卷{exam_id}".strip()
+        if op == "delete":
+            return f"删除试卷{exam_id}".strip()
+        if op == "public_invite.enable":
+            return f"试卷{exam_id}打开公开邀约".strip()
+        if op == "public_invite.disable":
+            return f"试卷{exam_id}关闭公开邀约".strip()
+        return f"试卷操作{op}({exam_id})".strip()
+
+    if et == "assignment.create":
+        return f"答题邀约{_oplog_join_plus2(name, phone, exam_id)}".strip("+")
+
+    return et
 
 
 def _invite_window_state(assignment: dict, *, now: datetime | None = None) -> tuple[str, date | None, date | None]:
@@ -1787,6 +1964,53 @@ def create_app() -> Flask:
             )
 
         return jsonify({"items": items})
+
+    @app.get("/admin/api/operation-logs/updates")
+    @admin_required
+    def admin_operation_logs_updates_api():
+        try:
+            after_id = int(request.args.get("after_id") or "0")
+        except Exception:
+            after_id = 0
+        try:
+            limit = int(request.args.get("limit") or "20")
+        except Exception:
+            limit = 20
+        limit = max(1, min(50, limit))
+
+        try:
+            rows = list_operation_logs_after_id(after_id=after_id, limit=limit)
+        except Exception:
+            rows = []
+
+        out: list[dict[str, Any]] = []
+        for it in rows or []:
+            et = str(it.get("event_type") or "").strip()
+            k, label = _oplog_type_label_v2(et)
+            it2 = dict(it)
+            it2["type_key"] = k
+            it2["type_label"] = label
+            it2["detail_text"] = _oplog_detail_text_v2(it2)
+            at = it2.get("at")
+            at_str = ""
+            try:
+                if at:
+                    at_str = at.strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                at_str = ""
+            out.append(
+                {
+                    "id": int(it2.get("id") or 0),
+                    "at": at_str,
+                    "type_key": str(it2.get("type_key") or "system"),
+                    "type_label": str(it2.get("type_label") or ""),
+                    "detail_text": str(it2.get("detail_text") or ""),
+                }
+            )
+
+        # id ASC so the client can prepend in reverse order (keep "newest first" view).
+        out.sort(key=lambda x: int(x.get("id") or 0))
+        return jsonify({"ok": True, "items": out})
 
     @app.post("/admin/exams/upload")    # 上传
     @admin_required        #  必须在管理员登录后才能看到 
@@ -3737,6 +3961,10 @@ def create_app() -> Flask:
                 sms["biz_id"] = biz_id
             assignment["sms_verify"] = sms
             save_assignment(token, assignment)
+            try:
+                incr_sms_calls_and_alert(1)
+            except Exception:
+                pass
 
         return jsonify(
             {

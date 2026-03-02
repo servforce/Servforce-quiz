@@ -3,26 +3,26 @@
   // Keep this small so the topbar badge feels "real-time" without needing a full push channel (SSE/WebSocket).
   const POLL_SECONDS = 2;
 
-  const badgeText = (level) => {
-    const k = String(level || "ok");
-    if (k === "warn") return "70%";
-    if (k === "danger") return "90%";
-    if (k === "critical") return "100%";
-    return "";
+  const maxRatioPct = (summary) => {
+    const llm = summary && summary.llm ? summary.llm : {};
+    const sms = summary && summary.sms ? summary.sms : {};
+    const r1 = typeof llm.ratio === "number" ? llm.ratio : parseFloat(String(llm.ratio || "0"));
+    const r2 = typeof sms.ratio === "number" ? sms.ratio : parseFloat(String(sms.ratio || "0"));
+    const maxr = Math.max(Number.isFinite(r1) ? r1 : 0, Number.isFinite(r2) ? r2 : 0);
+    return Math.min(100, Math.max(0, Math.round(maxr * 100)));
   };
 
-  const applyBadge = (el, level) => {
+  const applyBadge = (el, summary) => {
     if (!el) return;
-    const lvl = String(level || "ok");
-    el.textContent = badgeText(lvl);
+    const lvl = String(summary && summary.overall_level ? summary.overall_level : "ok");
+    el.textContent = lvl === "ok" ? "" : `${maxRatioPct(summary)}%`;
     el.classList.remove("level-ok", "level-warn", "level-danger", "level-critical");
     el.classList.add(`level-${lvl}`);
   };
 
   const updateAllBadges = (summary) => {
-    const lvl = summary && summary.overall_level ? summary.overall_level : "ok";
     const nodes = Array.from(document.querySelectorAll("[data-system-status-badge]"));
-    for (const n of nodes) applyBadge(n, lvl);
+    for (const n of nodes) applyBadge(n, summary);
   };
 
   const fetchSummary = async () => {

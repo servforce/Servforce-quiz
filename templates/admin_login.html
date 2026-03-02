@@ -6,33 +6,45 @@
     <title>管理员登录</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <style>
-      body { min-height: 100vh; display: grid; place-items: center; padding: 22px; }
-      /* Use the same viewport-sized surface as other pages. */
-      .wrap { width: min(980px, 100%); display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; }
+      body.admin-login {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 28px 18px;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      .login-wrap {
+        width: min(1120px, 100%);
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 18px;
+        align-items: stretch;
+      }
       .hero {
-        border-radius: var(--radius);
-        padding: 28px 26px;
-        color: rgba(15, 23, 42, 0.92);
-        border: 1px solid var(--border);
-        background: rgba(255, 255, 255, 0.92);
-        box-shadow: var(--shadow-soft);
-        overflow: hidden;
         position: relative;
-      }
-      .hero::before {
-        content: "";
-        position: absolute;
-        inset: -2px;
-        background: radial-gradient(900px 420px at 12% 18%, rgba(37, 99, 235, 0.16), transparent 60%),
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background:
+          radial-gradient(900px 420px at 12% 18%, rgba(37, 99, 235, 0.18), transparent 62%),
           radial-gradient(700px 380px at 88% 22%, rgba(124, 58, 237, 0.14), transparent 58%),
-          radial-gradient(700px 420px at 30% 90%, rgba(16, 185, 129, 0.10), transparent 60%);
-        filter: blur(28px);
-        opacity: 0.75;
+          linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.82));
+        box-shadow: 0 16px 40px rgba(2, 6, 23, 0.10);
+        padding: 30px 28px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
       }
-      .hero > * { position: relative; }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
       .logo {
-        width: 40px;
-        height: 40px;
+        width: 42px;
+        height: 42px;
         border-radius: 14px;
         background-color: #ffffff;
         background-image: url("{{ url_for('static', filename='logo.svg') }}");
@@ -41,39 +53,264 @@
         background-size: contain;
         box-shadow: 0 12px 26px rgba(2, 6, 23, 0.14);
       }
-      .brand-title { font-weight: 950; color: rgba(15, 23, 42, 0.92); }
-      .brand-sub { font-size: 13px; color: rgba(71, 85, 105, 0.92); margin-top: 2px; }
-      .hero h1 { font-size: 28px; margin: 10px 0 8px; line-height: 1.2; color: rgba(15, 23, 42, 0.96); letter-spacing: -0.01em; }
-      .hero p { margin: 0; color: rgba(71, 85, 105, 0.92); line-height: 1.7; font-size: 14px; }
-      .pill { margin-top: 18px; display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 999px; background: rgba(15, 23, 42, 0.04); border: 1px solid rgba(15, 23, 42, 0.08); font-size: 13px; }
-      .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(34, 197, 94, 0.95); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.16); }
-      .card { border-radius: var(--radius); background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden; }
-      .card-inner { padding: 22px 22px 18px; }
-      .hint { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
-      .field { margin-bottom: 12px; }
-      .btn { width: 100%; }
-      .footer { padding: 12px 22px 16px; border-top: 1px solid rgba(15, 23, 42, 0.08); color: var(--muted); font-size: 12px; background: rgba(255, 255, 255, 0.85); }
-      @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } .hero { display: none; } }
+      .brand-title { font-size: 34px; font-weight: 900; line-height: 1.1; letter-spacing: -0.02em; color: #0b1f44; }
+      .brand-sub { margin-top: 6px; font-size: 16px; font-weight: 700; color: rgba(15, 23, 42, 0.75); }
+      .hero-copy p { margin: 0; font-size: 18px; line-height: 1.75; color: rgba(30, 41, 59, 0.88); max-width: none; width: 100%; }
+      .feature-grid {
+        margin-top: 18px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .feature-item {
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.60);
+        padding: 10px 12px;
+      }
+      .feature-item strong {
+        display: block;
+        font-size: 15px;
+        color: #0b1f44;
+        line-height: 1.2;
+      }
+      .feature-item span {
+        display: block;
+        margin-top: 4px;
+        font-size: 14px;
+        color: rgba(15, 23, 42, 0.72);
+        line-height: 1.35;
+      }
+      .flow-line {
+        margin-top: 12px;
+        font-size: 15px;
+        font-weight: 800;
+        color: rgba(15, 23, 42, 0.78);
+      }
+      .hero-meta {
+        margin-top: 26px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.70);
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        color: rgba(15, 23, 42, 0.86);
+        font-size: 15px;
+        font-weight: 800;
+      }
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #22c55e;
+        box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.14);
+      }
+
+      .card {
+        border-radius: 20px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background:
+          radial-gradient(900px 420px at 12% 18%, rgba(37, 99, 235, 0.14), transparent 62%),
+          radial-gradient(700px 380px at 88% 22%, rgba(124, 58, 237, 0.11), transparent 58%),
+          linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.90));
+        box-shadow: 0 16px 40px rgba(2, 6, 23, 0.10);
+        padding: 24px;
+        display: flex;
+        align-items: center;
+      }
+      .card-inner {
+        width: 100%;
+        max-width: 500px;
+        margin: 0 auto;
+        min-height: 100%;
+        display: grid;
+        align-content: center;
+      }
+      .card-head {
+        margin-bottom: 12px;
+        padding-left: 2px;
+      }
+      .card-head h2 {
+        margin: 0;
+        font-size: 36px;
+        line-height: 1.22;
+        letter-spacing: -0.01em;
+        color: #0b1f44;
+      }
+      .card-head::after {
+        content: "";
+        display: block;
+        width: 72px;
+        height: 3px;
+        margin-top: 8px;
+        border-radius: 999px;
+        background: rgba(15, 37, 82, 0.24);
+      }
+      .login-form {
+        margin-top: 14px;
+        padding: 14px;
+        border-radius: 16px;
+        border: 1px solid transparent;
+        background: transparent;
+      }
+      .card-head p {
+        margin: 8px 0 20px;
+        font-size: 15px;
+        color: rgba(15, 23, 42, 0.62);
+        font-weight: 700;
+      }
+      .field {
+        margin-bottom: 14px;
+        display: grid;
+        grid-template-columns: 58px 1fr;
+        align-items: center;
+        gap: 12px;
+      }
+      .field label {
+        margin: 0;
+        font-size: 19px;
+        font-weight: 850;
+        color: rgba(15, 23, 42, 0.82);
+        justify-self: end;
+      }
+      .login-form input[type="text"],
+      .login-form input[type="password"] {
+        width: 100%;
+        height: 50px;
+        padding: 0 14px;
+        border-radius: 13px;
+        font-size: 20px !important;
+        line-height: 1.2 !important;
+        font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Segoe UI", Arial, sans-serif !important;
+        font-weight: 600 !important;
+        letter-spacing: 0 !important;
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        background: #eef4ff;
+        -webkit-appearance: none;
+        appearance: none;
+        transition: border-color 120ms ease, box-shadow 120ms ease;
+      }
+      .login-form input[type="text"]:focus,
+      .login-form input[type="password"]:focus {
+        outline: none;
+        font-size: 20px !important;
+        line-height: 1.2 !important;
+        font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Segoe UI", Arial, sans-serif !important;
+        font-weight: 600 !important;
+        letter-spacing: 0 !important;
+        border-color: rgba(37, 99, 235, 0.45);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+      }
+      .login-form input[type="text"]::-webkit-input-placeholder,
+      .login-form input[type="password"]::-webkit-input-placeholder { font-size: 20px; font-weight: 500; }
+      .login-form input[type="text"]::placeholder,
+      .login-form input[type="password"]::placeholder { font-size: 20px; font-weight: 500; }
+      .login-form input[type="text"]:-webkit-autofill,
+      .login-form input[type="text"]:-webkit-autofill:hover,
+      .login-form input[type="text"]:-webkit-autofill:focus,
+      .login-form input[type="text"]:-webkit-autofill:active,
+      .login-form input[type="password"]:-webkit-autofill,
+      .login-form input[type="password"]:-webkit-autofill:hover,
+      .login-form input[type="password"]:-webkit-autofill:focus,
+      .login-form input[type="password"]:-webkit-autofill:active {
+        -webkit-text-fill-color: #0f172a !important;
+        font-size: 20px !important;
+        line-height: 1.2 !important;
+        font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Segoe UI", Arial, sans-serif !important;
+        font-weight: 600 !important;
+        box-shadow: 0 0 0 1000px #eef4ff inset !important;
+        transition: background-color 99999s ease-in-out 0s;
+      }
+      .card .btn {
+        width: clamp(160px, 46%, 220px);
+        height: 42px;
+        margin-top: 8px;
+        margin-left: auto;
+        margin-right: auto;
+        display: block;
+        border-radius: 12px;
+        font-size: 19px;
+        font-weight: 900;
+        border: 1px solid rgba(15, 23, 42, 0.14);
+        background: #0f2552;
+        color: #ffffff;
+      }
+      .card .btn:hover {
+        filter: brightness(1.04);
+        text-decoration: none;
+      }
+
+      @media (max-width: 980px) {
+        .login-wrap { grid-template-columns: 1fr; width: min(560px, 100%); }
+        .hero { display: none; }
+        .card { padding: 22px 18px; }
+        .card-head h2 { font-size: 32px; }
+      }
+      @media (max-width: 420px) {
+        .field { grid-template-columns: 1fr; gap: 6px; }
+        .field label { justify-self: start; }
+      }
     </style>
   </head>
   <body class="admin-login">
-    <div class="wrap">
+    <div class="login-wrap">
       <section class="hero" aria-label="产品介绍">
-        <div class="brand">
-          <div class="logo" aria-hidden="true"></div>
-          <div>
-            <div class="brand-title">Servforce Quiz</div>
-            <div class="brand-sub">管理后台 · 试卷管理 / 候选人管理 / 答题邀请</div>
+        <div class="hero-top">
+          <div class="brand">
+            <div class="logo" aria-hidden="true"></div>
+            <div>
+              <div class="brand-title">Servforce Quiz</div>
+            </div>
+          </div>
+          <div class="hero-copy">
+            <p>面向招聘全流程的一体化系统：从试卷配置、邀约投递、在线作答到智能判卷与运营监控，统一在一个后台完成。</p>
+            <div class="feature-grid" aria-label="系统能力总览">
+              <div class="feature-item">
+                <strong>试卷管理</strong>
+                <span>上传/编辑题目，版本化维护</span>
+              </div>
+              <div class="feature-item">
+                <strong>候选人管理</strong>
+                <span>简历入库、信息归档、检索筛选</span>
+              </div>
+              <div class="feature-item">
+                <strong>答题邀约</strong>
+                <span>链接/二维码发放，进度追踪</span>
+              </div>
+              <div class="feature-item">
+                <strong>智能判卷</strong>
+                <span>自动评分、评语生成、结果沉淀</span>
+              </div>
+              <div class="feature-item">
+                <strong>系统日志</strong>
+                <span>关键操作留痕，行为可追溯</span>
+              </div>
+              <div class="feature-item">
+                <strong>系统状态</strong>
+                <span>Token/短信用量监控与预警</span>
+              </div>
+            </div>
+            <div class="flow-line">流程闭环：试卷 -> 邀约 -> 作答 -> 判卷 -> 复盘</div>
           </div>
         </div>
-        <h1>欢迎回来</h1>
-        <p>登录后可上传试卷、生成答题邀请链接/二维码、管理候选人并查看成绩与评估结果。</p>
-        <div class="pill"><span class="dot" aria-hidden="true"></span><span>服务运行中</span></div>
+        <div class="hero-meta">
+          <div class="pill"><span class="dot" aria-hidden="true"></span><span>服务运行中</span></div>
+        </div>
       </section>
 
       <section class="card" aria-label="管理员登录">
         <div class="card-inner">
-          <h2>管理员登录</h2>
+          <div class="card-head">
+            <h2>管理员登录</h2>
+          </div>
 
           {% for m in get_flashed_messages() %}
           {% if m and (m|string)|trim %}
@@ -81,40 +318,19 @@
           {% endif %}
           {% endfor %}
 
-          <form method="post" action="/admin/login">
+          <form class="login-form" method="post" action="/admin/login">
             <div class="field">
               <label for="username">账号</label>
-              <input id="username" class="input" name="username" autocomplete="username" placeholder="请输入账号" />
+              <input id="username" class="input login-input" name="username" autocomplete="username" placeholder="请输入账号" />
             </div>
             <div class="field">
               <label for="password">密码</label>
-              <input id="password" class="input" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" />
+              <input id="password" class="input login-input" name="password" type="password" autocomplete="current-password" placeholder="请输入密码" />
             </div>
             <button class="btn" type="submit">登录</button>
           </form>
         </div>
-
       </section>
     </div>
-    <style>
-      /* Match admin pages' perceived type size (login used smaller text). */
-      body.admin-login { font-size: 16px; }
-      body.admin-login .brand-sub { font-size: 14px; }
-      body.admin-login .hero p { font-size: 15px; }
-      body.admin-login .pill { font-size: 14px; }
-      body.admin-login .field {
-        display: grid;
-        grid-template-columns: 56px 1fr;
-        column-gap: 10px;
-        align-items: center;
-      }
-      body.admin-login .field label { font-size: 14px; margin: 0; justify-self: end; }
-      body.admin-login .input { font-size: 16px; padding: 12px 14px; }
-      body.admin-login .btn { font-size: 16px; padding: 11px 14px; }
-      @media (max-width: 420px) {
-        body.admin-login .field { grid-template-columns: 1fr; row-gap: 6px; }
-        body.admin-login .field label { justify-self: start; }
-      }
-    </style>
   </body>
 </html>

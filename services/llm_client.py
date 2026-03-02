@@ -14,7 +14,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from config import DOUBAO_API_KEY, DOUBAO_BASE_URL, DOUBAO_MODEL, logger
-from services.audit_context import incr_audit_meta_int
+from services.audit_context import get_audit_context, incr_audit_meta_int
+from services.system_metrics import incr_llm_tokens_and_alert, record_llm_usage
 
 
 def _extract_llm_usage(obj: dict[str, Any]) -> tuple[int | None, int | None, int | None]:
@@ -56,6 +57,14 @@ def _accumulate_llm_usage(obj: dict[str, Any]) -> None:
     except Exception:
         ttk = None
     incr_audit_meta_int("llm_total_tokens_sum", ttk)
+    try:
+        incr_llm_tokens_and_alert(ttk)
+    except Exception:
+        pass
+    try:
+        record_llm_usage(total_tokens=ttk, ctx=get_audit_context(), model=str(obj.get("model") or "").strip() or None)
+    except Exception:
+        pass
 
 
 def _supports_response_format_json() -> bool:
