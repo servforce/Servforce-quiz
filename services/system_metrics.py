@@ -237,7 +237,7 @@ def ensure_sms_calls_metric(*, day: str, tz_offset_seconds: int) -> int:
     """
     Backfill sms_calls daily metric when it's missing in the file store.
 
-    This keeps the "系统状态" panel consistent for days where we previously relied on DB logs.
+    This keeps the "ϵͳ״̬" panel consistent for days where we previously relied on DB logs.
     """
     d = str(day or "").strip()[:10]
     if not d:

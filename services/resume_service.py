@@ -418,7 +418,7 @@ EXPERIENCE_STOP_KEYWORDS = [
     "教育经历",
     "教育背景",
     "学习经历",
-    "实习",
+    "ʵϰ",
     "实习经历",
     "技能",
     "专业技能",
@@ -1014,7 +1014,7 @@ def focus_resume_text_for_details(
         "课程设计",
         "毕业设计",
         "比赛项目",
-        "实习",
+        "ʵϰ",
         "实习经历",
         "工作经历",
         "经历",
@@ -1414,21 +1414,21 @@ def parse_resume_details_llm(text: str) -> dict[str, Any]:
     def _norm_degree(v: str) -> str:
         s = _s(v)
         if not s:
-            return "未知"
+            return "δ֪"
         s = s.replace("学士", "本科").replace("研究生", "硕士")
         if s in {"本科", "硕士", "博士", "大专", "高中", "未知"}:
             return s
         if "博" in s:
             return "博士"
-        if "硕" in s:
-            return "硕士"
+        if "˶" in s:
+            return "˶ʿ"
         if "本" in s:
             return "本科"
-        if "专" in s:
+        if "ר" in s:
             return "大专"
         if "高" in s:
             return "高中"
-        return "未知"
+        return "δ֪"
 
     def _norm_gender(v: str) -> str:
         s = _s(v)
@@ -1437,8 +1437,8 @@ def parse_resume_details_llm(text: str) -> dict[str, Any]:
         if s in {"M", "Male", "male"}:
             return "男"
         if s in {"F", "Female", "female"}:
-            return "女"
-        return "未知" if s else ""
+            return "Ů"
+        return "δ֪" if s else ""
 
     # Normalize basic types.
     out: dict[str, Any] = {}
@@ -1470,7 +1470,7 @@ def parse_resume_details_llm(text: str) -> dict[str, Any]:
             major = _s(e.get("major"))
             start = _s(e.get("start"))
             end = _s(e.get("end"))
-            if not any([school, major, start, end]) and degree == "未知":
+            if not any([school, major, start, end]) and degree == "δ֪":
                 continue
             norm_edu.append(
                 {"degree": degree, "school": school, "major": major, "start": start, "end": end}

@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
@@ -578,7 +578,20 @@
       }
       .legend-dot { width: 12px; height: 12px; border-radius: 999px; display:inline-block; }
       .legend-cnt { color: rgba(15, 23, 42, 0.62); font-weight: 950; }
-      .density-wrap { width: 100%; overflow-x: auto; }
+      .density-wrap { width: 100%; overflow: hidden; }
+      .density-plotly {
+        width: 100%;
+        min-height: 420px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+      .density-empty {
+        padding: 14px 8px 4px;
+        color: rgba(15, 23, 42, 0.55);
+        font-size: 14px;
+        font-weight: 700;
+      }
       .density-bars { display:flex; align-items: flex-end; gap: 10px; padding: 10px 4px 4px; min-height: 180px; }
       .density-bar {
         width: 22px;
@@ -1278,30 +1291,8 @@
                 </form>
               </div>
               <div class="density-wrap">
-                {% set maxc = (chart_counts|max) if chart_counts else 0 %}
-                <div class="density-bars">
-                  {% for d in (chart_days or []) %}
-                  {% set i = loop.index0 %}
-                  {% set c = (chart_counts[i] if chart_counts and (i < chart_counts|length) else 0) %}
-                  {% if c and c > 0 and maxc > 0 %}
-                    {% set h = (8 + (c * 96 // maxc)) %}
-                    <div class="density-bar" style="height: {{ h }}px" title="{{ d }}：{{ c }}"></div>
-                  {% else %}
-                    <div class="density-bar zero" style="height: 0px" title="{{ d }}：0"></div>
-                  {% endif %}
-                {% endfor %}
-                  {% if not chart_days %}
-                    <div class="muted" style="padding: 8px 0;">暂无数据</div>
-                  {% endif %}
-                </div>
-                {% if chart_days and (not maxc or maxc <= 0) %}
-                  <div class="muted" style="padding: 6px 4px 0;">该时间范围暂无操作记录，可调整时间范围。</div>
-                {% endif %}
-                <div class="density-x" aria-hidden="true">
-                  {% for d in (chart_days or []) %}
-                    <span>{{ (d[5:7]|int) ~ "." ~ (d[8:10]|int) }}</span>
-                  {% endfor %}
-                </div>
+                <div id="log_density_plotly" class="density-plotly" aria-label="任务密度图（Plotly）"></div>
+                <div id="log_density_empty" class="density-empty" style="display:none;">该时间范围暂无操作记录，可调整时间范围。</div>
               </div>
             </div>
 
@@ -1484,6 +1475,7 @@
       </div>
     </main>
 
+    <script src="{{ url_for('static', filename='vendor/plotly/plotly.min.js') }}"></script>
     <script>
       document.body.classList.add("js");
 
@@ -1495,6 +1487,13 @@
         ["status", document.getElementById("tab-status")],
       ]);
       const navLinks = Array.from(document.querySelectorAll("[data-nav]"));
+      const resizeLogDensityChart = () => {
+        const el = document.getElementById("log_density_plotly");
+        if (!el || !window.Plotly || typeof window.Plotly.Plots?.resize !== "function") return;
+        try {
+          window.Plotly.Plots.resize(el);
+        } catch (_) {}
+      };
 
       function setActive(tabKey) {
         for (const btn of tabButtons) {
@@ -1509,6 +1508,11 @@
 
         for (const a of navLinks) {
           a.classList.toggle("active", a.dataset.nav === tabKey);
+        }
+        if (tabKey === "logs") {
+          // Plotly may be initialized while the panel is hidden; force a relayout after reveal.
+          window.setTimeout(resizeLogDensityChart, 0);
+          window.setTimeout(resizeLogDensityChart, 120);
         }
       }
 
@@ -1531,6 +1535,143 @@
 
       window.addEventListener("hashchange", () => setActive(tabKeyFromHash()));
       setActive(tabKeyFromHash());
+      window.addEventListener("resize", () => {
+        window.requestAnimationFrame(resizeLogDensityChart);
+      });
+
+      // Logs density chart (Plotly).
+      (() => {
+        try {
+          const days = {{ (chart_days or [])|tojson }};
+          const countsRaw = {{ (chart_counts or [])|tojson }};
+          const counts = Array.isArray(countsRaw) ? countsRaw.map((x) => Number(x || 0)) : [];
+          const hasData = Array.isArray(days) && days.length > 0;
+
+          const plotlyEl = document.getElementById("log_density_plotly");
+          const emptyEl = document.getElementById("log_density_empty");
+          if (!plotlyEl || !emptyEl) return;
+
+          if (!hasData) {
+            plotlyEl.style.display = "none";
+            emptyEl.style.display = "";
+            return;
+          }
+
+          const xVals = days.slice();
+          const yVals = counts.map((v) => Number(v || 0));
+          const allZero = yVals.every((v) => v <= 0);
+          if (allZero) {
+            plotlyEl.style.display = "none";
+            emptyEl.style.display = "";
+            return;
+          }
+
+          const avgWindow = 7;
+          const movingAvg = yVals.map((_, idx) => {
+            const l = Math.max(0, idx - avgWindow + 1);
+            const seg = yVals.slice(l, idx + 1);
+            const sum = seg.reduce((a, b) => a + b, 0);
+            return Number((sum / Math.max(1, seg.length)).toFixed(2));
+          });
+
+          const peakVal = Math.max(...yVals);
+          const peakIdx = yVals.indexOf(peakVal);
+          const markerSizes = yVals.map((v) => (v > 0 ? 7 : 3));
+
+          if (window.Plotly && typeof window.Plotly.newPlot === "function") {
+            const densityTrace = {
+              x: xVals,
+              y: yVals,
+              type: "scatter",
+              mode: "lines+markers",
+              fill: "tozeroy",
+              fillcolor: "rgba(37,99,235,0.16)",
+              line: { color: "rgba(37,99,235,0.95)", width: 3, shape: "spline", smoothing: 0.9 },
+              marker: {
+                color: "rgba(37,99,235,1)",
+                size: markerSizes,
+                line: { color: "rgba(255,255,255,0.9)", width: 1.2 },
+              },
+              hovertemplate: "%{x}<br>Count: %{y}<extra></extra>",
+              hovertemplate: "%{x}<br>操作数：%{y}<extra></extra>",
+              name: "每日操作数",
+            };
+
+            const avgTrace = {
+              x: xVals,
+              y: movingAvg,
+              type: "scatter",
+              mode: "lines",
+              line: { color: "rgba(100,116,139,0.9)", width: 2, dash: "dot", shape: "spline", smoothing: 0.8 },
+              hovertemplate: "%{x}<br>7日均值：%{y}<extra></extra>",
+              name: "7日均值",
+            };
+
+            const peakTrace = {
+              x: [xVals[peakIdx]],
+              y: [peakVal],
+              type: "scatter",
+              mode: "markers+text",
+              marker: {
+                size: 12,
+                color: "rgba(249,115,22,1)",
+                line: { color: "rgba(255,255,255,0.95)", width: 1.6 },
+              },
+              text: [`峰值 ${peakVal}`],
+              textposition: "top left",
+              textfont: { size: 12, color: "rgba(15,23,42,0.85)" },
+              hovertemplate: "%{x}<br>峰值：%{y}<extra></extra>",
+              name: "峰值",
+              cliponaxis: false,
+            };
+
+            window.Plotly.newPlot(
+              plotlyEl,
+              [densityTrace, avgTrace, peakTrace],
+              {
+                height: 400,
+                margin: { l: 56, r: 48, t: 22, b: 46 },
+                paper_bgcolor: "rgba(0,0,0,0)",
+                plot_bgcolor: "rgba(0,0,0,0)",
+                hovermode: "x unified",
+                dragmode: false,
+                xaxis: {
+                  type: "date",
+                  nticks: 9,
+                  tickformat: "%-m月%-d日",
+                  tickfont: { size: 12, color: "rgba(51,65,85,0.88)" },
+                  showgrid: true,
+                  gridcolor: "rgba(148,163,184,0.12)",
+                  fixedrange: true,
+                  automargin: true,
+                },
+                yaxis: {
+                  title: { text: "操作数", standoff: 10 },
+                  rangemode: "tozero",
+                  tickfont: { size: 12, color: "rgba(51,65,85,0.88)" },
+                  gridcolor: "rgba(148,163,184,0.18)",
+                  zerolinecolor: "rgba(148,163,184,0.26)",
+                  fixedrange: true,
+                },
+                legend: {
+                  orientation: "h",
+                  x: 0,
+                  y: 1.14,
+                  bgcolor: "rgba(255,255,255,0.55)",
+                  bordercolor: "rgba(148,163,184,0.22)",
+                  borderwidth: 1,
+                  font: { size: 12 },
+                },
+              },
+              { displayModeBar: false, responsive: true, scrollZoom: false }
+            );
+            window.setTimeout(resizeLogDensityChart, 0);
+            window.setTimeout(resizeLogDensityChart, 120);
+          }
+        } catch (_) {
+          // Keep the rest of the page scripts running even if charts fail.
+        }
+      })();
 
       // Auto-hide flash messages after 5s.
       (() => {
@@ -2562,3 +2703,4 @@
     </script>
   </body>
 </html>
+

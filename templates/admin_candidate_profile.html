@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
@@ -399,7 +399,7 @@
                   </span>
                 {% endif %}
                 <form id="reparseForm" method="post" action="/admin/candidates/{{ c.id }}/resume/reparse" enctype="multipart/form-data" style="margin:0;">
-                  <input id="reparseFile" type="file" name="file" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+                  <input id="reparseFile" type="file" name="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
                   <button type="button" id="reparseBtn" class="btn btn-primary">上传简历并解析</button>
                 </form>
               </div>
@@ -686,3 +686,4 @@
     <script src="{{ url_for('static', filename='system_status.js') }}"></script>
   </body>
 </html>
+

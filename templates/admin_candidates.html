@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
@@ -103,21 +103,7 @@
         font-size: 18px;
         line-height: 1;
       }
-      .resume-name {
-        margin-top: 6px;
-        font-size: 13px;
-        color: rgba(15, 23, 42, 0.72);
-        max-width: 220px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
       .resume-upload-cell { display: flex; align-items: center; }
-      /* Put chosen filename under the upload button without affecting the button-row height. */
-      .form-grid #resumeFileName {
-        grid-column: 4;
-        grid-row: 2;
-      }
       .cand-actions { display: inline-flex; gap: 10px; align-items: center; justify-content: flex-end; }
       .cand-actions .btn {
         display: inline-flex;
@@ -135,6 +121,29 @@
         width: 44px;
         padding: 0;
         font-size: 20px;
+      }
+      .flash-center {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 3200;
+        min-width: 320px;
+        max-width: min(88vw, 720px);
+        padding: 14px 18px;
+        border-radius: 14px;
+        border: 1px solid rgba(37, 99, 235, 0.25);
+        background: rgba(239, 246, 255, 0.97);
+        box-shadow: 0 18px 40px rgba(2, 6, 23, 0.20);
+        color: rgba(15, 23, 42, 0.92);
+        font-size: 16px;
+        font-weight: 800;
+        text-align: center;
+        transition: opacity 220ms ease, transform 220ms ease;
+      }
+      .flash-center.fade-out {
+        opacity: 0;
+        transform: translate(-50%, calc(-50% - 6px));
       }
 
       /* Make Candidate Management font scale match Exams Management (admin dashboard). */
@@ -155,7 +164,48 @@
       .date-proxy .date-btn { width: 32px; height: 32px; right: 8px; }
       table.cands-table { font-size: 19px; }
       table.cands-table th { font-size: 17px; }
-      .resume-name { font-size: 14px; }
+      .parsing-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 3000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.42);
+      }
+      .parsing-overlay.show { display: flex; }
+      .parsing-card {
+        min-width: 320px;
+        max-width: 90vw;
+        padding: 18px 20px;
+        border-radius: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.14);
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 18px 42px rgba(2, 6, 23, 0.28);
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 18px;
+        font-weight: 900;
+        color: rgba(15, 23, 42, 0.9);
+      }
+      .parsing-spinner {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        border: 2px solid rgba(15, 23, 42, 0.20);
+        border-top-color: rgba(37, 99, 235, 0.95);
+        animation: spin 800ms linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      body.parsing-lock {
+        overflow: hidden;
+      }
+      body.parsing-lock header,
+      body.parsing-lock main {
+        pointer-events: none;
+        user-select: none;
+      }
 
       /* Keep header/body columns perfectly aligned: use fixed table layout + colgroup widths. */
       table.cands-table { table-layout: fixed; }
@@ -168,7 +218,6 @@
       tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
       @media (max-width: 980px) {
         .form-grid { grid-template-columns: 1fr; max-width: 100%; }
-        .form-grid #resumeFileName { grid-column: 1; grid-row: auto; }
         .search-inline .field.field-q { flex: 1 1 100%; max-width: 100%; }
         .search-inline .field.field-sm { flex: 1 1 100%; }
       }
@@ -210,7 +259,7 @@
     <main class="container page" style="max-width:1080px;">
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}
-      <div class="flash">{{ m }}</div>
+      <div class="flash flash-center">{{ m }}</div>
       {% endif %}
       {% endfor %}
 
@@ -239,10 +288,9 @@
             </form>
             <form id="resumeUploadForm" method="post" action="/admin/candidates/resume/upload" enctype="multipart/form-data">
               <div class="resume-upload-cell">
-                <input id="resumeFile" class="input" type="file" name="file" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+                <input id="resumeFile" class="input" type="file" name="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
                 <button id="resumePickBtn" class="btn btn-primary" type="button">上传简历</button>
               </div>
-              <div id="resumeFileName" class="resume-name" title=""></div>
             </form>
           </div>
 
@@ -359,6 +407,12 @@
         </section>
       </div>
     </main>
+    <div id="parsingOverlay" class="parsing-overlay" role="status" aria-live="assertive" aria-label="正在解析简历">
+      <div class="parsing-card">
+        <span class="parsing-spinner" aria-hidden="true"></span>
+        <span>正在解析简历，请稍候...</span>
+      </div>
+    </div>
 
     <script>
       // Live fuzzy search (debounced) for candidates.
@@ -381,30 +435,33 @@
       // Resume upload: pick file and auto-submit.
       const resumePickBtn = document.getElementById("resumePickBtn");
       const resumeFile = document.getElementById("resumeFile");
-      const resumeFileName = document.getElementById("resumeFileName");
       const resumeUploadForm = document.getElementById("resumeUploadForm");
+      const parsingOverlay = document.getElementById("parsingOverlay");
+      const lockParsingUI = () => {
+        if (parsingOverlay) parsingOverlay.classList.add("show");
+        document.body.classList.add("parsing-lock");
+      };
       if (resumePickBtn && resumeFile) {
         resumePickBtn.addEventListener("click", () => resumeFile.click());
         resumeFile.addEventListener("change", () => {
           const f = resumeFile.files && resumeFile.files.length > 0 ? resumeFile.files[0] : null;
-          if (resumeFileName) {
-            resumeFileName.textContent = f ? (f.name || "已选择文件") : "";
-            resumeFileName.title = resumeFileName.textContent || "";
-          }
           if (!f || !resumeUploadForm) return;
+          const ext = (f.name || "").toLowerCase();
+          if (!(ext.endsWith(".pdf") || ext.endsWith(".docx"))) {
+            alert("仅支持 PDF/Word（DOCX）简历文件");
+            try { resumeFile.value = ""; } catch (e) {}
+            return;
+          }
           if (typeof f.size === "number" && f.size > 10 * 1024 * 1024) {
             alert("文件超过10MB，请重新上传");
             try { resumeFile.value = ""; } catch (e) {}
-            if (resumeFileName) {
-              resumeFileName.textContent = "";
-              resumeFileName.title = "";
-            }
             return;
           }
           try {
             resumePickBtn.disabled = true;
             resumePickBtn.textContent = "解析中…";
           } catch (e) {}
+          lockParsingUI();
           resumeUploadForm.submit();
         });
       }
@@ -471,6 +528,21 @@
           });
         });
 	    </script>
+      <script>
+        (() => {
+          const flashes = Array.from(document.querySelectorAll(".flash-center"));
+          if (!flashes.length) return;
+          for (const el of flashes) {
+            window.setTimeout(() => {
+              el.classList.add("fade-out");
+              window.setTimeout(() => {
+                try { el.remove(); } catch (_) {}
+              }, 260);
+            }, 7000);
+          }
+        })();
+      </script>
       <script src="{{ url_for('static', filename='system_status.js') }}"></script>
 	  </body>
 	</html>
+

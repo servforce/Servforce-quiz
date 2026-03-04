@@ -1,6 +1,9 @@
 {
   "prettier.logLevel": "warn",
   "prettier.useEditorConfig": false,
+  "files.encoding": "utf8",
+  "files.autoGuessEncoding": false,
+  "files.eol": "\n",
   "python.defaultInterpreterPath": "E:\\anacoda\\python.exe",
   "python.analysis.extraPaths": [
     "${workspaceFolder}"

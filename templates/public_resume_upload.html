@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
@@ -6,31 +6,44 @@
     <title>上传简历</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <style>
-      body { min-height: 100vh; display: grid; place-items: center; padding: 22px; }
-      .card { width: min(560px, 100%); }
-      /* 放大 3 号：该页面内所有常见控件统一 +3px。 */
-      .surface, .section, .input, .btn, input[type="file"] { font-size: 17px; }
-      .btn { width: auto; }
-      .muted { color: var(--muted); font-size: 15px; line-height: 1.6; }
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      .card {
+        width: min(560px, 100%);
+      }
+      .section,
+      .input,
+      .btn,
+      input[type="file"] {
+        font-size: 17px;
+      }
       .hero {
-        margin: 6px 0 14px;
-        padding: 14px 14px;
-        border-radius: 16px;
+        margin: 8px 0 18px;
+        padding: 20px;
+        border-radius: 18px;
         border: 1px solid rgba(15, 23, 42, 0.10);
         background: rgba(248, 250, 252, 0.75);
         position: relative;
         overflow: hidden;
       }
-      .hero h1 { margin: 0; font-size: 21px; letter-spacing: 0.2px; }
-      .hero p { margin: 8px 0 0; }
+      .hero h1 {
+        margin: 0;
+        font-size: 21px;
+        line-height: 1.2;
+        letter-spacing: 0.2px;
+      }
       .verify-overlay {
         position: fixed;
         left: 50%;
         top: 50%;
         transform: translate(-50%, -50%);
         z-index: 50;
-        padding: 10px 12px;
-        border-radius: 12px;
+        padding: 16px 20px;
+        border-radius: 14px;
         border: 1px solid rgba(220, 38, 38, 0.22);
         background: rgba(255, 255, 255, 0.92);
         color: rgba(15, 23, 42, 0.92);
@@ -39,27 +52,41 @@
         box-shadow: 0 16px 40px rgba(2, 6, 23, 0.12);
         display: none;
       }
-      .verify-overlay.show { display: block; }
+      .verify-overlay.show {
+        display: block;
+      }
       .spinner {
         display: inline-block;
-        width: 14px;
-        height: 14px;
-        border: 2px solid rgba(15, 23, 42, 0.22);
+        width: 22px;
+        height: 22px;
+        border: 3px solid rgba(15, 23, 42, 0.22);
         border-top-color: rgba(59, 130, 246, 0.95);
         border-radius: 999px;
         animation: spin 800ms linear infinite;
         vertical-align: -2px;
-        margin-right: 8px;
+        margin-right: 10px;
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
-      .grid { display: grid; gap: 12px; }
-      .row { display: grid; gap: 8px; }
-      .label { font-size: 16px; font-weight: 900; color: rgba(15, 23, 42, 0.75); }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .grid {
+        display: grid;
+        gap: 14px;
+      }
+      .row {
+        display: grid;
+        gap: 10px;
+      }
+      .label {
+        font-size: 16px;
+        font-weight: 900;
+        color: rgba(15, 23, 42, 0.82);
+      }
       .pill {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
+        gap: 12px;
+        padding: 12px 16px;
         border-radius: 999px;
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(255, 255, 255, 0.85);
@@ -67,10 +94,37 @@
         font-size: 16px;
         color: rgba(15, 23, 42, 0.9);
       }
-      .pill .k { color: rgba(15, 23, 42, 0.55); font-weight: 800; }
-      .actions { margin-top: 14px; display: flex; justify-content: center; gap: 10px; }
-      .actions .btn-primary { min-width: 180px; padding: 10px 34px; border-radius: 14px; }
-      input[type="file"] { width: 100%; }
+      .pill .k {
+        color: rgba(15, 23, 42, 0.58);
+        font-weight: 800;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.6;
+      }
+      .actions {
+        margin-top: 16px;
+        display: flex;
+        justify-content: center;
+      }
+      .actions .btn-primary {
+        min-width: 180px;
+        min-height: 46px;
+        border-radius: 14px;
+        padding: 0 28px;
+      }
+      input[type="file"] {
+        width: 100%;
+      }
+      @media (max-width: 980px) {
+        .card { width: min(560px, 100%); }
+        .section, .input, .btn, input[type="file"] { font-size: 16px; }
+        .hero h1 { font-size: 20px; }
+        .label, .pill { font-size: 16px; }
+        .muted { font-size: 14px; }
+        .actions .btn-primary { min-width: 170px; min-height: 42px; }
+      }
     </style>
   </head>
   <body>
@@ -95,14 +149,13 @@
           <div class="pill"><span class="k">手机号</span><span>{{ phone }}</span></div>
         </div>
 
-        <form id="uploadForm" method="post" action="/api/public/resume/upload" enctype="multipart/form-data" class="section" style="padding:0; border:0; margin-top:14px;">
+        <form id="uploadForm" method="post" action="/api/public/resume/upload" enctype="multipart/form-data" class="section" style="padding:0; border:0; margin-top:16px;">
           <input type="hidden" name="token" value="{{ token }}" />
           <div class="row">
-          <!-- <div class="label">简历文件（PDF / DOCX / TXT / MD / 图片）</div> -->
-          <div class="label">简历文件</div>
-          <input class="input" type="file" name="file" required />
-          <div class="muted">建议上传可复制文本的 PDF/DOCX，以获得更好的解析效果。</div>
-        </div>
+            <div class="label">简历文件</div>
+            <input class="input" type="file" name="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
+            <div class="muted">仅支持 PDF/Word（DOCX）格式。</div>
+          </div>
           <div class="actions">
             <button id="submitBtn" class="btn btn-primary" type="submit">上传并继续答题</button>
           </div>
@@ -117,20 +170,29 @@
         const overlay = document.getElementById('overlay');
         const overlayText = document.getElementById('overlayText');
         const spinner = document.getElementById('spinner');
-        const show = (t, loading) => {
+
+        const show = (text, loading) => {
           if (!overlay) return;
-          const msg = String(t || '').trim();
-          if (overlayText) overlayText.textContent = msg;
-          else overlay.textContent = msg;
+          const msg = String(text || '').trim();
+          if (overlayText) {
+            overlayText.textContent = msg;
+          } else {
+            overlay.textContent = msg;
+          }
           if (spinner) spinner.style.display = loading ? 'inline-block' : 'none';
           overlay.classList.toggle('show', !!msg);
         };
 
         if (!form) return;
+
         form.addEventListener('submit', async (e) => {
           e.preventDefault();
-          show('正在上传并解析简历，请稍候…', true);
-          if (btn) { btn.disabled = true; btn.textContent = '处理中…'; }
+          show('正在上传并解析简历，请稍候...', true);
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = '处理中...';
+          }
+
           try {
             const res = await fetch(form.action, {
               method: 'POST',
@@ -142,11 +204,14 @@
               window.location.href = data.redirect;
               return;
             }
-            show((data && data.error) || '上传失败，请稍后重试。');
+            show((data && data.error) || '上传失败，请稍后重试。', false);
           } catch (_) {
-            show('上传失败，请检查网络后重试。');
+            show('上传失败，请检查网络后重试。', false);
           } finally {
-            if (btn) { btn.disabled = false; btn.textContent = '上传并继续答题'; }
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = '上传并继续答题';
+            }
             if (spinner) spinner.style.display = 'none';
           }
         });

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import html
 import os
@@ -94,18 +94,19 @@ from services.university_tags import classify_university
 from storage.json_store import ensure_dirs, read_json, write_json
 from web.auth import admin_required
 
-# 使用正则表达式 
-_NAME_RE = re.compile(r"^[\u4e00-\u9fffA-Za-z·\s]{2,20}$")  # 用来验证一个名字是否符合特定的规则
-_PHONE_RE = re.compile(r"^1[3-9]\d{9}$")    # 验证一个手机号是否符合特定规则
+# 基础输入校验：姓名、手机号与全角数字归一化。
+_NAME_RE = re.compile(r"^[\u4e00-\u9fffA-Za-z·\s]{2,20}$")
+_PHONE_RE = re.compile(r"^1[3-9]\d{9}$")
 _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
+_ALLOWED_RESUME_EXTS = {".pdf", ".docx"}
 
 
-# 接收一个字符串类型的参数 value，返回一个布尔值 True 或 False，表示该名字是否有效
+# 校验中文姓名（2-20字符，允许·与空格）。
 def _is_valid_name(value: str) -> bool:
     v = (value or "").strip()
     return bool(_NAME_RE.fullmatch(v))
 
-# 字符串类型的参数 value，并返回一个布尔值，表示传入的手机号是否有效
+# 校验手机号（支持 +86/86 前缀及常见分隔符）。
 def _is_valid_phone(value: str) -> bool:
     v = (value or "").strip()
     v = v.replace(" ", "").replace("-", "")
@@ -115,7 +116,7 @@ def _is_valid_phone(value: str) -> bool:
         v = v[2:]
     return bool(_PHONE_RE.fullmatch(v))
 
-# 将输入的手机号都变成标准的输出
+# 归一化手机号：统一去噪并提取 11 位中国大陆手机号。
 def _normalize_phone(value: str) -> str:
     v = (value or "").strip()
     v = v.translate(_FULLWIDTH_DIGITS)
@@ -131,6 +132,29 @@ def _normalize_phone(value: str) -> str:
         if _PHONE_RE.fullmatch(tail):
             digits = tail
     return digits
+
+
+def _normalize_exam_status(value: str) -> str:
+    """Normalize exam/assignment status values to canonical keys."""
+    s = str(value or "").strip()
+    if not s:
+        return ""
+    key = s.lower()
+    mapping = {
+        "verified": "verified",
+        "验证通过": "verified",
+        "invited": "invited",
+        "已邀约": "invited",
+        "in_exam": "in_exam",
+        "正在答题": "in_exam",
+        "grading": "grading",
+        "正在判卷": "grading",
+        "finished": "finished",
+        "判卷结束": "finished",
+        "expired": "expired",
+        "失效": "expired",
+    }
+    return mapping.get(s, mapping.get(key, key))
 
 
 def _clean_projects_raw(text: str) -> str:
@@ -162,6 +186,7 @@ def _system_status_cfg_path() -> Path:
     return STORAGE_DIR / "system_status.json"
 
 
+# 系统状态：读取阈值配置（大模型 token / 短信调用）。
 def _load_system_status_cfg() -> dict[str, int]:
     """
     Load daily thresholds for system status page.
@@ -373,6 +398,7 @@ def _compute_system_status_summary() -> dict[str, object]:
     }
 
 
+# 系统日志：将内部事件类型映射为页面展示标签。
 def _oplog_type_label_v2(et: str) -> tuple[str, str]:
     et = str(et or "").strip()
     if et.startswith("candidate."):
@@ -426,7 +452,7 @@ def _oplog_detail_text_v2(it: dict[str, Any]) -> str:
     if et.startswith("candidate."):
         op = et.split(".", 1)[1] if "." in et else et
         if op == "read":
-            return f"查看{name or '候选人'}详细信息".strip()
+            return f"查看{name or '候选人'}详情".strip()
         if op == "create":
             return f"新增{_oplog_join_plus2(name, phone)}".strip("+")
         if op == "delete":
@@ -441,8 +467,8 @@ def _oplog_detail_text_v2(it: dict[str, Any]) -> str:
             except Exception:
                 is_reparse = False
             if is_reparse:
-                return f"重新上传解析简历，花费token量：{tt}" if tt > 0 else "重新上传解析简历"
-            return f"解析简历消耗token量：{tt}" if tt > 0 else "解析简历消耗token量"
+                return f"重新上传并解析简历，消耗token：{tt}" if tt > 0 else "重新上传并解析简历"
+            return f"解析简历，消耗token：{tt}" if tt > 0 else "解析简历"
         return f"候选人操作{op}".strip()
 
     if et == "assignment.verify":
@@ -454,11 +480,11 @@ def _oplog_detail_text_v2(it: dict[str, Any]) -> str:
         return f"{prefix}{who_plus}，消耗短信认证{sms_cnt}次".strip()
 
     if et == "exam.enter":
-        prefix = "公开邀约" if public_invite else ""
+        prefix = "公开邀约+" if public_invite else ""
         return f"{prefix}进入答题{who_plus}".strip()
 
     if et == "exam.finish":
-        prefix = "公开邀约" if public_invite else ""
+        prefix = "公开邀约+" if public_invite else ""
         return f"{prefix}提交答题{who_plus}".strip()
 
     if et == "exam.grade":
@@ -471,7 +497,7 @@ def _oplog_detail_text_v2(it: dict[str, Any]) -> str:
             tt = int(it.get("llm_total_tokens") or 0)
         except Exception:
             tt = 0
-        tok_part = f"，消耗token量：{tt}" if tt > 0 else ""
+        tok_part = f"，消耗token：{tt}" if tt > 0 else ""
         return f"判卷完成{_oplog_join_plus2(name, phone, exam_id)}（得分：{s2}）{tok_part}".strip()
 
     if et == "system.alert":
@@ -488,8 +514,8 @@ def _oplog_detail_text_v2(it: dict[str, Any]) -> str:
             pct_i = int(round(float(meta.get("ratio") or 0.0) * 100))
         except Exception:
             pct_i = 0
-        used_part = f" ({used_i}/{limit_i})" if limit_i > 0 else ""
-        return f"系统告警： {kind_label}达到阈值 {level} {pct_i}%{used_part}".strip()
+        used_part = f"（{used_i}/{limit_i}）" if limit_i > 0 else ""
+        return f"系统告警：{kind_label}达到阈值，{level} {pct_i}%{used_part}".strip()
 
     if et.startswith("exam."):
         op = et.split(".", 1)[1] if "." in et else et
@@ -509,7 +535,7 @@ def _oplog_detail_text_v2(it: dict[str, Any]) -> str:
         if op == "delete":
             return f"删除试卷{exam_id}".strip()
         if op == "public_invite.enable":
-            return f"试卷{exam_id}打开公开邀约".strip()
+            return f"试卷{exam_id}开启公开邀约".strip()
         if op == "public_invite.disable":
             return f"试卷{exam_id}关闭公开邀约".strip()
         return f"试卷操作{op}({exam_id})".strip()
@@ -920,6 +946,7 @@ def _resolve_exam_asset_file(exam_key: str, relpath: str) -> Path | None:
     return None
 
 
+# 试卷资源处理：将 Markdown 中的本地资源路径统一重写为受控访问 URL。
 def _rewrite_exam_asset_paths(exam_key: str, spec: dict, public_spec: dict) -> None:
     for k in ("welcome_image", "end_image"):
         v = str(spec.get(k) or "").strip()
@@ -941,6 +968,7 @@ def _rewrite_exam_asset_paths(exam_key: str, spec: dict, public_spec: dict) -> N
         q["stem_md"] = stem
 
 
+# 首次写入试卷：解析 Markdown -> 落盘 source/spec/public -> 同步资源文件。
 def _write_exam_to_storage(exam_text: str, *, assets: dict[str, bytes] | None = None) -> str:
     spec, public_spec = parse_qml_markdown(exam_text)
     exam_key = spec["id"]
@@ -963,6 +991,7 @@ def _write_exam_to_storage(exam_text: str, *, assets: dict[str, bytes] | None = 
     return exam_key
 
 
+# 覆写已有试卷目录（用于编辑保存）。
 def _rewrite_exam_in_dir(exam_key: str, exam_text: str) -> None:
     spec, public_spec = parse_qml_markdown(exam_text)
     parsed_key = str(spec.get("id") or "")
@@ -977,6 +1006,7 @@ def _rewrite_exam_in_dir(exam_key: str, exam_text: str) -> None:
     write_json(exam_dir / "public.json", public_spec)
 
 
+# exam_key 变更时，迁移 assignment 文件中的关联键。
 def _migrate_assignment_exam_key(old_exam_key: str, new_exam_key: str) -> int:
     """
     Best-effort migration: update assignment JSON files to keep tokens working
@@ -1003,6 +1033,7 @@ def _migrate_assignment_exam_key(old_exam_key: str, new_exam_key: str) -> int:
     return updated
 
 
+# exam_key 变更时，迁移历史归档文件名与归档内部 exam_key。
 def _migrate_archives_exam_key(old_exam_key: str, new_exam_key: str) -> int:
     """
     Best-effort migration: rename archived attempt files and update embedded exam_key.
@@ -1052,6 +1083,7 @@ def _migrate_archives_exam_key(old_exam_key: str, new_exam_key: str) -> int:
     return migrated
 
 
+# 管理端更新试卷：必要时先改目录/关联键，再重写 spec/public。
 def _admin_update_exam_from_source(old_exam_key: str, new_source_md: str) -> str:
     spec_tmp, _public_tmp = parse_qml_markdown(new_source_md)
     new_exam_key = str(spec_tmp.get("id") or "").strip()
@@ -1077,13 +1109,16 @@ def _admin_update_exam_from_source(old_exam_key: str, new_source_md: str) -> str
 
     _rewrite_exam_in_dir(new_exam_key, new_source_md)
     return new_exam_key
-    
-def create_app() -> Flask:
-    app = Flask(__name__)   # 确定项目根目录，确定templates和static路径
-    app.secret_key = SECRET_KEY #  Flask 用来加密和签名 session 数据的密钥
 
-    ensure_dirs()   # 生成试卷和二维码
-    # 创建数据库失败，则退出程序
+
+# Flask 应用工厂：注册路由并初始化存储、数据库与后台任务。
+def create_app() -> Flask:
+    # Flask 默认从项目根目录定位 templates/static。
+    app = Flask(__name__)
+    app.secret_key = SECRET_KEY
+
+    # 预创建存储目录（试卷、答题记录、归档等）。
+    ensure_dirs()
     try:
         init_db()
     except RuntimeError as e:
@@ -1151,7 +1186,7 @@ def create_app() -> Flask:
 
     def _backfill_exam_papers_from_assignments() -> None:
         """
-        Best-effort backfill so the admin "答题邀请 -> 答题记录列表" can show historical tokens.
+        Best-effort backfill so the admin "答题邀约 -> 答题记录列表" can show historical tokens.
         """
         assignments_dir = STORAGE_DIR / "assignments"
         if not assignments_dir.exists():
@@ -1243,13 +1278,48 @@ def create_app() -> Flask:
     except Exception:
         logger.exception("Backfill exam_paper from assignments failed")
 
+    def _backfill_exam_paper_status_values() -> None:
+        """Best-effort: normalize legacy/garbled status values in exam_paper table."""
+        try:
+            offset = 0
+            page_size = 500
+            touched = 0
+            while True:
+                rows = list_exam_papers(limit=page_size, offset=offset) or []
+                if not rows:
+                    break
+                for r in rows:
+                    token = str(r.get("token") or "").strip()
+                    raw_status = str(r.get("status") or "").strip()
+                    if not token:
+                        continue
+                    norm_status = _normalize_exam_status(raw_status)
+                    if norm_status and norm_status != raw_status:
+                        try:
+                            set_exam_paper_status(token, norm_status)
+                            touched += 1
+                        except Exception:
+                            pass
+                if len(rows) < page_size:
+                    break
+                offset += page_size
+            if touched > 0:
+                logger.info("Backfilled exam_paper status values: %s", touched)
+        except Exception:
+            logger.exception("Backfill exam_paper status values failed")
+
+    try:
+        _backfill_exam_paper_status_values()
+    except Exception:
+        logger.exception("Backfill exam_paper status values bootstrap failed")
+
     # Auto-collect: once countdown starts, keep decreasing even if candidate leaves the page.
     # Start only once (avoid Flask reloader double-start).
     if os.getenv("ENABLE_AUTO_COLLECT", "1").strip().lower() not in {"0", "false", "no"}:
         if os.getenv("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
             threading.Thread(target=_auto_collect_loop, daemon=True).start()
 
-    # Flask 的全局错误处理器
+    #
     @app.errorhandler(FileNotFoundError)
     def _handle_file_not_found(_e):
         return "Not Found", 404
@@ -1296,9 +1366,9 @@ def create_app() -> Flask:
 
     @app.get("/")   # session 里是否已登录管理员，决定跳转到后台首页还是登录页
     def index():
-        if session.get("admin_logged_in"):      # 说明管理员已经登录(键不存在的不报错)
+        if session.get("admin_logged_in"):
             return redirect(url_for("admin_dashboard"))     # 跳转到admin_dashboard对应的页面去，反向寻到url
-        return redirect(url_for("admin_login"))     # 没登录就跳转到登录页面，通过这个函数反向推测url路径，可以在修改路由后方便修改页面
+        return redirect(url_for("admin_login"))
 
     # ---------------- Admin ----------------
     @app.context_processor
@@ -1314,11 +1384,11 @@ def create_app() -> Flask:
             return {"system_status_summary": {}}
 
     # get是从后端调用数据和页面的
-    @app.get("/admin/login")    # 注册一个路由，调用下面函数
+    @app.get("/admin/login")
     def admin_login():
-        return render_template("admin_login.html")     # 渲染并返回页面
+        return render_template("admin_login.html")
 
-    # post是将浏览器的数据传入后端进行验证的
+    #
     @app.post("/admin/login")
     def admin_login_post():
         username = (request.form.get("username") or "").strip()     # 取表单的数据
@@ -1327,13 +1397,13 @@ def create_app() -> Flask:
             session["admin_logged_in"] = True       # 写入session标记admin_logged_in = True
             return redirect(url_for("admin_dashboard"))     # admin_dashboard，管理员首页
         flash("账号或密码错误")
-        return redirect(url_for("admin_login"))     # 登录失败就重新填入
+        return redirect(url_for("admin_login"))
 
-    # 退出功能
-    @app.post("/admin/logout")      # 点击按钮激发退出页面功能
+    #
+    @app.post("/admin/logout")
     def admin_logout():     
-        session.clear()     # 把session里的所有数据清空
-        return redirect(url_for("admin_login"))     # 重新回到登录页面对应的路由
+        session.clear()
+        return redirect(url_for("admin_login"))
 
     @app.get("/admin/api/system-status/summary")
     @admin_required
@@ -1362,7 +1432,7 @@ def create_app() -> Flask:
     @admin_required     # session.get("admin_logged_in")只有管理员登录后才能查看这个页面
     def admin_dashboard():
         exams_all = _list_exams()   # 获取考试列表
-        candidates = list_candidates(limit=200)  # 获取考生列表，最多取 200 条
+        candidates = list_candidates(limit=200)
 
         exam_q = (request.args.get("exam_q") or "").strip()
         attempt_q = (request.args.get("attempt_q") or "").strip()
@@ -1423,7 +1493,7 @@ def create_app() -> Flask:
             e["public_invite_token"] = str(cfg.get("token") or "").strip()
 
         def _status_label(v: str) -> str:
-            s = str(v or "").strip()
+            s = _normalize_exam_status(v)
             m = {
                 "verified": "验证通过",
                 "invited": "已邀约",
@@ -1432,7 +1502,7 @@ def create_app() -> Flask:
                 "finished": "判卷结束",
                 "expired": "失效",
             }
-            return m.get(s, s or "未知")
+            return m.get(s, "未知")
 
         attempt_per_page = 20
         try:
@@ -1485,7 +1555,7 @@ def create_app() -> Flask:
         attempt_candidates_page: list[dict[str, Any]] = []
         for r in rows:
             token = str(r.get("token") or "").strip()
-            status = str(r.get("status") or "").strip()
+            status = _normalize_exam_status(r.get("status"))
 
             invite_start_date = _date_to_iso(r.get("invite_start_date"))
             invite_end_date = _date_to_iso(r.get("invite_end_date"))
@@ -1661,241 +1731,13 @@ def create_app() -> Flask:
                 return ""
 
         def _detail_text(it: dict[str, Any]) -> str:
-            et = str(it.get("event_type") or "").strip()
-            meta = it.get("meta") if isinstance(it.get("meta"), dict) else {}
-            who = _fmt_person(it.get("candidate_name"), it.get("candidate_phone"), it.get("candidate_id"))
-            exam_key = str(it.get("exam_key") or "").strip()
-            ek = exam_key or "（未知试卷）"
-
-            if et.startswith("candidate."):
-                op = et.split(".", 1)[1] if "." in et else et
-                if op == "read":
-                    n2 = str(meta.get("name") or "").strip()
-                    p2 = _normalize_phone(str(meta.get("phone") or "").strip())
-                    who2 = " ".join([x for x in [n2, p2] if x]) or who
-                    return f"查看候选人 {who2}".strip()
-                if op == "create":
-                    n2 = str(meta.get("name") or "").strip()
-                    p2 = _normalize_phone(str(meta.get("phone") or "").strip())
-                    who2 = " ".join([x for x in [n2, p2] if x]) or who
-                    return f"新增候选人 {who2}".strip()
-                if op == "list":
-                    return "查看候选人列表"
-                if op == "update":
-                    field = str(meta.get("field") or "").strip()
-                    fp = f"（{field}）" if field else ""
-                    return f"更新候选人 {who}{fp}".strip()
-                if op == "delete":
-                    return f"删除候选人 {who}".strip()
-                return f"候选人操作 {op} {who}".strip()
-
-            if et == "assignment.create":
-                who2 = who or "（未知候选人）"
-                return f"答题邀约 {who2} → 试卷 {ek}".strip()
-            if et == "exam.enter":
-                who2 = who or "（未知候选人）"
-                return f"进入答题 {who2} → 试卷 {ek}".strip()
-            if et == "exam.finish":
-                who2 = who or "（未知候选人）"
-                return f"提交答题 {who2} → 试卷 {ek}".strip()
-            if et == "exam.grade":
-                who2 = who or "（未知候选人）"
-                score = meta.get("score")
-                score_part = ""
-                try:
-                    if score is not None and score != "":
-                        score_part = f"（得分 {int(score)}）"
-                except Exception:
-                    score_part = f"（得分 {str(score).strip()}）" if score is not None else ""
-                return f"判卷完成 {who2} → 试卷 {ek}{score_part}".strip()
-
-            if et == "sms.send":
-                tail = str(meta.get("phone_tail") or "").strip()
-                ok = meta.get("ok")
-                ok_text = "成功" if ok is True else ("失败" if ok is False else "完成")
-                err = str(meta.get("error") or "").strip()
-                err_part = f"（{err}）" if err else ""
-                tail_part = f"（尾号 {tail}）" if tail else ""
-                return f"短信验证码发送{tail_part}：{ok_text}{err_part}".strip()
-
-            if et == "system.alert":
-                kind = str(meta.get("kind") or "").strip() or "unknown"
-                level = str(meta.get("level") or "").strip() or "warn"
-                used = meta.get("used")
-                limit = meta.get("limit")
-                ratio = meta.get("ratio")
-                try:
-                    pct = f"{round(float(ratio) * 100):d}%"
-                except Exception:
-                    pct = ""
-                used_part = ""
-                try:
-                    if used is not None and limit is not None:
-                        used_part = f"（{int(used)}/{int(limit)}）"
-                except Exception:
-                    used_part = ""
-                pct_part = f" {pct}" if pct else ""
-                return f"系统告警：{kind} {level}{pct_part}{used_part}".strip()
-
-            if et.startswith("exam."):
-                op = et.split(".", 1)[1] if "." in et else et
-                if op == "read":
-                    view = str(meta.get("view") or "").strip().lower()
-                    if view == "paper":
-                        return f"查看候选人视图详情 {ek}".strip()
-                    if view == "edit":
-                        return f"编辑试卷 {ek}".strip()
-                    return f"查看试卷详情 {ek}".strip()
-                if op == "result":
-                    who2 = who or "（未知候选人）"
-                    return f"查看答题结果 {who2} → 试卷 {ek}".strip()
-                if op in {"upload", "update", "delete"}:
-                    m = {"upload": "上传", "update": "更新", "delete": "删除"}[op]
-                    return f"{m}试卷 {ek}".strip()
-                return f"试卷操作 {op} {ek}".strip()
-
-            return et
+            return _oplog_detail_text_v2(it)
 
         def _type_label_v2(et: str) -> tuple[str, str]:
-            et = str(et or "").strip()
-            if et.startswith("candidate."):
-                return "candidate", "候选人操作"
-            if et in {"assignment.create", "assignment.verify", "exam.enter", "exam.finish"}:
-                return "assignment", "答题邀约操作"
-            if et == "exam.grade":
-                return "grading", "判卷操作"
-            if et == "system.alert" or et.startswith("sms."):
-                return "system", "系统"
-            if et.startswith("exam."):
-                return "exam", "试卷操作"
-            return "system", "系统"
-
-        def _safe_int2(v: Any) -> int | None:
-            if v is None or v == "":
-                return None
-            try:
-                return int(v)
-            except Exception:
-                return None
-
-        def _join_plus2(*parts: str) -> str:
-            items = [str(x or "").strip() for x in parts]
-            items = [x for x in items if x]
-            return "+".join(items)
-
-        def _pick_name_phone2(it: dict[str, Any], meta: dict[str, Any]) -> tuple[str, str]:
-            n = str(meta.get("name") or it.get("candidate_name") or "").strip()
-            p = _normalize_phone(str(meta.get("phone") or it.get("candidate_phone") or "").strip())
-            return n, p
-
-        def _exam_id_text2(meta: dict[str, Any], exam_key: str) -> str:
-            # User requirement: "试卷id" means exam_key (not sort-id).
-            return str(exam_key or "").strip() or "未知试卷"
+            return _oplog_type_label_v2(et)
 
         def _detail_text_v2(it: dict[str, Any]) -> str:
-            et = str(it.get("event_type") or "").strip()
-            meta = it.get("meta") if isinstance(it.get("meta"), dict) else {}
-            exam_key = str(it.get("exam_key") or "").strip()
-            exam_id = _exam_id_text2(meta, exam_key)
-            name, phone = _pick_name_phone2(it, meta)
-            who_plus = _join_plus2(name, phone, exam_id)
-            public_invite = bool(meta.get("public_invite"))
-
-            if et.startswith("candidate."):
-                op = et.split(".", 1)[1] if "." in et else et
-                if op == "read":
-                    return f"查看{name or '候选人'}详细信息".strip()
-                if op == "create":
-                    return f"新增{_join_plus2(name, phone)}".strip("+")
-                if op == "delete":
-                    return f"删除{_join_plus2(name, phone)}".strip("+")
-                if op in {"resume.parse", "resume_parse"}:
-                    try:
-                        tt = int(it.get("llm_total_tokens") or 0)
-                    except Exception:
-                        tt = 0
-                    try:
-                        is_reparse = bool(meta.get("reparse"))
-                    except Exception:
-                        is_reparse = False
-                    if is_reparse:
-                        return f"重新上传解析简历，花费token量：{tt}" if tt > 0 else "重新上传解析简历"
-                    return f"解析简历消耗token量：{tt}" if tt > 0 else "解析简历消耗token量"
-                return f"候选人操作{op}".strip()
-
-            if et == "assignment.verify":
-                try:
-                    sms_cnt = int(meta.get("sms_send_count") or 0)
-                except Exception:
-                    sms_cnt = 0
-                prefix = "公开邀约+" if public_invite else ""
-                return f"{prefix}{who_plus}，消耗短信认证{sms_cnt}次".strip()
-
-            if et == "exam.enter":
-                prefix = "公开邀约" if public_invite else ""
-                return f"{prefix}进入答题{who_plus}".strip()
-
-            if et == "exam.finish":
-                prefix = "公开邀约" if public_invite else ""
-                return f"{prefix}提交答题{who_plus}".strip()
-
-            if et == "exam.grade":
-                score = meta.get("score")
-                try:
-                    s2 = int(score or 0)
-                except Exception:
-                    s2 = _safe_int2(score) or 0
-                try:
-                    tt = int(it.get("llm_total_tokens") or 0)
-                except Exception:
-                    tt = 0
-                tok_part = f"，消耗token量：{tt}" if tt > 0 else ""
-                return f"判卷完成{_join_plus2(name, phone, exam_id)}（得分：{s2}）{tok_part}".strip()
-
-            if et == "system.alert":
-                kind = str(meta.get("kind") or "").strip() or "unknown"
-                kind_label = kind
-                if kind == "sms_calls":
-                    kind_label = "短信认证"
-                elif kind == "llm_tokens":
-                    kind_label = "大模型token"
-                level = str(meta.get("level") or "").strip() or "warn"
-                used_i = _safe_int2(meta.get("used")) or 0
-                limit_i = _safe_int2(meta.get("limit")) or 0
-                try:
-                    pct_i = int(round(float(meta.get("ratio") or 0.0) * 100))
-                except Exception:
-                    pct_i = 0
-                used_part = f" ({used_i}/{limit_i})" if limit_i > 0 else ""
-                return f"系统告警： {kind_label}达到阈值 {level} {pct_i}%{used_part}".strip()
-
-            if et.startswith("exam."):
-                op = et.split(".", 1)[1] if "." in et else et
-                if op == "read":
-                    view = str(meta.get("view") or "").strip().lower()
-                    if view == "paper":
-                        return f"查看候选人视图详情{exam_id}".strip()
-                    if view == "edit":
-                        return f"编辑试卷{exam_id}".strip()
-                    return f"查看试卷详情{exam_id}".strip()
-                if op == "result":
-                    return f"查看{_join_plus2(name, phone, exam_id)}的结果".strip("+")
-                if op == "upload":
-                    return f"上传试卷{exam_id}".strip()
-                if op == "update":
-                    return f"修改试卷{exam_id}".strip()
-                if op == "delete":
-                    return f"删除试卷{exam_id}".strip()
-                if op == "public_invite.enable":
-                    return f"试卷{exam_id}打开公开邀约".strip()
-                if op == "public_invite.disable":
-                    return f"试卷{exam_id}关闭公开邀约".strip()
-                return f"试卷操作{op}({exam_id})".strip()
-
-            if et == "assignment.create":
-                return f"答题邀约{_join_plus2(name, phone, exam_id)}".strip("+")
-
-            return et
+            return _oplog_detail_text_v2(it)
 
         for it in ops:
             et = str(it.get("event_type") or "").strip()
@@ -1944,7 +1786,7 @@ def create_app() -> Flask:
         tokens = tokens[:50]
 
         def status_label(v: str) -> str:
-            s = str(v or "").strip()
+            s = _normalize_exam_status(v)
             m = {
                 "verified": "验证通过",
                 "invited": "已邀约",
@@ -1953,7 +1795,7 @@ def create_app() -> Flask:
                 "finished": "判卷结束",
                 "expired": "失效",
             }
-            return m.get(s, s or "未知")
+            return m.get(s, "未知")
 
         def date_to_iso(v) -> str:
             if v is None:
@@ -1970,7 +1812,7 @@ def create_app() -> Flask:
             if not ep:
                 continue
 
-            status = str(ep.get("status") or "").strip()
+            status = _normalize_exam_status(ep.get("status"))
             entered_at = ep.get("entered_at")
             invite_end_date = date_to_iso(ep.get("invite_end_date"))
 
@@ -2038,11 +1880,11 @@ def create_app() -> Flask:
         return jsonify({"ok": True, "items": out})
 
     @app.post("/admin/exams/upload")    # 上传
-    @admin_required        #  必须在管理员登录后才能看到 
+    @admin_required
     def admin_exams_upload():
         file = request.files.get("file")
         if not file or not file.filename:
-            flash("请选择 .md 或 .zip 文件")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard"))
         filename = (file.filename or "").lower()
 
@@ -2051,7 +1893,7 @@ def create_app() -> Flask:
             try:
                 zf = zipfile.ZipFile(BytesIO(file.read()))
             except Exception:
-                flash("ZIP 读取失败，请确认文件格式为 .zip")
+                flash("操作失败，请稍后重试")
                 return redirect(url_for("admin_dashboard"))
 
             md_names = [n for n in zf.namelist() if not n.endswith("/") and n.lower().endswith(".md")]
@@ -2132,7 +1974,7 @@ def create_app() -> Flask:
             return redirect(url_for("admin_exam_detail_by_sort_id", exam_id=sort_id))
         return redirect(url_for("admin_exam_detail", exam_key=exam_key))
 
-    @app.get("/admin/exams/<exam_key>")     # 根据key值得到试卷细节
+    @app.get("/admin/exams/<exam_key>")
     @admin_required
     @admin_required
     def admin_exam_detail(exam_key: str):
@@ -2432,7 +2274,7 @@ def create_app() -> Flask:
     def admin_exam_delete(exam_key: str):
         exam_dir = STORAGE_DIR / "exams" / exam_key
         if not exam_dir.exists():
-            flash("试卷不存在或已删除")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard") + "#tab-exams")
 
         affected = 0
@@ -2445,7 +2287,7 @@ def create_app() -> Flask:
             shutil.rmtree(exam_dir)
         except Exception:
             logger.exception("Delete exam dir failed: %s", exam_dir)
-            flash("删除失败：试卷目录无法删除（请检查文件占用/权限）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_exam_detail", exam_key=exam_key))
 
         # Success: keep UI quiet (no flash), user can see result from list refresh.
@@ -2503,7 +2345,7 @@ def create_app() -> Flask:
             }
         )
 
-    # 候选者信息
+    #
     @app.get("/admin/candidates")
     @admin_required
     def admin_candidates():
@@ -2619,18 +2461,28 @@ def create_app() -> Flask:
         edu_list = [e for e in educations if isinstance(e, dict)]
 
         highest = _highest_degree(edu_list)
-        show_degrees: set[str] = set()
-        if highest == "博士":
-            show_degrees = {"本科", "硕士", "博士"}
-        elif highest == "硕士":
-            show_degrees = {"本科", "硕士"}
-        elif highest == "本科":
-            show_degrees = {"本科"}
-        elif highest:
-            show_degrees = {highest}
+        highest_rank = _degree_rank(highest)
+        edu_show: list[dict] = []
+        for e in edu_list:
+            d = str(e.get("degree") or "").strip()
+            r = _degree_rank(d)
+            if highest_rank > 0:
+                #
+                if r > 0 and r <= highest_rank:
+                    edu_show.append(e)
+            else:
+                edu_show.append(e)
 
-        edu_show = [e for e in edu_list if not show_degrees or str(e.get("degree") or "") in show_degrees]
-        edu_show.sort(key=lambda x: _degree_rank(str(x.get("degree") or "")))
+        if not edu_show:
+            edu_show = list(edu_list)
+
+        edu_show.sort(
+            key=lambda x: (
+                _degree_rank(str(x.get("degree") or "")),
+                str(x.get("start") or ""),
+                str(x.get("end") or ""),
+            )
+        )
         for e in edu_show:
             try:
                 tag, label = classify_university(str(e.get("school") or ""))
@@ -2788,7 +2640,7 @@ def create_app() -> Flask:
                     exam = {}
                 title = str(exam.get("title") or "").strip()
                 exam_key = str(exam.get("exam_key") or "").strip()
-                exam_name = title or exam_key or "—"
+                exam_name = title or exam_key or "未知试卷"
 
                 sort_key = 0.0
                 try:
@@ -2860,7 +2712,7 @@ def create_app() -> Flask:
 
         evaluation = str(request.form.get("evaluation") or "").strip()
         if not evaluation:
-            flash("请输入评价内容")
+            flash("操作失败，请稍后重试")
             return redirect(
                 url_for("admin_candidate_profile", candidate_id=candidate_id, _anchor="evaluations")
             )
@@ -2929,12 +2781,12 @@ def create_app() -> Flask:
             )
         except Exception:
             logger.exception("Update candidate evaluation failed (cid=%s)", candidate_id)
-            flash("保存失败：评价写入失败")
+            flash("操作失败，请稍后重试")
             return redirect(
                 url_for("admin_candidate_profile", candidate_id=candidate_id, _anchor="evaluations")
             )
 
-        flash("评价已保存")
+        flash("操作失败，请稍后重试")
         return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id, _anchor="evaluations"))
 
     @app.get("/admin/candidates/<int:candidate_id>/resume/download")
@@ -2983,23 +2835,23 @@ def create_app() -> Flask:
 
         file = request.files.get("file")
         if not file or not getattr(file, "filename", ""):
-            flash("请选择简历文件")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
         try:
             data = file.read() or b""
         except Exception:
-            flash("简历文件读取失败")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
         if len(data) > 10 * 1024 * 1024:
-            flash("简历文件过大（需小于等于 10MB）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
         filename = str(file.filename or "")
         ext = os.path.splitext(filename)[1].lower()
-        if ext not in {".pdf", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}:
-            flash("暂不支持该文件类型（仅支持 PDF/DOCX/TXT/MD）")
+        if ext not in _ALLOWED_RESUME_EXTS:
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
         try:
@@ -3083,7 +2935,7 @@ def create_app() -> Flask:
         except Exception:
             current_phone = ""
         if _is_valid_phone(parsed_phone) and current_phone and parsed_phone != current_phone:
-            flash("重新上传的简历手机号与当前候选人不一致，已阻止覆盖（请确认文件是否选错）。")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
         try:
@@ -3151,7 +3003,7 @@ def create_app() -> Flask:
             )
         except Exception:
             logger.exception("Update candidate resume failed (cid=%s)", candidate_id)
-            flash("重新解析失败（数据库写入失败）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
         try:
@@ -3167,20 +3019,20 @@ def create_app() -> Flask:
         flash("重新上传成功")
         return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
-    # 添加候选者信息，采用post
+    #
     @app.post("/admin/candidates")
     @admin_required
     def admin_candidates_create():
         name = (request.form.get("name") or "").strip()
         phone = _normalize_phone(request.form.get("phone") or "")
         if not name or not phone:
-            flash("姓名/手机号必填")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
         if not _is_valid_name(name):
-            flash("姓名格式不正确（2-20位中文/英文，可含空格/·）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
         if not _is_valid_phone(phone):
-            flash("手机号格式不正确（需为 11 位中国大陆手机号）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
 
         existed = get_candidate_by_phone(phone)
@@ -3195,7 +3047,7 @@ def create_app() -> Flask:
             except Exception:
                 pass
         except Exception:
-            flash("手机号已存在或写入失败")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
         flash("候选人创建成功")
         return redirect(url_for("admin_candidates"))
@@ -3205,29 +3057,29 @@ def create_app() -> Flask:
     def admin_candidates_resume_upload():
         file = request.files.get("file")
         if not file or not getattr(file, "filename", ""):
-            flash("请选择简历文件")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
 
         try:
             data = file.read() or b""
         except Exception:
-            flash("简历文件读取失败")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
 
         if len(data) > 10 * 1024 * 1024:
-            flash("简历文件过大（需小于等于 10MB）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
 
         filename = str(file.filename or "")
         ext = os.path.splitext(filename)[1].lower()
-        if ext not in {".pdf", ".docx", ".txt", ".md", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}:
-            flash("暂不支持该文件类型（仅支持 PDF/DOCX/TXT/MD）")
+        if ext not in _ALLOWED_RESUME_EXTS:
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
 
         try:
             text = extract_resume_text(data, filename)
         except ValueError:
-            flash("暂不支持该文件类型（仅支持 PDF/DOCX/TXT/MD）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
         except RuntimeError as e:
             flash(f"简历解析失败：{e}")
@@ -3285,7 +3137,7 @@ def create_app() -> Flask:
                 pass
 
         if not _is_valid_phone(phone):
-            flash("未识别到有效手机号，无法入库（请检查简历内容或换可复制文本）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
 
         name = parsed_name if _is_valid_name(parsed_name) else "未知"
@@ -3325,7 +3177,7 @@ def create_app() -> Flask:
         cid, created = _upsert_candidate_by_phone(phone=phone, name=name)
 
         if cid <= 0:
-            flash("简历入库失败：无法定位候选人记录（手机号可能已存在且异常）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
 
         # Parse full details synchronously so profile page doesn't need to wait.
@@ -3393,17 +3245,9 @@ def create_app() -> Flask:
             except Exception:
                 pass
 
-        msg = "简历上传成功，候选人已创建" if created else "简历上传成功，已更新候选人简历"
-        if name == "未知":
-            msg += "（提示：姓名未识别成功，请手动编辑或换可复制文本简历）"
-        if phone_conf and phone_conf < 60:
-            msg += f"（提示：手机号提取置信度较低 {phone_conf}/100，请核对）"
-        if name_conf and name_conf < 60:
-            msg += f"（提示：姓名提取置信度较低 {name_conf}/100，请核对）"
-        flash(msg)
         return redirect(url_for("admin_candidates"))
 
-    # 修改候选者身份信息
+    #
     @app.get("/admin/candidates/<int:candidate_id>/edit")
     @admin_required
     def admin_candidates_edit(candidate_id: int):
@@ -3415,7 +3259,7 @@ def create_app() -> Flask:
     def admin_candidate_attempt(candidate_id: int):
         c = get_candidate(candidate_id)
         if not c:
-            flash("候选人不存在")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
         p = _find_latest_archive(c)
         if not p:
@@ -3450,7 +3294,7 @@ def create_app() -> Flask:
     def admin_candidate_attempt_by_archive(candidate_id: int, archive_name: str):
         c = get_candidate(candidate_id)
         if not c:
-            flash("候选人不存在")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
 
         phone = str(c.get("phone") or "").strip()
@@ -3499,20 +3343,20 @@ def create_app() -> Flask:
             pass
         return render_template("admin_candidate_attempt.html", archive=archive)
 
-    # 修改候选人信息
+    #
     @app.post("/admin/candidates/<int:candidate_id>/edit")
     @admin_required
     def admin_candidates_edit_post(candidate_id: int):
         # Deprecated: inline editing is now done on the profile page.
         return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
-    # 删除候选者身份信息
+    #
     @app.post("/admin/candidates/<int:candidate_id>/delete")
     @admin_required
     def admin_candidates_delete(candidate_id: int):
         c = get_candidate(candidate_id)
         if not c:
-            flash("候选人不存在")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
         try:
             delete_candidate(candidate_id)
@@ -3528,7 +3372,7 @@ def create_app() -> Flask:
         except Exception:
             flash("删除失败")
             return redirect(url_for("admin_candidates"))
-        flash("候选人已删除")
+        flash("操作失败，请稍后重试")
         return redirect(url_for("admin_candidates"))
 
     # 分发试卷
@@ -3540,7 +3384,7 @@ def create_app() -> Flask:
         time_limit_raw = (request.form.get("time_limit_seconds") or "").strip()
         time_limit_seconds = _parse_duration_seconds(time_limit_raw)
         if not time_limit_raw or time_limit_seconds is None:
-            flash("请填写限时（时:分:秒），例如 02:00:00")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard") + "#tab-assign")
         min_submit_seconds_raw = (request.form.get("min_submit_seconds") or "").strip()
         min_submit_seconds: int | None = None
@@ -3554,18 +3398,18 @@ def create_app() -> Flask:
 
         spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
         if not spec_path.exists():
-            flash("试卷不存在")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard"))
 
         c = get_candidate(candidate_id)
         if not c:
-            flash("候选人不存在")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard"))
 
         invite_start_date_raw = (request.form.get("invite_start_date") or "").strip()
         invite_end_date_raw = (request.form.get("invite_end_date") or "").strip()
         if not invite_start_date_raw:
-            flash("请选择答题开始日期")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard") + "#tab-assign")
         if not invite_end_date_raw:
             flash("请选择答题结束日期")
@@ -3573,19 +3417,19 @@ def create_app() -> Flask:
         sd = _parse_date_ymd(invite_start_date_raw) if invite_start_date_raw else None
         ed = _parse_date_ymd(invite_end_date_raw) if invite_end_date_raw else None
         if sd is None:
-            flash("答题开始日期格式不正确（应为 YYYY-MM-DD）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard") + "#tab-assign")
         if ed is None:
-            flash("答题结束日期格式不正确（应为 YYYY-MM-DD）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard") + "#tab-assign")
         if invite_start_date_raw and sd is None:
-            flash("答题开始日期格式不正确（应为 YYYY-MM-DD）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard") + "#tab-assign")
         if invite_end_date_raw and ed is None:
-            flash("答题结束日期格式不正确（应为 YYYY-MM-DD）")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard") + "#tab-assign")
         if sd is not None and ed is not None and ed < sd:
-            flash("答题结束日期不能早于开始日期")
+            flash("操作失败，请稍后重试")
             return redirect(url_for("admin_dashboard") + "#tab-assign")
 
         base_url = request.url_root.rstrip("/")
@@ -3632,7 +3476,7 @@ def create_app() -> Flask:
             url=result["url"],
         )
 
-    # 生成二维码图片
+    #
     @app.get("/admin/qr/<token>.png")
     @admin_required
     def admin_qr(token: str):
@@ -3898,6 +3742,7 @@ def create_app() -> Flask:
             if assignment.get("grading") or _finalize_if_time_up(token, assignment):
                 return redirect(url_for("public_done", token=token))
             _ensure_exam_paper_for_token(token, assignment)
+
         verify = assignment.get("verify") or {}
         sms = assignment.get("sms_verify") or {}
         return render_template(
@@ -3921,6 +3766,7 @@ def create_app() -> Flask:
         cooldown_seconds = 60
         max_send = 3
         now = datetime.now(timezone.utc)
+
         with assignment_locked(token):
             assignment = load_assignment(token)
             if str(assignment.get("status") or "").strip() == "expired":
@@ -3936,8 +3782,30 @@ def create_app() -> Flask:
             if verify.get("locked"):
                 return jsonify({"ok": False, "error": "链接已失效。"}), 410
 
-            candidate_id = int(assignment.get("candidate_id") or 0)
-            ok = verify_candidate(candidate_id, name=name, phone=phone)
+            try:
+                candidate_id = int(assignment.get("candidate_id") or 0)
+            except Exception:
+                candidate_id = 0
+
+            ok = False
+            if candidate_id > 0:
+                ok = verify_candidate(candidate_id, name=name, phone=phone)
+            else:
+                existing = None
+                try:
+                    existing = get_candidate_by_phone(phone)
+                except Exception:
+                    existing = None
+                if existing and int(existing.get("id") or 0) > 0:
+                    existing_id = int(existing.get("id") or 0)
+                    existing_name = str(existing.get("name") or "").strip()
+                    ok = bool(existing_name == name)
+                    if ok:
+                        assignment["candidate_id"] = existing_id
+                        candidate_id = existing_id
+                else:
+                    ok = True
+
             if not ok:
                 verify["attempts"] = int(verify.get("attempts") or 0) + 1
                 if verify["attempts"] >= int(assignment.get("verify_max_attempts") or 3):
@@ -3978,6 +3846,7 @@ def create_app() -> Flask:
             except Exception:
                 logger.exception("Send SMS verify code failed")
                 return jsonify({"ok": False, "error": "短信服务暂不可用，请稍后重试。"}), 502
+
             success = bool(resp.get("Success")) and str(resp.get("Code") or "").upper() == "OK"
             if not success:
                 return jsonify({"ok": False, "error": str(resp.get("Message") or "发送失败。")}), 502
@@ -3999,17 +3868,14 @@ def create_app() -> Flask:
             except Exception:
                 pass
 
-        return jsonify(
-            {
-                "ok": True,
-                "cooldown": cooldown_seconds,
-                "biz_id": biz_id,
-                "send_count": int(sms.get("send_count") or 0),
-                "send_max": max_send,
-            }
-        )
+        return jsonify({
+            "ok": True,
+            "cooldown": cooldown_seconds,
+            "biz_id": biz_id,
+            "send_count": int(sms.get("send_count") or 0),
+            "send_max": max_send,
+        })
 
-    # 验证候选者信息进入答卷
     @app.post("/api/public/verify")
     def public_verify():
         wants_json = "application/json" in str(request.headers.get("Accept") or "").lower()
@@ -4021,11 +3887,14 @@ def create_app() -> Flask:
         log_exam_key = ""
         log_public_invite = False
         log_sms_send_count = 0
+        next_redirect = ""
+
         if not _is_valid_name(name) or not _is_valid_phone(phone):
             if wants_json:
                 return jsonify({"ok": False, "error": "姓名或手机号格式不正确。"}), 400
             flash("姓名或手机号格式不正确")
             return redirect(url_for("public_verify_page", token=token))
+
         with assignment_locked(token):
             assignment = load_assignment(token)
             if str(assignment.get("status") or "").strip() == "expired":
@@ -4033,15 +3902,18 @@ def create_app() -> Flask:
                     return jsonify({"ok": False, "expired": True, "error": "当前链接已失效，请联系管理员重新生成。"}), 410
                 flash("链接已失效")
                 return redirect(url_for("public_verify_page", token=token))
+
             st, _sd, _ed = _invite_window_state(assignment)
             if st in {"not_started", "expired"}:
                 if wants_json:
                     return jsonify({"ok": False, "error": "当前不在可答题时间范围内。"}), 400
                 return redirect(url_for("public_verify_page", token=token))
+
             if assignment.get("grading") or _finalize_if_time_up(token, assignment):
                 if wants_json:
                     return jsonify({"ok": False, "error": "答题已结束。"}), 400
                 return redirect(url_for("public_done", token=token))
+
             _ensure_exam_paper_for_token(token, assignment)
             verify = assignment.get("verify") or {"attempts": 0, "locked": False}
             if verify.get("locked"):
@@ -4055,18 +3927,30 @@ def create_app() -> Flask:
             except Exception:
                 candidate_id = 0
 
-            # Public invite attempts may start with candidate_id=0 (unknown candidate).
-            # In that case, we treat this as registration after SMS verification.
             if candidate_id > 0:
                 ok = verify_candidate(candidate_id, name=name, phone=phone)
             else:
-                ok = True
+                existing = None
+                try:
+                    existing = get_candidate_by_phone(phone)
+                except Exception:
+                    existing = None
+                if existing and int(existing.get("id") or 0) > 0:
+                    existing_id = int(existing.get("id") or 0)
+                    existing_name = str(existing.get("name") or "").strip()
+                    ok = bool(existing_name == name)
+                    if ok:
+                        assignment["candidate_id"] = existing_id
+                        candidate_id = existing_id
+                else:
+                    ok = True
 
             if ok:
                 sms = assignment.get("sms_verify") or {}
                 if str(sms.get("phone") or "") != phone:
                     sms["phone"] = phone
                     assignment["sms_verify"] = sms
+
                 if not sms.get("verified"):
                     if not sms_code:
                         if wants_json:
@@ -4082,6 +3966,7 @@ def create_app() -> Flask:
                             return jsonify({"ok": False, "error": "短信服务暂不可用，请稍后重试。"}), 502
                         flash("短信服务暂不可用，请稍后重试。")
                         return redirect(url_for("public_verify_page", token=token))
+
                     verify_result = ""
                     model = resp.get("Model")
                     if isinstance(model, dict):
@@ -4104,27 +3989,12 @@ def create_app() -> Flask:
                             assignment["verify"] = verify
                             save_assignment(token, assignment)
                             if wants_json:
-                                return (
-                                    jsonify(
-                                        {
-                                            "ok": False,
-                                            "expired": True,
-                                            "error": "验证码未在规定次数内验证通过，链接已失效，请联系管理员重新生成。",
-                                            "clear_sms": True,
-                                        }
-                                    ),
-                                    410,
-                                )
+                                return jsonify({"ok": False, "expired": True, "error": "验证码未在规定次数内验证通过，链接已失效，请联系管理员重新生成。", "clear_sms": True}), 410
                             flash("验证码未在规定次数内验证通过，链接已失效，请联系管理员重新生成。")
                             return redirect(url_for("public_verify_page", token=token))
 
                         if wants_json:
-                            return (
-                                jsonify({"ok": False, "error": "验证码错误，请重试。", "clear_sms": True}),
-                                400,
-                            )
-                        # If the candidate has already requested 3 codes and still cannot verify,
-                        # expire this token to force the admin to re-issue a new invite.
+                            return jsonify({"ok": False, "error": "验证码错误，请重试。", "clear_sms": True}), 400
                         save_assignment(token, assignment)
                         flash("验证码错误，请重试。")
                         return redirect(url_for("public_verify_page", token=token))
@@ -4133,7 +4003,6 @@ def create_app() -> Flask:
                     sms["verified_at"] = datetime.now(timezone.utc).isoformat()
                     assignment["sms_verify"] = sms
 
-                # If this is a public invite attempt, create/bind a candidate now.
                 if candidate_id <= 0:
                     cand = None
                     try:
@@ -4141,17 +4010,20 @@ def create_app() -> Flask:
                     except Exception:
                         cand = None
                     if cand and int(cand.get("id") or 0) > 0:
-                        cid = int(cand.get("id") or 0)
-                        try:
-                            if str(cand.get("name") or "").strip() != name:
-                                update_candidate(cid, name=name, phone=phone)
-                        except Exception:
-                            pass
-                        candidate_id = cid
+                        candidate_id = int(cand.get("id") or 0)
+                        assignment["candidate_id"] = int(candidate_id)
                     else:
-                        candidate_id = int(create_candidate(name=name, phone=phone))
+                        assignment["pending_profile"] = {
+                            "name": name,
+                            "phone": phone,
+                            "sms_verified_at": str(sms.get("verified_at") or ""),
+                        }
+                        now2 = datetime.now(timezone.utc)
+                        assignment["status"] = "resume_pending"
+                        assignment["status_updated_at"] = now2.isoformat()
+                        next_redirect = url_for("public_resume_upload_page", token=token)
 
-                    assignment["candidate_id"] = int(candidate_id)
+                if candidate_id > 0:
                     try:
                         inv = assignment.get("invite_window") or {}
                         if not isinstance(inv, dict):
@@ -4171,13 +4043,15 @@ def create_app() -> Flask:
                     except Exception:
                         pass
 
-                try:
-                    set_exam_paper_status(token, "verified")
-                except Exception:
-                    pass
-                now2 = datetime.now(timezone.utc)
-                assignment["status"] = "verified"
-                assignment["status_updated_at"] = now2.isoformat()
+                    try:
+                        set_exam_paper_status(token, "verified")
+                    except Exception:
+                        pass
+                    now2 = datetime.now(timezone.utc)
+                    assignment["status"] = "verified"
+                    assignment["status_updated_at"] = now2.isoformat()
+                    assignment.pop("pending_profile", None)
+                    next_redirect = url_for("public_exam_page", token=token)
             else:
                 verify["attempts"] = int(verify.get("attempts") or 0) + 1
                 if verify["attempts"] >= int(assignment.get("verify_max_attempts") or 3):
@@ -4215,14 +4089,314 @@ def create_app() -> Flask:
                 )
             except Exception:
                 pass
+            if not next_redirect:
+                next_redirect = url_for("public_exam_page", token=token)
             if wants_json:
-                return jsonify({"ok": True, "redirect": url_for("public_exam_page", token=token)})
-            return redirect(url_for("public_exam_page", token=token))
+                return jsonify({"ok": True, "redirect": next_redirect})
+            return redirect(next_redirect)
 
         if wants_json:
             return jsonify({"ok": False, "error": "信息不匹配，请重试。"}), 400
         flash("信息不匹配，请重试")
         return redirect(url_for("public_verify_page", token=token))
+
+    @app.get("/resume/<token>")
+    def public_resume_upload_page(token: str):
+        with assignment_locked(token):
+            assignment = load_assignment(token)
+            if str(assignment.get("status") or "").strip() == "expired":
+                return render_template(
+                    "public_unavailable.html",
+                    title="链接已失效",
+                    message="当前答题链接已失效，请联系管理员重新生成新的邀请链接。",
+                    start_date="",
+                    end_date="",
+                )
+            st, sd, ed = _invite_window_state(assignment)
+            if st in {"not_started", "expired"}:
+                title = "未到答题时间" if st == "not_started" else "邀请已失效"
+                msg = "当前未到答题时间，请在有效时间范围内进入答题。" if st == "not_started" else "当前邀请已超过有效时间范围，无法开始答题。"
+                return render_template(
+                    "public_unavailable.html",
+                    title=title,
+                    message=msg,
+                    start_date=(sd.isoformat() if sd else ""),
+                    end_date=(ed.isoformat() if ed else ""),
+                )
+            if assignment.get("grading") or _finalize_if_time_up(token, assignment):
+                return redirect(url_for("public_done", token=token))
+
+            sms = assignment.get("sms_verify") or {}
+            if not bool(sms.get("verified")):
+                return redirect(url_for("public_verify_page", token=token))
+
+            try:
+                candidate_id = int(assignment.get("candidate_id") or 0)
+            except Exception:
+                candidate_id = 0
+            if candidate_id > 0:
+                return redirect(url_for("public_exam_page", token=token))
+
+            pending = assignment.get("pending_profile") or {}
+            name = str(pending.get("name") or "").strip()
+            phone = _normalize_phone(str(pending.get("phone") or sms.get("phone") or "").strip())
+            if not name:
+                name = "候选人"
+            if not _is_valid_phone(phone):
+                return redirect(url_for("public_verify_page", token=token))
+
+        return render_template("public_resume_upload.html", token=token, name=name, phone=phone)
+
+    @app.post("/api/public/resume/upload")
+    def public_resume_upload():
+        wants_json = "application/json" in str(request.headers.get("Accept") or "").lower()
+        token = (request.form.get("token") or "").strip()
+        f = request.files.get("file")
+
+        if not token:
+            if wants_json:
+                return jsonify({"ok": False, "error": "缺少 token。"}), 400
+            flash("请求无效：缺少 token")
+            return redirect(url_for("index"))
+
+        if not f or not getattr(f, "filename", ""):
+            if wants_json:
+                return jsonify({"ok": False, "error": "请选择简历文件。"}), 400
+            flash("请选择简历文件")
+            return redirect(url_for("public_resume_upload_page", token=token))
+
+        with assignment_locked(token):
+            assignment = load_assignment(token)
+            if str(assignment.get("status") or "").strip() == "expired":
+                if wants_json:
+                    return jsonify({"ok": False, "expired": True, "error": "当前链接已失效。"}), 410
+                flash("链接已失效")
+                return redirect(url_for("public_verify_page", token=token))
+
+            st, _sd, _ed = _invite_window_state(assignment)
+            if st in {"not_started", "expired"}:
+                if wants_json:
+                    return jsonify({"ok": False, "error": "当前不在可答题时间范围内。"}), 400
+                return redirect(url_for("public_verify_page", token=token))
+
+            sms = assignment.get("sms_verify") or {}
+            if not bool(sms.get("verified")):
+                if wants_json:
+                    return jsonify({"ok": False, "error": "请先完成验证码验证。"}), 400
+                return redirect(url_for("public_verify_page", token=token))
+
+            try:
+                candidate_id = int(assignment.get("candidate_id") or 0)
+            except Exception:
+                candidate_id = 0
+            if candidate_id > 0:
+                if wants_json:
+                    return jsonify({"ok": True, "redirect": url_for("public_exam_page", token=token)})
+                return redirect(url_for("public_exam_page", token=token))
+
+            pending = assignment.get("pending_profile") or {}
+            name = str(pending.get("name") or "").strip()
+            phone = _normalize_phone(str(pending.get("phone") or sms.get("phone") or "").strip())
+
+        if not _is_valid_name(name) or not _is_valid_phone(phone):
+            if wants_json:
+                return jsonify({"ok": False, "error": "候选人信息不完整，请重新验证。"}), 400
+            flash("候选人信息不完整，请重新验证")
+            return redirect(url_for("public_verify_page", token=token))
+
+        try:
+            data = f.read() or b""
+        except Exception:
+            if wants_json:
+                return jsonify({"ok": False, "error": "简历文件读取失败。"}), 400
+            flash("简历文件读取失败")
+            return redirect(url_for("public_resume_upload_page", token=token))
+
+        if len(data) > 10 * 1024 * 1024:
+            if wants_json:
+                return jsonify({"ok": False, "error": "简历文件过大（需小于等于10MB）。"}), 400
+            flash("简历文件过大（需小于等于10MB）")
+            return redirect(url_for("public_resume_upload_page", token=token))
+
+        filename = str(f.filename or "")
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in _ALLOWED_RESUME_EXTS:
+            if wants_json:
+                return jsonify({"ok": False, "error": "仅支持上传 PDF/Word（DOCX）简历。"}), 400
+            flash("仅支持上传 PDF/Word（DOCX）简历")
+            return redirect(url_for("public_resume_upload_page", token=token))
+
+        try:
+            text = extract_resume_text(data, filename)
+        except Exception as e:
+            logger.exception("Public resume extract failed")
+            if wants_json:
+                return jsonify({"ok": False, "error": f"简历解析失败：{type(e).__name__}"}), 500
+            flash(f"简历解析失败：{type(e).__name__}")
+            return redirect(url_for("public_resume_upload_page", token=token))
+
+        parsed_phone = ""
+        parsed_name = ""
+        name_conf = 0
+        phone_conf = 0
+        try:
+            ident = parse_resume_identity_fast(text or "") or {}
+            parsed_name = str(ident.get("name") or "").strip()
+            parsed_phone = _normalize_phone(str(ident.get("phone") or "").strip())
+            conf = ident.get("confidence") or {}
+            if isinstance(conf, dict):
+                name_conf = _safe_int(conf.get("name") or 0, 0)
+                phone_conf = _safe_int(conf.get("phone") or 0, 0)
+        except Exception:
+            pass
+
+        if _is_valid_phone(parsed_phone) and parsed_phone != phone:
+            if wants_json:
+                return jsonify({"ok": False, "error": "简历手机号与验证手机号不一致，请检查后重试。"}), 400
+            flash("简历手机号与验证手机号不一致，请检查后重试")
+            return redirect(url_for("public_resume_upload_page", token=token))
+
+        details: dict[str, Any] = {}
+        details_error = ""
+        resume_llm_total_tokens = 0
+        try:
+            with audit_context(meta={}):
+                parsed_details = parse_resume_details_llm(text or "")
+                if isinstance(parsed_details, dict):
+                    details = parsed_details
+                try:
+                    ctx = get_audit_context()
+                    m = ctx.get("meta")
+                    if isinstance(m, dict):
+                        resume_llm_total_tokens += int(m.get("llm_total_tokens_sum") or 0)
+                except Exception:
+                    pass
+        except Exception as e:
+            details_error = f"{type(e).__name__}: {e}"
+
+        cid = 0
+        created = False
+        cand = None
+        try:
+            cand = get_candidate_by_phone(phone)
+        except Exception:
+            cand = None
+        if cand and int(cand.get("id") or 0) > 0:
+            cid = int(cand.get("id") or 0)
+        else:
+            try:
+                cid = int(create_candidate(name=name, phone=phone))
+                created = True
+            except Exception:
+                try:
+                    cand2 = get_candidate_by_phone(phone)
+                    cid = int((cand2 or {}).get("id") or 0)
+                except Exception:
+                    cid = 0
+
+        if cid <= 0:
+            if wants_json:
+                return jsonify({"ok": False, "error": "创建候选人失败，请稍后重试。"}), 500
+            flash("创建候选人失败，请稍后重试")
+            return redirect(url_for("public_resume_upload_page", token=token))
+
+        if created:
+            try:
+                log_event(
+                    "candidate.create",
+                    actor="candidate",
+                    candidate_id=cid,
+                    meta={"name": name, "phone": phone, "public_invite": True},
+                )
+            except Exception:
+                pass
+
+        if _is_valid_name(parsed_name):
+            try:
+                c0 = get_candidate(cid) or {}
+                old_name = str(c0.get("name") or "").strip()
+                if old_name in {"", "未知"}:
+                    update_candidate(cid, name=parsed_name, phone=phone)
+            except Exception:
+                pass
+
+        mime = str(getattr(f, "mimetype", "") or "")
+        resume_meta: dict[str, Any] = {
+            "extracted": {"name": parsed_name, "phone": parsed_phone or phone},
+            "confidence": {"name": max(0, min(100, name_conf)), "phone": max(0, min(100, phone_conf))},
+            "source_filename": filename,
+            "source_mime": mime,
+            "details": {
+                "status": ("failed" if details_error else ("done" if details else "empty")),
+                "data": details,
+                "parsed_at": datetime.now(timezone.utc).isoformat(),
+            },
+        }
+        if details_error:
+            resume_meta["details"]["error"] = details_error  # type: ignore[index]
+
+        try:
+            update_candidate_resume(
+                cid,
+                resume_bytes=data,
+                resume_filename=filename,
+                resume_mime=mime,
+                resume_size=len(data),
+                resume_parsed=resume_meta,
+            )
+        except Exception:
+            logger.exception("Public resume save failed (cid=%s)", cid)
+            if wants_json:
+                return jsonify({"ok": False, "error": "简历保存失败，请稍后重试。"}), 500
+            flash("简历保存失败，请稍后重试")
+            return redirect(url_for("public_resume_upload_page", token=token))
+
+        with assignment_locked(token):
+            assignment = load_assignment(token)
+            assignment["candidate_id"] = int(cid)
+            assignment.pop("pending_profile", None)
+            now2 = datetime.now(timezone.utc)
+            assignment["status"] = "verified"
+            assignment["status_updated_at"] = now2.isoformat()
+            try:
+                inv = assignment.get("invite_window") or {}
+                if not isinstance(inv, dict):
+                    inv = {}
+                invite_start_date = str(inv.get("start_date") or "").strip() or None
+                invite_end_date = str(inv.get("end_date") or "").strip() or None
+                if not get_exam_paper_by_token(token):
+                    create_exam_paper(
+                        candidate_id=int(cid),
+                        phone=phone,
+                        exam_key=str(assignment.get("exam_key") or ""),
+                        token=token,
+                        invite_start_date=invite_start_date,
+                        invite_end_date=invite_end_date,
+                        status="verified",
+                    )
+                else:
+                    set_exam_paper_status(token, "verified")
+            except Exception:
+                pass
+            save_assignment(token, assignment)
+
+        try:
+            log_event(
+                "candidate.resume.parse",
+                actor="candidate",
+                candidate_id=int(cid),
+                exam_key=(str(assignment.get("exam_key") or "").strip() or None),
+                token=(token or None),
+                llm_total_tokens=(int(resume_llm_total_tokens or 0) or None),
+                meta={"public_invite": True},
+            )
+        except Exception:
+            pass
+
+        redirect_to = url_for("public_exam_page", token=token)
+        if wants_json:
+            return jsonify({"ok": True, "redirect": redirect_to})
+        return redirect(redirect_to)
 
     @app.get("/a/<token>")
     def public_exam_page_alias(token: str):
@@ -4359,7 +4533,7 @@ def create_app() -> Flask:
     @app.post("/api/public/answers/<token>")
     def public_save_answers(token: str):
         with assignment_locked(token):
-            assignment = load_assignment(token)     # 将答题数据存入到json中
+            assignment = load_assignment(token)
             if (assignment.get("verify") or {}).get("locked"):
                 abort(410)
             if assignment.get("grading") or _finalize_if_time_up(token, assignment):
@@ -4453,7 +4627,7 @@ def create_app() -> Flask:
             if elapsed < min_submit_seconds and elapsed < time_limit_seconds:
                 wait = max(0, int(min_submit_seconds - elapsed))
                 mins = (min_submit_seconds + 59) // 60
-                flash(f"需考试开始后满 {mins} 分钟才可交卷（还需等待 {wait} 秒）")
+                flash(f"操作失败：{e}")
                 with assignment_locked(token):
                     save_assignment(token, assignment)
                 return redirect(url_for("public_exam_page", token=token))
@@ -4480,7 +4654,7 @@ def create_app() -> Flask:
 
     return app
 
-# 目录里扫描所有考试文件夹，读取每个考试的 spec.json，整理成一个列表返回
+#
 def _list_exams():
     exams_dir = STORAGE_DIR / "exams"
     out = []
@@ -4491,12 +4665,12 @@ def _list_exams():
         spec_path = p / "spec.json"
         if not spec_path.exists():
             continue
-        # 如果有一个考试不能读取，就跳过在读取其余的
+        #
         try:
             spec = read_json(spec_path)
         except Exception:
             continue
-        # 将试卷id ，title和问题存到out中
+        #
         try:
             mtime = spec_path.stat().st_mtime
         except Exception:
@@ -5243,8 +5417,13 @@ def _sync_exam_paper_finished_from_assignment(assignment: dict) -> None:
         logger.exception("Sync exam_paper finished failed (token=%s)", token)
         return
 
-# 此文件作为项目入口
+#
 if __name__ == "__main__":
     app = create_app()
-    # 运行Flask实例对象，debug=True 浏览器出现错误，页面显示错误，port=5050，可以修改  
+    #
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
+
+
+
+
+
