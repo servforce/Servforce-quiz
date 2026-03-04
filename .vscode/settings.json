@@ -1,4 +1,8 @@
 {
   "prettier.logLevel": "warn",
-  "prettier.useEditorConfig": false
+  "prettier.useEditorConfig": false,
+  "python.defaultInterpreterPath": "E:\\anacoda\\python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}"
+  ]
 }

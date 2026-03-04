@@ -408,6 +408,12 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
             n = backfill_system_log_llm_totals_from_meta()
             if n > 0:
                 logger.info("Backfilled system_log llm_total_tokens from meta: %s rows", n)
+            n2 = backfill_system_log_llm_totals_zero_for_ai_generate_missing()
+            if n2 > 0:
+                logger.info(
+                    "Backfilled system_log llm_total_tokens=0 for historical ai.generate rows: %s rows",
+                    n2,
+                )
         except Exception:
             logger.exception("Failed to backfill system_log llm_total_tokens from meta")
         logger.info("DB ready")
@@ -970,6 +976,40 @@ def backfill_system_log_llm_totals_from_meta() -> int:
             return int(cur.rowcount or 0)
 
 
+def backfill_system_log_llm_totals_zero_for_ai_generate_missing() -> int:
+    """
+    Historical fallback:
+
+    Some old ai-generated exam logs never persisted token usage in either
+    llm_total_tokens or meta.llm_total_tokens_sum. For those rows, backfill
+    llm_total_tokens to 0 and annotate meta for traceability.
+    """
+    sql = """
+UPDATE system_log
+SET
+  llm_total_tokens = 0,
+  meta = jsonb_set(
+    COALESCE(meta, '{}'::jsonb),
+    '{llm_total_tokens_backfill}',
+    '"missing_history_default_0"'::jsonb,
+    true
+  )
+WHERE event_type = 'exam.upload'
+  AND COALESCE(meta->>'source', '') = 'ai.generate'
+  AND (llm_total_tokens IS NULL OR llm_total_tokens < 0)
+  AND (
+    meta IS NULL
+    OR NOT (meta ? 'llm_total_tokens_sum')
+    OR COALESCE(NULLIF(meta->>'llm_total_tokens_sum', ''), '0') !~ '^[0-9]+$'
+    OR (meta->>'llm_total_tokens_sum')::int <= 0
+  )
+    """
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            return int(cur.rowcount or 0)
+
+
 def _system_log_where_clause(
     *,
     query: str | None = None,
@@ -1165,7 +1205,7 @@ def list_operation_logs(*, limit: int = 50, offset: int = 0) -> list[dict[str, A
     sl.event_type = 'system.alert' OR
     sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
   ) AND sl.event_type <> 'llm.usage'
-  ORDER BY sl.id DESC
+  ORDER BY sl.at DESC, sl.id DESC
   LIMIT %s
   OFFSET %s
   """
@@ -1211,7 +1251,7 @@ def list_operation_logs_after_id(*, after_id: int, limit: int = 50) -> list[dict
     sl.event_type = 'system.alert' OR
     sl.event_type IN ('assignment.create','assignment.verify','exam.enter','exam.finish')
   ) AND sl.event_type <> 'llm.usage'
-  ORDER BY sl.id DESC
+  ORDER BY sl.at DESC, sl.id DESC
   LIMIT %s
  """
     with conn_scope() as conn:
@@ -1327,10 +1367,9 @@ def has_system_alert(*, day: str, kind: str, level: str) -> bool:
 
 def touch_system_alert(*, day: str, kind: str, level: str, used: int, limit: int, ratio: float) -> None:
     """
-    Update an existing system.alert row (same day/kind/level) to reflect the latest snapshot.
-
-    We treat system.alert as a *state* (threshold reached) rather than an immutable historical record,
-    so the UI can show the current ratio without requiring multiple rows per day.
+    Backward-compatible helper to record a system.alert snapshot.
+    Always appends a new row (never updates existing rows), so repeated warnings
+    on the same day are preserved chronologically.
     """
     d = str(day or "").strip()
     k = str(kind or "").strip()
@@ -1350,25 +1389,18 @@ def touch_system_alert(*, day: str, kind: str, level: str, used: int, limit: int
     except Exception:
         r = 0.0
 
-    sql = """
- UPDATE system_log sl
-    SET at = NOW(),
-        meta = COALESCE(sl.meta, '{}'::jsonb) || jsonb_build_object(
-          'day', %s,
-          'kind', %s,
-          'level', %s,
-          'used', %s,
-          'limit', %s,
-          'ratio', %s
-        )
-  WHERE sl.event_type = 'system.alert'
-    AND COALESCE(sl.meta->>'day','') = %s
-    AND COALESCE(sl.meta->>'kind','') = %s
-    AND COALESCE(sl.meta->>'level','') = %s
-"""
-    with conn_scope() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (d, k, lv, u, l, r, d, k, lv))
+    create_system_log(
+        actor="system",
+        event_type="system.alert",
+        meta={
+            "day": d,
+            "kind": k,
+            "level": lv,
+            "used": u,
+            "limit": l,
+            "ratio": r,
+        },
+    )
 
 
 def estimate_sms_calls_for_day(*, day: str, tz_offset_seconds: int) -> int:

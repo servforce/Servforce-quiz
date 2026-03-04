@@ -17,7 +17,18 @@
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
       .md { white-space: normal; }
-      .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
+      .md img {
+        width: min(100%, 1080px);
+        max-width: 100%;
+        height: auto;
+        border-radius: 10px;
+        display: block;
+        margin: 12px auto;
+        padding: 10px;
+        background: #ffffff;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        box-shadow: 0 8px 20px rgba(2, 6, 23, 0.06);
+      }
 
       /* Review cards: visually align with the exam question cards in ui.css. */
       .q {

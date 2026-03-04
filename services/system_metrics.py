@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from config import STORAGE_DIR, logger
-from db import create_system_log, has_system_alert, touch_system_alert
+from db import create_system_log
 from db import estimate_sms_calls_for_day
 from storage.json_store import read_json, write_json
 
@@ -171,16 +171,8 @@ def _maybe_emit_system_alert(*, day: str, kind: str, used: int, limit: int) -> N
     level = _level_from_ratio(ratio)
     if level not in {"warn", "danger", "critical"}:
         return
-    try:
-        if has_system_alert(day=day, kind=kind, level=level):
-            try:
-                touch_system_alert(day=day, kind=kind, level=level, used=int(used or 0), limit=int(limit or 0), ratio=float(ratio or 0.0))
-            except Exception:
-                pass
-            return
-    except Exception:
-        # If dedupe check fails, still best-effort write once.
-        pass
+    # Always append a new alert log row when usage crosses/keeps warning levels.
+    # This keeps a complete chronological trail for operations and audits.
     try:
         create_system_log(
             actor="system",
@@ -220,6 +212,25 @@ def incr_llm_tokens_and_alert(total_tokens: int | None) -> int:
     limit = int(cfg.get("llm_tokens_limit") or 0)
     _maybe_emit_system_alert(day=day, kind="llm_tokens", used=used, limit=limit)
     return used
+
+
+def emit_alerts_for_current_snapshot(*, day: str | None = None) -> None:
+    """
+    Evaluate current daily counters against current limits and append alerts when exceeded.
+
+    Useful after threshold config changes: if usage is already above warn/danger/critical,
+    emit a new system.alert row immediately instead of waiting for the next increment event.
+    """
+    d = str(day or _today_local_day()).strip()[:10]
+    if not d:
+        return
+    cfg = _load_cfg()
+    llm_limit = int(cfg.get("llm_tokens_limit") or 0)
+    sms_limit = int(cfg.get("sms_calls_limit") or 0)
+    llm_used = get_daily_metric(day=d, key="llm_tokens")
+    sms_used = get_daily_metric(day=d, key="sms_calls")
+    _maybe_emit_system_alert(day=d, kind="llm_tokens", used=llm_used, limit=llm_limit)
+    _maybe_emit_system_alert(day=d, kind="sms_calls", used=sms_used, limit=sms_limit)
 
 
 def ensure_sms_calls_metric(*, day: str, tz_offset_seconds: int) -> int:

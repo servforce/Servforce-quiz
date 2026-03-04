@@ -27,6 +27,187 @@
       .upload-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
       .upload-row .field { margin: 0; }
       #tab-exams .upload-row { margin-top: 10px; }
+      .upload-row .ai-gen-toggle {
+        display: inline-flex;
+        align-items: center;
+        height: 40px;
+        margin: 0;
+        font-weight: 800;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .ai-gen-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(15, 23, 42, 0.36);
+      }
+      .ai-gen-modal[hidden] { display: none; }
+      .ai-gen-panel {
+        width: min(1060px, 96vw);
+        max-height: min(96vh, 1800px);
+        overflow: auto;
+        padding: 14px;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 20px 48px rgba(15, 23, 42, 0.24);
+      }
+      .ai-gen-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 3000;
+        display: grid;
+        place-items: center;
+        background: rgba(15, 23, 42, 0.38);
+      }
+      .ai-gen-loading[hidden] { display: none; }
+      .ai-gen-loading-box {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.96);
+        font-weight: 800;
+        color: rgba(15, 23, 42, 0.86);
+      }
+      .ai-gen-spinner {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 2px solid rgba(15, 23, 42, 0.18);
+        border-top-color: rgba(15, 23, 42, 0.92);
+        animation: ai-spin 0.8s linear infinite;
+      }
+      @keyframes ai-spin { to { transform: rotate(360deg); } }
+      .ai-gen-panel-head {
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+      }
+      .ai-gen-panel-head .ai-top-btn {
+        height: 42px;
+        min-width: 132px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 14px;
+      }
+      .ai-gen-panel-head .ai-top-btn:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+      .ai-gen-panel-head .ai-top-btn-close {
+        height: 38px;
+        min-width: 86px;
+        padding: 0 12px;
+        font-size: 18px;
+      }
+      .ai-gen-panel.ai-gen-row { display: block; }
+      .ai-gen-panel .field-ai-prompt { width: 100%; max-width: none; display: block; }
+      .ai-gen-panel .ai-prompt-input { width: 100%; }
+      .ai-check-result {
+        margin: 8px 0 10px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.14);
+        background: rgba(15, 23, 42, 0.03);
+        font-size: 14px;
+        line-height: 1.6;
+        color: rgba(15, 23, 42, 0.86);
+      }
+      .ai-check-result.ok {
+        border-color: rgba(22, 163, 74, 0.30);
+        background: rgba(22, 163, 74, 0.08);
+        color: #166534;
+      }
+      .ai-check-result.warn {
+        border-color: rgba(245, 158, 11, 0.35);
+        background: rgba(245, 158, 11, 0.10);
+        color: #92400e;
+      }
+      .confirm-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 3200;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: rgba(15, 23, 42, 0.40);
+      }
+      .confirm-modal[hidden] { display: none; }
+      .confirm-card {
+        width: min(440px, 94vw);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 18px 40px rgba(2, 6, 23, 0.24);
+        padding: 16px;
+      }
+      .confirm-title {
+        margin: 0 0 8px;
+        font-size: 18px;
+        font-weight: 900;
+        color: rgba(15, 23, 42, 0.92);
+      }
+      .confirm-actions {
+        margin-top: 12px;
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+      .flash {
+        transition: opacity 220ms ease, transform 220ms ease;
+      }
+      .flash.fade-out {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+      .ai-gen-row {
+        margin-top: 0;
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+      }
+      .ai-gen-row .field { margin: 0; }
+      .ai-gen-row .field-ai-prompt { flex: 1 1 760px; max-width: 100%; }
+      .ai-gen-row .ai-gen-actions { display: inline-flex; gap: 10px; align-items: flex-end; }
+      .ai-gen-row .ai-gen-actions .btn { height: 40px; font-size: 16px; border-radius: 14px; }
+      .ai-prompt-head {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 12px;
+        margin-bottom: 6px;
+      }
+      .ai-prompt-head > label { margin: 0; }
+      .ai-prompt-input {
+        min-height: 432px;
+        resize: vertical;
+        white-space: pre-wrap;
+      }
+      .chk-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: auto;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        font-weight: 700;
+        color: rgba(15, 23, 42, 0.82);
+      }
+      .chk-inline input[type="checkbox"] { width: 16px; height: 16px; }
       input[type="file"].file-input {
         display: block;
         width: min(620px, 100%);
@@ -643,7 +824,73 @@
                 <input id="file" class="file-input" type="file" name="file" accept=".md,.zip,text/markdown,application/zip" required />
               </div>
               <button class="btn btn-primary" type="submit">上传解析</button>
+              <button
+                id="ai_gen_toggle"
+                class="btn btn-primary ai-gen-toggle"
+                type="button"
+                aria-controls="ai_gen_modal"
+                aria-expanded="false"
+              >&#22823;&#27169;&#22411;&#33258;&#21160;&#29983;&#25104;&#35797;&#21367;</button>
             </form>
+          </div>
+
+
+          <div id="ai_gen_modal" class="ai-gen-modal" hidden>
+            <form
+              id="ai_gen_panel"
+              class="ai-gen-panel ai-gen-row"
+              method="post"
+              action="/admin/exams/ai"
+              role="dialog"
+              aria-modal="true"
+              aria-label="AI exam generation"
+            >
+              <div class="ai-gen-panel-head">
+                <button id="ai_check_btn" class="btn btn-primary ai-top-btn" type="button">&#26816;&#26597;&#25552;&#31034;&#35789;</button>
+                <button id="ai_generate_btn" class="btn btn-primary ai-top-btn" type="submit" name="op" value="generate" disabled>&#33258;&#21160;&#29983;&#25104;&#35797;&#21367;</button>
+                <button id="ai_gen_close" class="btn btn-primary ai-top-btn ai-top-btn-close" type="button">&#20851;&#38381;</button>
+              </div>
+              <div id="ai_check_result" class="ai-check-result" hidden></div>
+              <div class="field field-ai-prompt">
+                <div class="ai-prompt-head">
+                  <label class="chk-inline" for="ai_include_diagrams">
+                    <input
+                      id="ai_include_diagrams"
+                      type="checkbox"
+                      name="ai_include_diagrams"
+                      value="1"
+                      {% if ai_exam_include_diagrams %}checked{% endif %}
+                    />
+                    &#29983;&#25104;&#31034;&#24847;&#22270;&#65288;SVG&#65289;
+                  </label>
+                  <label class="chk-inline" for="ai_use_sample_prompt">
+                    <input id="ai_use_sample_prompt" type="checkbox" value="1" />
+                    &#25552;&#31034;&#35789;&#31034;&#20363;
+                  </label>
+                </div>
+                <textarea
+                  id="ai_exam_prompt"
+                  class="input ai-prompt-input"
+                  name="ai_exam_prompt"
+                  placeholder="&#35831;&#25551;&#36848;&#65306;&#23703;&#20301;/&#20027;&#39064;&#12289;&#30446;&#26631;&#20154;&#32676;&#12289;&#39064;&#22411;&#19982;&#39064;&#37327;&#12289;&#38590;&#24230;&#12289;&#35780;&#20998;&#35201;&#27714;..."
+                >{{ ai_exam_prompt or '' }}</textarea>
+              </div>
+              <div id="ai_gen_loading" class="ai-gen-loading" hidden>
+                <div class="ai-gen-loading-box">
+                  <span class="ai-gen-spinner" aria-hidden="true"></span>
+                  <span>正在生成试卷，请稍候...</span>
+                </div>
+              </div>
+            </form>
+          </div>
+          <div id="delete_exam_confirm_modal" class="confirm-modal" hidden>
+            <div class="confirm-card" role="dialog" aria-modal="true" aria-label="删除试卷确认">
+              <h3 class="confirm-title">是否确认删除试卷？</h3>
+              <div class="confirm-actions">
+                <button id="delete_exam_confirm_ok" class="btn btn-primary" type="button">确定</button>
+                <button id="delete_exam_confirm_cancel" class="btn" type="button">取消</button>
+              </div>
+            </div>
           </div>
 
           <div class="flex" style="justify-content:flex-start; margin: 10px 0 14px;">
@@ -680,12 +927,12 @@
                 <tr class="row-link" data-href="/admin/exams/{{ e.id }}">
                   <td class="col-id">{{ e.id }}</td>
 	                  <td class="col-key"><span class="exam-key">{{ e.exam_key }}</span></td>
-		                  <td class="col-title">{{ e.title }}</td>
+		                  <td class="col-title">{{ e.title | title_clean }}</td>
 		                  <td class="col-count">{{ e.count }}</td>
 		                  <td class="col-updated"><span class="shift-updated">{{ e.updated_at.strftime("%Y-%m-%d %H:%M:%S") if e.updated_at else "" }}</span></td>
 		                  <td class="col-actions">
 	                    <div class="exam-actions">
-                      <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该试卷？删除后候选人关联试卷将显示为“已删除”，但已归档答题仍可查看。');">
+                      <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" style="display:inline; margin:0;" data-exam-delete-form>
                         <button class="btn btn-danger" type="submit">删除</button>
                       </form>
                       <button
@@ -1284,6 +1531,289 @@
 
       window.addEventListener("hashchange", () => setActive(tabKeyFromHash()));
       setActive(tabKeyFromHash());
+
+      // Auto-hide flash messages after 5s.
+      (() => {
+        const flashes = Array.from(document.querySelectorAll(".flash"));
+        for (const el of flashes) {
+          window.setTimeout(() => {
+            el.classList.add("fade-out");
+            window.setTimeout(() => {
+              try { el.remove(); } catch (_) {}
+            }, 240);
+          }, 5000);
+        }
+      })();
+
+      // Toggle AI exam generation panel.
+      const aiGenToggle = document.getElementById("ai_gen_toggle");
+      const aiGenModal = document.getElementById("ai_gen_modal");
+      const aiGenPanel = document.getElementById("ai_gen_panel");
+      const aiGenClose = document.getElementById("ai_gen_close");
+      const aiCheckBtn = document.getElementById("ai_check_btn");
+      const aiGenerateBtn = document.getElementById("ai_generate_btn");
+      const aiCheckResult = document.getElementById("ai_check_result");
+      const aiGenLoading = document.getElementById("ai_gen_loading");
+      const aiPromptEl = document.getElementById("ai_exam_prompt");
+      const aiIncludeDiagramsEl = document.getElementById("ai_include_diagrams");
+      const aiUseSamplePromptEl = document.getElementById("ai_use_sample_prompt");
+      if (aiGenToggle && aiGenModal && aiGenPanel) {
+        const LS_AI_PROMPT_KEY = "admin.ai_exam_prompt.draft";
+        const LS_AI_INCLUDE_DIAGRAMS_KEY = "admin.ai_exam_prompt.include_diagrams";
+        let aiCheckPassed = false;
+        let aiGenerating = false;
+        const SAMPLE_AI_PROMPT = `请为【AI算法工程师】生成一份可导入系统的结构化技术试卷。
+
+【一、基础要求】
+1) 目标人群：2-5年经验，熟悉机器学习训练与调参、常见模型评估与工程落地。
+2) 总题量：25题，总分100分，答题时长120分钟。
+3) 题型分布：单选12题，多选8题，简答5题。
+4) 难度分布：简单20%，中等60%，困难20%（允许误差±1题）。
+5) 每题必须包含：题干、选项（客观题）、标准答案、详细解析、分值。
+6) 输出语言：中文，术语准确，表达简洁，避免歧义。
+
+【二、知识范围与覆盖约束】
+1) 必须覆盖：过拟合与欠拟合、偏差-方差、正则化、数据增强、学习率策略、早停、损失函数、模型评估指标、交叉验证、特征工程、训练监控与故障排查、上线后漂移监控。
+2) 覆盖约束：每个核心知识点至少1题；以下重点知识点至少2题：过拟合/欠拟合、评估指标、调参与训练策略。
+3) 去重约束：题干语义重复率低于20%，同一知识点同一问法最多2题。
+
+【三、图片题强约束（重点）】
+1) 至少生成6道“带图题”，并在全卷前/中/后段分散分布，不可集中在同一段。
+2) 图题类型必须多样化，禁止全部为流程图；至少包含：
+   - 折线图（如 train/test loss 曲线）
+   - 柱状图或直方图
+   - 散点图或决策边界示意
+   - 混淆矩阵/热力图
+   - 架构图（流程图最多2张）
+   - 表格型可视化（如指标对比图）
+3) 每张图必须满足：
+   - 严禁裁剪、截断、遮挡、越界，图中所有文字/坐标/图例完整可见。
+   - 画布四周保留边距（不少于宽高的5%），禁止贴边。
+   - 文字最小字号≥12px，标题≥16px，坐标轴名称与单位完整。
+   - 颜色对比充足，图例完整，缩放后可读。
+   - 若首图不合格，必须自动重绘并替换为最终合格图。
+   - 优先使用SVG；若使用位图，必须高分辨率并保证缩放可读。
+4) 图题关联性约束：每道图题必须基于图进行判断/计算/分析，禁止“有图无关”。
+
+【四、图题内容质量要求】
+至少包含以下风格（可扩展）：
+1) 给出train/test loss曲线，判断过拟合阶段并给出最有效改进方案。
+2) 给出混淆矩阵，计算并比较Precision/Recall/F1，分析偏差来源。
+3) 给出不同模型多指标柱状图，选择上线方案并说明权衡。
+4) 给出特征分布图，识别数据泄漏或分布漂移风险。
+5) 给出简化系统架构图，定位性能瓶颈或单点故障。
+
+【五、评分与可判定性】
+1) 客观题：答案必须唯一、无歧义；错误选项具有迷惑性但可判定。
+2) 简答题必须采用“分步给分”，禁止全有全无：
+   - 每道简答题拆分为4-6个评分点（关键点）。
+   - 每个评分点必须给出：评分点名称、关键词/同义表达集合、分值占比、扣分条件。
+   - 各评分点占比合计100%。
+   - 评分时按“命中评分点即得对应分值，未命中不得分；明显错误按扣分条件扣减（最低0分）”执行。
+   - 最终分数=各评分点得分之和（保留1位小数）。
+   - 除“完全空白”或“完全覆盖全部关键点”外，严禁只给0分或满分。
+   - 每道简答题必须给出评分细则示例：评分点列表（占比）、命中示例、部分命中示例（展示非0非满分）。
+   - 评分解释必须给出“命中点/未命中点”，保证可复核、可追溯。
+3) 解析要求：必须解释“为什么对/错”，不能只给结论。
+
+【六、试卷结构与分值约束】
+1) 全卷分值合计必须=100分。
+2) 客观题与简答题分值分布合理，简答题总分建议30-40分。
+3) 难度与分值匹配：困难题分值应显著高于简单题。
+
+【七、输出要求（严格）】
+1) 仅输出可导入系统的Markdown试卷内容，不输出与试卷无关的说明。
+2)【试卷开头展示格式（必须严格按此输出）】
+在试卷最开头先输出“试卷头信息区”，包含且仅包含以下字段，顺序固定：
+1、 主标题：{试卷中文标题}
+2、 英文标识：({exam_key})
+3、一行简介：{一句话说明试卷覆盖范围与能力维度}
+4、 四个统计项（同一行展示，字段名固定）：
+   - 题目数：{总题量}
+   - 总分：{总分} 分
+   - 单选：{单选题数} 题 / {单选总分} 分
+   - 简答：{简答题数} 题 / {简答总分} 分
+要求：
+- 字段名必须使用：题目数、总分、单选、简答（不要改名）。
+- 数值必须与后续题目内容完全一致（可校验）。
+- 若存在多选题，不在该行单独展示“多选”字段（保持与指定样式一致）。
+- 头信息区输出后，再开始正式题目列表。
+
+3) 输出前执行自检；若任一约束不满足，必须先重写后再输出最终版本，不得输出半成品。`;
+
+        const renderAiCheckResult = (ok, text) => {
+          if (!aiCheckResult) return;
+          aiCheckResult.hidden = false;
+          aiCheckResult.className = ok ? "ai-check-result ok" : "ai-check-result warn";
+          aiCheckResult.textContent = text;
+        };
+        const syncAiExpanded = () => {
+          aiGenToggle.setAttribute("aria-expanded", aiGenModal.hidden ? "false" : "true");
+        };
+        const syncGenerateEnabled = () => {
+          if (aiGenerateBtn) aiGenerateBtn.disabled = !aiCheckPassed;
+        };
+        const invalidateAiCheck = () => {
+          aiCheckPassed = false;
+          syncGenerateEnabled();
+        };
+        const saveAiDraft = () => {
+          try {
+            if (aiPromptEl) localStorage.setItem(LS_AI_PROMPT_KEY, String(aiPromptEl.value || ""));
+            if (aiIncludeDiagramsEl) localStorage.setItem(LS_AI_INCLUDE_DIAGRAMS_KEY, aiIncludeDiagramsEl.checked ? "1" : "0");
+          } catch (_) {}
+        };
+        const loadAiDraft = () => {
+          try {
+            if (aiPromptEl) {
+              const v = localStorage.getItem(LS_AI_PROMPT_KEY);
+              if (typeof v === "string" && v.trim()) aiPromptEl.value = v;
+            }
+            if (aiIncludeDiagramsEl) {
+              const d = localStorage.getItem(LS_AI_INCLUDE_DIAGRAMS_KEY);
+              if (d === "1" || d === "0") aiIncludeDiagramsEl.checked = (d === "1");
+            }
+          } catch (_) {}
+        };
+        const openAiModal = () => {
+          aiGenModal.hidden = false;
+          syncAiExpanded();
+          if (aiPromptEl) aiPromptEl.focus();
+        };
+        const closeAiModal = () => {
+          aiGenModal.hidden = true;
+          syncAiExpanded();
+        };
+
+        aiGenToggle.addEventListener("click", () => {
+          openAiModal();
+        });
+        if (aiGenClose) aiGenClose.addEventListener("click", closeAiModal);
+
+        if (aiPromptEl) aiPromptEl.addEventListener("input", () => {
+          invalidateAiCheck();
+          saveAiDraft();
+        });
+        if (aiIncludeDiagramsEl) aiIncludeDiagramsEl.addEventListener("change", () => {
+          invalidateAiCheck();
+          saveAiDraft();
+        });
+        if (aiUseSamplePromptEl) {
+          aiUseSamplePromptEl.addEventListener("change", () => {
+            const cur = aiPromptEl ? String(aiPromptEl.value || "") : "";
+            const sameAsSample = cur.trim() === SAMPLE_AI_PROMPT.trim();
+            if (aiUseSamplePromptEl.checked) {
+              if (cur.trim() && !sameAsSample) {
+                const ok = window.confirm("当前已填写提示词，是否用示例覆盖？");
+                if (!ok) {
+                  aiUseSamplePromptEl.checked = false;
+                  return;
+                }
+              }
+              if (aiPromptEl) aiPromptEl.value = SAMPLE_AI_PROMPT;
+              saveAiDraft();
+              invalidateAiCheck();
+            } else {
+              if (aiPromptEl && sameAsSample) aiPromptEl.value = "";
+              saveAiDraft();
+              invalidateAiCheck();
+            }
+          });
+        }
+
+        if (aiCheckBtn) {
+          aiCheckBtn.addEventListener("click", async () => {
+            const prompt = (aiPromptEl && aiPromptEl.value) ? String(aiPromptEl.value) : "";
+            const fd = new FormData();
+            fd.set("ai_exam_prompt", prompt);
+            if (aiIncludeDiagramsEl && aiIncludeDiagramsEl.checked) fd.set("ai_include_diagrams", "1");
+            try {
+              aiCheckBtn.disabled = true;
+              const resp = await fetch("/admin/exams/ai/check", { method: "POST", body: fd });
+              const j = await resp.json();
+              if (!resp.ok || !j || !j.ok) {
+                aiCheckPassed = false;
+                syncGenerateEnabled();
+                renderAiCheckResult(false, "检查失败，请重试");
+                return;
+              }
+              if (j.complete) {
+                aiCheckPassed = true;
+                syncGenerateEnabled();
+                renderAiCheckResult(true, "提示词检查通过，可以生成试卷");
+              } else {
+                aiCheckPassed = false;
+                syncGenerateEnabled();
+                const miss = Array.isArray(j.missing) ? j.missing.filter(Boolean) : [];
+                const missText = miss.map((x) => String(x).replace(/[。；;\s]+$/g, "")).join("；");
+                const tip = missText ? (`提示词不完整：${missText}`) : "提示词不完整，请补充关键信息";
+                renderAiCheckResult(false, tip);
+              }
+            } catch (_) {
+              aiCheckPassed = false;
+              syncGenerateEnabled();
+              renderAiCheckResult(false, "检查失败，请重试");
+            } finally {
+              aiCheckBtn.disabled = false;
+            }
+          });
+        }
+
+        aiGenPanel.addEventListener("submit", (e) => {
+          const submitter = e.submitter || document.activeElement;
+          const op = submitter && submitter.getAttribute ? String(submitter.getAttribute("value") || "").trim() : "";
+          if (op !== "generate") return;
+          aiGenerating = true;
+          if (aiGenLoading) aiGenLoading.hidden = false;
+          if (aiCheckBtn) aiCheckBtn.disabled = true;
+          if (aiGenerateBtn) aiGenerateBtn.disabled = true;
+          if (aiGenClose) aiGenClose.disabled = true;
+        });
+        document.addEventListener("click", (e) => {
+          if (!aiGenerating) return;
+          e.preventDefault();
+          e.stopPropagation();
+        }, true);
+
+        loadAiDraft();
+        syncGenerateEnabled();
+        syncAiExpanded();
+      }
+
+      // Custom delete-confirm modal for exam deletion.
+      const deleteExamModal = document.getElementById("delete_exam_confirm_modal");
+      const deleteExamOk = document.getElementById("delete_exam_confirm_ok");
+      const deleteExamCancel = document.getElementById("delete_exam_confirm_cancel");
+      let pendingDeleteForm = null;
+      const closeDeleteExamModal = () => {
+        if (!deleteExamModal) return;
+        deleteExamModal.hidden = true;
+      };
+      const openDeleteExamModal = (formEl) => {
+        if (!deleteExamModal) return;
+        pendingDeleteForm = formEl;
+        deleteExamModal.hidden = false;
+      };
+      document.addEventListener("submit", (ev) => {
+        const form = ev.target && ev.target.matches ? (ev.target.matches("form[data-exam-delete-form]") ? ev.target : null) : null;
+        if (!form) return;
+        ev.preventDefault();
+        openDeleteExamModal(form);
+      }, true);
+      if (deleteExamCancel) {
+        deleteExamCancel.addEventListener("click", () => {
+          pendingDeleteForm = null;
+          closeDeleteExamModal();
+        });
+      }
+      if (deleteExamOk) {
+        deleteExamOk.addEventListener("click", () => {
+          const form = pendingDeleteForm;
+          pendingDeleteForm = null;
+          closeDeleteExamModal();
+          if (form && form.submit) form.submit();
+        });
+      }
 
       // Live fuzzy search (debounced) for exams.
       const examQ = document.getElementById("exam_q");

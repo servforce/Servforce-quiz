@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/codemirror/lib/codemirror.css') }}" />
     <style>
+      body { font-size: 17px; }
       /* Show textarea only when CodeMirror is not ready (fallback). */
       body.cm-ready textarea.editor { display: none; }
       textarea.editor {
@@ -19,7 +20,7 @@
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(255, 255, 255, 0.92);
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 18px;
+        font-size: 19px;
         line-height: 1.12;
       }
       .editor-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -29,7 +30,7 @@
         min-height: 0;
         height: auto;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 18px;
+        font-size: 19px;
         color: var(--text);
         border-radius: 14px;
         border: 1px solid rgba(15, 23, 42, 0.12);
@@ -62,13 +63,13 @@
         padding: 10px 12px;
         border-radius: 12px;
         font-weight: 700;
-        font-size: 15px;
+        font-size: 16px;
         color: var(--text);
         text-decoration: none;
         border: 1px solid transparent;
         background: transparent;
       }
-      .exam-tabs .ico { font-size: 14px; line-height: 1; opacity: 0.9; }
+      .exam-tabs .ico { font-size: 15px; line-height: 1; opacity: 0.9; }
       .exam-tabs a:hover { background: rgba(15, 23, 42, 0.04); text-decoration: none; }
       .exam-tabs a.active { background: rgba(37, 99, 235, 0.10); border-color: rgba(37, 99, 235, 0.22); color: #1d4ed8; }
 

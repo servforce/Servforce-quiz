@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ spec.title }}</title>
+    <title>{{ spec.title | title_clean }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <script>
       window.MathJax = {
@@ -17,7 +17,18 @@
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
       .md { white-space: normal; }
-      .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
+      .md img {
+        width: min(100%, 1080px);
+        max-width: 100%;
+        height: auto;
+        border-radius: 10px;
+        display: block;
+        margin: 12px auto;
+        padding: 10px;
+        background: #ffffff;
+        border: 1px solid rgba(15, 23, 42, 0.10);
+        box-shadow: 0 8px 20px rgba(2, 6, 23, 0.06);
+      }
 
       .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: center; }
       .exam-meta-title h2 {
@@ -161,8 +172,7 @@
 
         <section class="section">
           <div class="exam-meta-title">
-            <h2>{{ spec.title }}</h2>
-            <span class="muted">({{ exam_key }})</span>
+            <h2>{{ spec.title | title_clean }}</h2>
           </div>
           {% if spec.description %}
             <div class="exam-meta-desc">{{ spec.description }}</div>
