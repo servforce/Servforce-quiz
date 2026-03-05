@@ -267,19 +267,19 @@
 
       /* Attempt list date range filter (scoped to #tab-assign only). */
       #tab-assign .assign-attempts .attempt-head { display:flex; flex-direction: column; align-items: stretch; gap: 10px; margin: 0 0 10px; padding: 0; }
-      #tab-assign .assign-attempts .attempt-head .title { margin: 0; font-size: 16px; }
+      #tab-assign .assign-attempts .attempt-head .title { margin: 0; font-size: 20px; }
       /* Keep filter row "top-aligned" and put actions on the right of the query. */
       #tab-assign .assign-attempts .attempt-filter { display:flex; flex-wrap: nowrap; align-items: flex-end; gap: 10px; margin: 0; width: 100%; }
       #tab-assign .assign-attempts .attempt-filter .field { margin: 0; }
-      #tab-assign .assign-attempts .attempt-filter .field.field-q label { font-size: 18px; font-weight: 800; }
-      #tab-assign .assign-attempts .attempt-filter .field.field-q { flex: 0 1 420px; max-width: 420px; min-width: 260px; }
-      #tab-assign .assign-attempts .attempt-filter .field.field-sm { flex: 0 0 190px; }
-      #tab-assign .assign-attempts .attempt-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 38px; font-size: 17px; }
-      #tab-assign .assign-attempts .range-group { display: flex; align-items: flex-end; gap: 10px; }
-      #tab-assign .assign-attempts .range-group .field { flex: 1 1 190px; }
-      #tab-assign .assign-attempts .attempt-actions { display: inline-flex; gap: 10px; margin-left: auto; align-items: flex-end; }
+      #tab-assign .assign-attempts .attempt-filter .field.field-q label { font-size: 22px; font-weight: 800; }
+      #tab-assign .assign-attempts .attempt-filter .field.field-q { flex: 0 1 520px; max-width: 520px; min-width: 300px; }
+      #tab-assign .assign-attempts .attempt-filter .field.field-sm { flex: 0 0 230px; }
+      #tab-assign .assign-attempts .attempt-filter .input { height: 48px; padding-top: 0; padding-bottom: 0; line-height: 46px; font-size: 21px; }
+      #tab-assign .assign-attempts .range-group { display: flex; align-items: flex-end; gap: 10px; margin-left: auto; }
+      #tab-assign .assign-attempts .range-group .field { flex: 1 1 230px; }
+      #tab-assign .assign-attempts .attempt-actions { display: inline-flex; gap: 10px; margin-left: 0; align-items: flex-end; }
       #tab-assign .assign-attempts .range-sep {
-        height: 40px;
+        height: 48px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -304,8 +304,8 @@
         right: 10px;
         top: 50%;
         transform: translateY(-50%);
-        width: 28px;
-        height: 28px;
+        width: 34px;
+        height: 34px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -316,7 +316,7 @@
         padding: 0;
       }
       #tab-assign .assign-attempts .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
-      #tab-assign .assign-attempts .attempt-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: 16px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+      #tab-assign .assign-attempts .attempt-filter .btn { height: 48px; min-width: 92px; padding: 0 18px; line-height: 1; font-size: 20px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
       @media (max-width: 1100px) {
         #tab-assign .assign-attempts .attempt-filter { flex-wrap: wrap; }
         #tab-assign .assign-attempts .attempt-actions { margin-left: 0; }
@@ -362,10 +362,10 @@
       #tab-assign .assign-form { margin-top: 10px; }
 
       /* Make "试卷管理" font scale match "答题邀请" (readable/consistent). */
-      #tab-exams { font-size: 16px; }
-      #tab-exams .panel-head .title { font-size: 22px; letter-spacing: 0.2px; }
+      #tab-exams { font-size: 19px; }
+      #tab-exams .panel-head .title { font-size: clamp(32px, 2.1vw, 40px); letter-spacing: -0.2px; }
       #tab-exams .panel-head .sub { display: none; }
-      #tab-exams .field label { font-size: 16px; font-weight: 800; color: rgba(15, 23, 42, 0.78); }
+      #tab-exams .field label { font-size: 19px; font-weight: 800; color: rgba(15, 23, 42, 0.78); }
       #tab-exams .input,
       #tab-exams select,
       #tab-exams input[type="file"].file-input {
@@ -373,12 +373,20 @@
         padding-top: 0;
         padding-bottom: 0;
         line-height: 38px;
-        font-size: 17px;
+        font-size: 20px;
       }
       #tab-exams input[type="file"].file-input { padding: 6px 10px; line-height: 1.2; }
-      #tab-exams .btn { height: 40px; font-size: 16px; border-radius: 14px; }
-      #tab-exams table.exam-table { font-size: 19px; }
-      #tab-exams table.exam-table th { font-size: 17px; }
+      #tab-exams .btn {
+        height: 40px;
+        font-size: 19px;
+        border-radius: 14px;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #tab-exams table.exam-table { font-size: 22px; }
+      #tab-exams table.exam-table th { font-size: 20px; }
       #tab-exams .public-invite-toggle {
         width: 54px;
         height: 30px;
@@ -411,44 +419,44 @@
       #tab-exams .public-invite-toggle:disabled { opacity: .6; cursor: not-allowed; }
 
       /* Invite form visual polish (scoped to "答题邀请" only). */
-      #tab-assign { font-size: 17px; }
-      #tab-assign .panel-head .title { font-size: 22px; letter-spacing: 0.2px; }
-      #tab-assign .panel-head .sub { font-size: 16px; line-height: 1.6; color: rgba(15, 23, 42, 0.70); }
+      #tab-assign { font-size: 21px; }
+      #tab-assign .panel-head .title { font-size: clamp(32px, 2.1vw, 40px); letter-spacing: -0.2px; }
+      #tab-assign .panel-head .sub { font-size: 20px; line-height: 1.6; color: rgba(15, 23, 42, 0.70); }
       #tab-assign .assign-form {
-        max-width: 1060px;
+        max-width: 1280px;
         margin: 10px auto 0;
         background: rgba(255, 255, 255, 0.86);
         border: 1px solid rgba(15, 23, 42, 0.10);
         border-radius: 18px;
-        padding: 12px 12px 10px;
+        padding: 16px 16px 14px;
         box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
         backdrop-filter: blur(6px);
       }
       /* Stable, compact grid (avoid layout "jumping" when resizing). */
       #tab-assign .assign-form .assign-grid-2 {
         display: grid;
-        grid-template-columns: repeat(2, minmax(320px, 420px));
-        gap: 12px 14px;
+        grid-template-columns: repeat(2, minmax(360px, 560px));
+        gap: 16px 18px;
         align-items: end;
         justify-content: start;
       }
-      #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: repeat(3, minmax(220px, 260px)); justify-content: start; }
+      #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: repeat(3, minmax(240px, 320px)); justify-content: start; }
       #tab-assign .assign-form .field { margin: 0; }
-      #tab-assign .assign-form .field.field-mid { max-width: 420px; width: 100%; justify-self: start; }
-      #tab-assign .assign-form .field.field-narrow { max-width: 260px; width: 100%; justify-self: start; }
+      #tab-assign .assign-form .field.field-mid { max-width: 560px; width: 100%; justify-self: start; }
+      #tab-assign .assign-form .field.field-narrow { max-width: 320px; width: 100%; justify-self: start; }
       #tab-assign .assign-form .field label {
-        font-size: 18px;
+        font-size: 22px;
         font-weight: 800;
         color: rgba(15, 23, 42, 0.78);
         margin-bottom: 6px;
       }
       #tab-assign .assign-form .input,
       #tab-assign .assign-form select {
-        height: 48px;
-        font-size: 18px;
+        height: 56px;
+        font-size: 22px;
         padding-top: 0;
         padding-bottom: 0;
-        line-height: 46px;
+        line-height: 54px;
       }
       #tab-assign .assign-form .field { max-width: none; }
       #tab-assign .assign-form select { font-weight: 700; }
@@ -462,16 +470,16 @@
       #tab-assign .assign-form .assign-divider {
         height: 1px;
         background: rgba(15, 23, 42, 0.10);
-        margin: 10px 0;
+        margin: 14px 0;
       }
       #tab-assign .assign-form .assign-grid-params { margin-top: 0; }
       #tab-assign .assign-form .field.field-narrow .input,
-      #tab-assign .assign-form .field.field-narrow select { max-width: 260px; }
+      #tab-assign .assign-form .field.field-narrow select { max-width: 320px; }
       #tab-assign .assign-form .field.field-narrow select { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #tab-assign .assign-form .assign-actions { margin-top: 10px; display:flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
-      #tab-assign .assign-form .assign-actions .btn { height: 48px; padding: 0 22px; border-radius: 14px; font-size: 18px; }
+      #tab-assign .assign-form .assign-actions .btn { height: 56px; padding: 0 26px; border-radius: 14px; font-size: 22px; }
       @media (max-width: 1100px) {
-        #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: repeat(2, minmax(220px, 260px)); }
+        #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: repeat(2, minmax(240px, 320px)); }
       }
       @media (max-width: 980px) {
         #tab-assign .assign-form { max-width: 100%; margin-left: 0; margin-right: 0; }
@@ -484,18 +492,65 @@
       }
       .assign-attempts {
         max-width: 100%;
-        margin: 30px 0 0;
+        margin: 36px 0 0;
         display: flex;
         flex-direction: column;
         flex: 1 1 auto;
         min-height: 0;
       }
       .table-scroll { overflow-x: auto; }
-      .attempt-table { width: 100%; min-width: 1280px; font-size: 18px; }
+      .attempt-table { width: 100%; min-width: 1400px; font-size: 24px; }
+      /* Fill available width like candidate list: avoid hardcoded per-column pixel widths shrinking the table. */
+      #tab-assign .table-scroll .attempt-table {
+        width: 100% !important;
+        min-width: 100% !important;
+        table-layout: fixed !important;
+      }
+      #tab-assign .table-scroll .attempt-table thead th[style] {
+        width: auto !important;
+      }
+      #tab-assign .table-scroll .attempt-table th,
+      #tab-assign .table-scroll .attempt-table td {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+      }
+      /* Keep column spacing visually even across the whole row. */
+      #tab-assign .table-scroll .attempt-table th:nth-child(1),
+      #tab-assign .table-scroll .attempt-table td:nth-child(1) { width: 2% !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(2),
+      #tab-assign .table-scroll .attempt-table td:nth-child(2) { width: 2% !important; text-align: left; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(3),
+      #tab-assign .table-scroll .attempt-table td:nth-child(3) { width: 11% !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(4),
+      #tab-assign .table-scroll .attempt-table td:nth-child(4) { width: 18% !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(5),
+      #tab-assign .table-scroll .attempt-table td:nth-child(5) { width: 18% !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(6),
+      #tab-assign .table-scroll .attempt-table td:nth-child(6) { width: 10% !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(7),
+      #tab-assign .table-scroll .attempt-table td:nth-child(7) { width: 7% !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(8),
+      #tab-assign .table-scroll .attempt-table td:nth-child(8) { width: 26% !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(2),
+      #tab-assign .table-scroll .attempt-table td:nth-child(2) { padding-left: 0 !important; padding-right: 2px !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(3),
+      #tab-assign .table-scroll .attempt-table td:nth-child(3) { padding-left: 2px !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(1),
+      #tab-assign .table-scroll .attempt-table td:nth-child(1) { padding-right: 0 !important; }
+      /* Increase visual gap between 电话(3) and 试卷(4). */
+      #tab-assign .table-scroll .attempt-table th:nth-child(3),
+      #tab-assign .table-scroll .attempt-table td:nth-child(3) { padding-right: 28px !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(4),
+      #tab-assign .table-scroll .attempt-table td:nth-child(4) { padding-left: 28px !important; }
+      /* Increase visual gap between 试卷(4) and Token(5) by ~0.5x. */
+      #tab-assign .table-scroll .attempt-table th:nth-child(4),
+      #tab-assign .table-scroll .attempt-table td:nth-child(4) { padding-right: 18px !important; }
+      #tab-assign .table-scroll .attempt-table th:nth-child(5),
+      #tab-assign .table-scroll .attempt-table td:nth-child(5) { padding-left: 18px !important; }
       .attempt-table th, .attempt-table td { vertical-align: middle; }
       .attempt-table th {
         white-space: nowrap;
-        font-size: 16px;
+        font-size: 22px;
         text-transform: none;
         letter-spacing: 0;
       }
@@ -512,10 +567,10 @@
       .status-pill {
         display: inline-flex;
         align-items: center;
-        padding: 5px 10px;
+        padding: 7px 14px;
         border-radius: 999px;
         font-weight: 900;
-        font-size: 14px;
+        font-size: 20px;
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(15, 23, 42, 0.03);
         color: rgba(15, 23, 42, 0.86);
@@ -528,9 +583,9 @@
       .status-pill.grading { border-color: rgba(124, 58, 237, 0.30); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
       .status-pill.finished { border-color: rgba(22, 163, 74, 0.30); background: rgba(22, 163, 74, 0.10); color: #166534; }
       .status-pill.expired { border-color: rgba(220, 38, 38, 0.30); background: rgba(220, 38, 38, 0.08); color: #b91c1c; }
-      .log-table { width: 100%; min-width: 980px; font-size: 18px; }
+      .log-table { width: 100%; min-width: 980px; font-size: 20px; }
       .log-table th, .log-table td { vertical-align: middle; }
-      .log-table th { white-space: nowrap; font-size: 15px; }
+      .log-table th { white-space: nowrap; font-size: 17px; }
       .log-table td { font-variant-numeric: tabular-nums; }
       .log-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .log-table code { white-space: nowrap; }
@@ -540,7 +595,7 @@
         padding: 4px 10px;
         border-radius: 999px;
         font-weight: 900;
-        font-size: 13px;
+        font-size: 15px;
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(15, 23, 42, 0.03);
         color: rgba(15, 23, 42, 0.86);
@@ -560,23 +615,23 @@
         margin: 12px 0;
       }
       /* Logs (tab-logs) visual scale */
-      #tab-logs .log-box-title { font-weight: 950; margin-bottom: 12px; font-size: 18px; }
+      #tab-logs .log-box-title { font-weight: 950; margin-bottom: 12px; font-size: 20px; }
       #tab-logs .log-box-head { display:flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
       #tab-logs .log-box-head .log-box-title { margin-bottom: 0; }
-      #tab-logs .log-box-sub { color: rgba(15, 23, 42, 0.60); font-size: 16px; font-weight: 950; white-space: nowrap; }
+      #tab-logs .log-box-sub { color: rgba(15, 23, 42, 0.60); font-size: 18px; font-weight: 950; white-space: nowrap; }
       #tab-logs .legend-grid { display:flex; flex-wrap: wrap; gap: 12px; }
       .legend-item {
         display: inline-flex;
         align-items: center;
         gap: 10px;
-        padding: 10px 14px;
+        padding: 11px 16px;
         border-radius: 999px;
         border: 1px solid rgba(15, 23, 42, 0.10);
         background: rgba(255, 255, 255, 0.78);
         font-weight: 900;
-        font-size: 16px;
+        font-size: 20px;
       }
-      .legend-dot { width: 12px; height: 12px; border-radius: 999px; display:inline-block; }
+      .legend-dot { width: 14px; height: 14px; border-radius: 999px; display:inline-block; }
       .legend-cnt { color: rgba(15, 23, 42, 0.62); font-weight: 950; }
       .density-wrap { width: 100%; overflow: hidden; }
       .density-plotly {
@@ -627,11 +682,11 @@
       #tab-logs .density-filter { display:flex; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-end; gap: 10px; margin: 0; margin-left: auto; }
       #tab-logs .density-filter .field { margin: 0; }
       #tab-logs .density-filter .field.field-sm { flex: 0 0 190px; }
-      #tab-logs .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 38px; font-size: 16px; }
+      #tab-logs .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 38px; font-size: 18px; }
       #tab-logs .density-filter .range-group { display:flex; align-items: flex-end; gap: 10px; }
       #tab-logs .density-filter .range-sep { padding: 0 2px; height: 40px; line-height: 40px; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
       #tab-logs .density-filter .actions { display: inline-flex; gap: 10px; align-items: flex-end; margin-left: auto; }
-      #tab-logs .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: 16px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+      #tab-logs .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: 18px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
       @media (max-width: 980px) {
         #tab-logs .density-filter { flex-wrap: wrap; }
         #tab-logs .density-filter .actions { margin-left: 0; }
@@ -670,7 +725,7 @@
       #tab-logs .assign-attempts { margin: 0; }
 
       /* System Status */
-      #tab-status { font-size: 18px; }
+      #tab-status { font-size: 22px; }
       /* Hard requirement: status white background should fill the whole available surface (blue frame). */
       /* Also remove the top "empty bands" inside status tab. */
       #tab-status.panel { padding-top: 0; }
@@ -679,7 +734,7 @@
       /* Reduce perceived "empty band" at the top of the daily stats box. */
       #tab-status .log-box[aria-label="按天统计"] { padding-top: 10px; }
       #tab-status .log-box-head { display:grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; margin-bottom: 10px; }
-      #tab-status .log-box-title { font-weight: 950; margin: 0; font-size: 19px; line-height: 1.2; }
+      #tab-status .log-box-title { font-weight: 950; margin: 0; font-size: 23px; line-height: 1.2; }
       /* Keep titles in one line (e.g. "系统统计（按天）"). */
       #tab-status .log-box-head > div { min-width: 0; }
       #tab-status .log-box-head .log-box-title { white-space: nowrap; }
@@ -691,7 +746,7 @@
         margin: 0 0 12px;
         font-weight: 950;
         text-align: center;
-        font-size: 22px;
+        font-size: 26px;
       }
       #tab-status .status-head.level-ok { border-color: rgba(22, 163, 74, 0.35); background: rgba(22, 163, 74, 0.10); color: #166534; }
       #tab-status .status-head.level-warn { border-color: rgba(249, 115, 22, 0.40); background: rgba(249, 115, 22, 0.10); }
@@ -700,26 +755,26 @@
       #tab-status .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
       #tab-status .kpi { padding: 14px 14px; border-radius: 16px; border: 1px solid rgba(15, 23, 42, 0.10); background: rgba(255, 255, 255, 0.55); }
       #tab-status .k-title { font-weight: 950; color: rgba(15, 23, 42, 0.75); margin-bottom: 6px; }
-      #tab-status .k-main { font-size: 34px; font-weight: 1100; letter-spacing: -0.02em; }
-      #tab-status .k-sub { margin-top: 4px; color: rgba(15, 23, 42, 0.62); font-size: 16px; font-weight: 950; }
+      #tab-status .k-main { font-size: 38px; font-weight: 1100; letter-spacing: -0.02em; }
+      #tab-status .k-sub { margin-top: 4px; color: rgba(15, 23, 42, 0.62); font-size: 20px; font-weight: 950; }
       #tab-status .status-form { display:flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
       /* Threshold settings: title on the left, controls on the right (like other header bars). */
       #tab-status .status-cfg-box .log-box-head { margin-bottom: 0; }
       #tab-status .status-cfg-box .log-box-title { margin: 0; }
       #tab-status .status-cfg-box .status-form { justify-content: flex-end; align-items: flex-end; }
       #tab-status .status-cfg-box .status-form .field label {
-        font-size: 15px;
+        font-size: 19px;
         font-weight: 900;
         color: rgba(15, 23, 42, 0.75);
       }
-      #tab-status .status-cfg-box .status-form .input { font-size: 17px; }
-      #tab-status .status-cfg-box .status-form .btn { font-size: 17px; }
+      #tab-status .status-cfg-box .status-form .input { font-size: 21px; }
+      #tab-status .status-cfg-box .status-form .btn { font-size: 21px; }
       /* We reuse `.assign-attempts` for layout, but its global margin-top is too big for status tab. */
       #tab-status .assign-attempts { margin: 0; }
       #tab-status .assign-attempts .log-box:first-child { margin-top: 0; }
       #tab-status table.status-table { width: 100%; min-width: 980px; border-collapse: collapse; }
-      #tab-status table.status-table th { text-align:left; font-size: 16px; color: rgba(15, 23, 42, 0.92); font-weight: 950; padding: 10px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.10); }
-      #tab-status table.status-table td { padding: 14px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); font-weight: 700; font-size: 18px; color: rgba(15, 23, 42, 0.65); }
+      #tab-status table.status-table th { text-align:left; font-size: 20px; color: rgba(15, 23, 42, 0.92); font-weight: 950; padding: 10px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.10); }
+      #tab-status table.status-table td { padding: 14px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); font-weight: 700; font-size: 22px; color: rgba(15, 23, 42, 0.65); }
       #tab-status #status_pager[hidden] { display: none !important; }
 
       /* Status range filter: tidy, grouped controls (avoid "floating" inputs). */
@@ -739,7 +794,7 @@
       }
       #tab-status .density-filter .field { margin: 0; }
       #tab-status .density-filter .field.field-sm { flex: 0 0 auto; }
-      #tab-status .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 38px; font-size: 16px; }
+      #tab-status .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 38px; font-size: 20px; }
       /* Date proxy (yyyy/mm/dd) for system status filters. */
       #tab-status .density-filter .range-group { display:flex; align-items: flex-end; gap: 10px; width: auto; }
       #tab-status .density-filter .field.field-sm { flex: 0 0 auto; width: 176px; }
@@ -770,7 +825,7 @@
       #tab-status .density-filter .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
       #tab-status .density-filter .range-sep { padding: 0 2px; height: 40px; line-height: 40px; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
       #tab-status .density-filter .actions { display: inline-flex; gap: 10px; align-items: flex-end; flex: 0 0 auto; }
-      #tab-status .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: 16px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+      #tab-status .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: 20px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
       #tab-status .density-filter .btn[type="submit"] { background: rgba(37, 99, 235, 0.10); border-color: rgba(37, 99, 235, 0.20); }
       @media (max-width: 1100px) {
         #tab-status .log-box-head { grid-template-columns: 1fr; align-items: stretch; }
@@ -785,7 +840,7 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="container topbar-inner">
+      <div class="container workspace-frame topbar-inner">
         <div class="brand" aria-label="Servforce Quiz 管理后台">
           <span class="brand-badge" aria-hidden="true"></span>
           <span>Servforce Quiz</span>
@@ -816,7 +871,7 @@
       </div>
     </header>
 
-    <main class="container page" style="max-width:1080px;">
+    <main class="container workspace-frame page">
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}
       <div class="flash">{{ m }}</div>
@@ -1293,6 +1348,7 @@
               <div class="density-wrap">
                 <div id="log_density_plotly" class="density-plotly" aria-label="任务密度图（Plotly）"></div>
                 <div id="log_density_empty" class="density-empty" style="display:none;">该时间范围暂无操作记录，可调整时间范围。</div>
+                <script id="log_density_data" type="application/json">{{ {"days": (chart_days or []), "counts": (chart_counts or [])}|tojson }}</script>
               </div>
             </div>
 
@@ -1542,8 +1598,15 @@
       // Logs density chart (Plotly).
       (() => {
         try {
-          const days = {{ (chart_days or [])|tojson }};
-          const countsRaw = {{ (chart_counts or [])|tojson }};
+          const payloadEl = document.getElementById("log_density_data");
+          let payload = {};
+          try {
+            payload = JSON.parse((payloadEl && payloadEl.textContent) || "{}");
+          } catch (_) {
+            payload = {};
+          }
+          const days = Array.isArray(payload.days) ? payload.days : [];
+          const countsRaw = Array.isArray(payload.counts) ? payload.counts : [];
           const counts = Array.isArray(countsRaw) ? countsRaw.map((x) => Number(x || 0)) : [];
           const hasData = Array.isArray(days) && days.length > 0;
 
@@ -1619,7 +1682,7 @@
               },
               text: [`峰值 ${peakVal}`],
               textposition: "top left",
-              textfont: { size: 12, color: "rgba(15,23,42,0.85)" },
+              textfont: { size: 16, color: "rgba(15,23,42,0.85)" },
               hovertemplate: "%{x}<br>峰值：%{y}<extra></extra>",
               name: "峰值",
               cliponaxis: false,
@@ -1639,16 +1702,16 @@
                   type: "date",
                   nticks: 9,
                   tickformat: "%-m月%-d日",
-                  tickfont: { size: 12, color: "rgba(51,65,85,0.88)" },
+                  tickfont: { size: 16, color: "rgba(51,65,85,0.88)" },
                   showgrid: true,
                   gridcolor: "rgba(148,163,184,0.12)",
                   fixedrange: true,
                   automargin: true,
                 },
                 yaxis: {
-                  title: { text: "操作数", standoff: 10 },
+                  title: { text: "操作数", standoff: 10, font: { size: 18, color: "rgba(15,23,42,0.86)" } },
                   rangemode: "tozero",
-                  tickfont: { size: 12, color: "rgba(51,65,85,0.88)" },
+                  tickfont: { size: 16, color: "rgba(51,65,85,0.88)" },
                   gridcolor: "rgba(148,163,184,0.18)",
                   zerolinecolor: "rgba(148,163,184,0.26)",
                   fixedrange: true,
@@ -1660,10 +1723,16 @@
                   bgcolor: "rgba(255,255,255,0.55)",
                   bordercolor: "rgba(148,163,184,0.22)",
                   borderwidth: 1,
-                  font: { size: 12 },
+                  font: { size: 16 },
                 },
               },
-              { displayModeBar: false, responsive: true, scrollZoom: false }
+              {
+                displayModeBar: false,
+                responsive: true,
+                scrollZoom: false,
+                locale: "zh-CN",
+                toImageButtonOptions: { scale: 2 },
+              }
             );
             window.setTimeout(resizeLogDensityChart, 0);
             window.setTimeout(resizeLogDensityChart, 120);
@@ -2703,4 +2772,5 @@
     </script>
   </body>
 </html>
+
 

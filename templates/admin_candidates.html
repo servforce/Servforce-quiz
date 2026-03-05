@@ -33,7 +33,7 @@
       .status-code { display: inline-block; white-space: nowrap; }
       .search-inline { display:flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0; width: 100%; }
       .search-inline .field { margin: 0; flex: 1 1 240px; }
-      .search-inline .field.field-q { flex: 0 1 420px; max-width: 420px; }
+      .search-inline .field.field-q { flex: 0 1 620px; max-width: 620px; min-width: 260px; }
       .search-inline .field.field-sm { flex: 0 0 190px; }
       /* Ensure date inputs match the text input height (hard requirement). */
       .search-inline .input {
@@ -42,8 +42,13 @@
         padding-bottom: 0;
         line-height: 38px;
       }
-      .range-group { display: flex; align-items: flex-end; gap: 10px; }
+      .range-group { display: flex; align-items: flex-end; gap: 10px; margin-left: auto; }
       .range-group .field { flex: 1 1 190px; }
+      .search-actions {
+        display: inline-flex;
+        gap: 10px;
+        align-items: flex-end;
+      }
       .range-sep {
         height: 40px;
         display: inline-flex;
@@ -149,18 +154,18 @@
       /* Make Candidate Management font scale match Exams Management (admin dashboard). */
       .admin-surface { font-size: 16px; }
       .admin-surface .title { font-size: 22px; letter-spacing: 0.2px; }
-      .admin-surface .field label { font-size: 16px; font-weight: 800; color: rgba(15, 23, 42, 0.78); }
+      .admin-surface .field label { font-size: 17px; font-weight: 800; color: rgba(15, 23, 42, 0.78); }
       .admin-surface .input,
       .admin-surface select {
         height: 40px;
         padding-top: 0;
         padding-bottom: 0;
         line-height: 38px;
-        font-size: 17px;
+        font-size: 18px;
       }
       .form-grid #candidateCreateForm .btn.btn-primary,
-      .form-grid #resumePickBtn.btn.btn-primary { font-size: 16px; }
-      .search-inline .btn { font-size: 16px; }
+      .form-grid #resumePickBtn.btn.btn-primary { font-size: 17px; }
+      .search-inline .btn { font-size: 17px; }
       .date-proxy .date-btn { width: 32px; height: 32px; right: 8px; }
       table.cands-table { font-size: 19px; }
       table.cands-table th { font-size: 17px; }
@@ -225,7 +230,7 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="container topbar-inner">
+      <div class="container workspace-frame topbar-inner">
         <div class="brand" aria-label="Servforce Quiz 管理后台">
           <span class="brand-badge" aria-hidden="true"></span>
           <span>Servforce Quiz</span>
@@ -256,7 +261,7 @@
       </div>
     </header>
 
-    <main class="container page" style="max-width:1080px;">
+    <main class="container workspace-frame page">
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}
       <div class="flash flash-center">{{ m }}</div>
@@ -332,10 +337,8 @@
                   </div>
                 </div>
               </div>
-              <div>
+              <div class="search-actions">
                 <button class="btn btn-primary" type="submit">查询</button>
-              </div>
-              <div>
                 <a class="btn btn-primary" href="/admin/candidates">重置</a>
               </div>
             </form>
@@ -545,4 +548,5 @@
       <script src="{{ url_for('static', filename='system_status.js') }}"></script>
 	  </body>
 	</html>
+
 

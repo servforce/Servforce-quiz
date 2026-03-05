@@ -6,14 +6,15 @@
     <title>候选人身份验证</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <style>
-      body { min-height: 100vh; display: grid; place-items: center; padding: 22px; }
-      .card { width: min(520px, 100%); }
+      body { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+      .card { width: min(600px, 100%); }
+      .section, .input, .btn { font-size: 17px; }
       .btn { width: auto; }
-      .muted { color: var(--muted); font-size: 12px; }
+      .muted { color: var(--muted); font-size: 14px; }
       .hero-visual {
-        margin: 6px 0 14px;
+        margin: 8px 0 18px;
         padding: 0;
-        border-radius: 16px;
+        border-radius: 18px;
         border: 1px solid rgba(15, 23, 42, 0.10);
         background: rgba(248, 250, 252, 0.75);
         overflow: hidden;
@@ -24,14 +25,14 @@
         height: auto;
         display: block;
       }
-      .hfield { margin-top: 12px; display: flex; justify-content: center; }
+      .hfield { margin-top: 14px; display: flex; justify-content: center; }
       .hfield:first-of-type { margin-top: 0; }
-      .input-group { width: min(360px, 100%); display: flex; align-items: stretch; }
+      .input-group { width: min(460px, 100%); display: flex; align-items: stretch; }
       .input-addon {
-        flex: 0 0 88px;
+        flex: 0 0 98px;
         display: grid;
         place-items: center;
-        font-size: 14px;
+        font-size: 16px;
         font-weight: 800;
         color: var(--muted);
         background: rgba(255, 255, 255, 0.90);
@@ -44,11 +45,12 @@
       .input-group.sms .sms-send {
         border-radius: 0 14px 14px 0;
         border: 1px solid rgba(15, 23, 42, 0.12);
-        min-width: 110px;
-        padding: 0 14px;
+        min-width: 132px;
+        padding: 0 16px;
+        font-size: 15px;
         font-weight: 900;
       }
-      .sms-hint { margin-top: 8px; text-align: center; }
+      .sms-hint { margin-top: 10px; text-align: center; }
       .verify-overlay {
         position: absolute;
         left: 50%;
@@ -74,9 +76,13 @@
         transform: translate(-50%, -50%) scale(1);
         transition: opacity 180ms ease, transform 180ms ease, visibility 0s linear 0s;
       }
-      .actions { margin-top: 14px; display: flex; justify-content: center; }
-      .actions .btn-primary { min-width: 120px; padding: 10px 34px; border-radius: 14px; }
+      .actions { margin-top: 18px; display: flex; justify-content: center; }
+      .actions .btn-primary { min-width: 170px; min-height: 44px; padding: 0 34px; border-radius: 14px; }
       @media (max-width: 520px) {
+        .card { width: min(560px, 100%); }
+        .section, .input, .btn { font-size: 16px; }
+        .input-addon { flex-basis: 90px; font-size: 15px; }
+        .input-group.sms .sms-send { min-width: 120px; font-size: 14px; }
         .hfield { justify-content: stretch; }
         .input-group { width: 100%; }
       }

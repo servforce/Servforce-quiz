@@ -16,7 +16,7 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
-      body { font-size: 17px; }
+      body { font-size: 19px; }
       .md { white-space: normal; }
       .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
       .exam-tabs {
@@ -30,16 +30,16 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 12px;
+        padding: 12px 16px;
         border-radius: 12px;
         font-weight: 700;
-        font-size: 16px;
+        font-size: 22px;
         color: var(--text);
         text-decoration: none;
         border: 1px solid transparent;
         background: transparent;
       }
-      .exam-tabs .ico { font-size: 15px; line-height: 1; opacity: 0.9; }
+      .exam-tabs .ico { font-size: 21px; line-height: 1; opacity: 0.9; }
       .exam-tabs a.active {
         background: rgba(37, 99, 235, 0.10);
         border-color: rgba(37, 99, 235, 0.22);
@@ -64,8 +64,8 @@
       .section.compact .section-head { margin-bottom: 0; }
 
       .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: center; }
-      .exam-meta-title h2 { margin: 0; font-size: 31px; font-weight: 950; letter-spacing: -0.3px; line-height: 1.12; }
-      .exam-meta-desc { max-width: 920px; margin: 6px auto 0; color: var(--muted); font-size: 14px; line-height: 1.6; text-align: center; }
+      .exam-meta-title h2 { margin: 0; font-size: 35px; font-weight: 950; letter-spacing: -0.3px; line-height: 1.12; }
+      .exam-meta-desc { max-width: 920px; margin: 6px auto 0; color: var(--muted); font-size: 18px; line-height: 1.6; text-align: center; }
       .exam-meta-stats { margin-top: 10px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
       .pill {
         display: inline-flex;
@@ -76,14 +76,14 @@
         border: 1px solid rgba(15, 23, 42, 0.10);
         background: rgba(255, 255, 255, 0.86);
         font-weight: 800;
-        font-size: 13px;
+        font-size: 17px;
         color: rgba(15, 23, 42, 0.86);
         white-space: nowrap;
       }
       /* Floating public invite card (like candidate exam countdown). */
       .floating-invite-card {
         position: fixed;
-        top: 120px; /* below topbar */
+        top: 190px; /* avoid overlapping top-right action buttons */
         /* Stick to the viewport right edge (outer right side). */
         right: 16px;
         z-index: 12;
@@ -166,7 +166,7 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="container topbar-inner exam-frame">
+      <div class="container workspace-frame topbar-inner">
         <div class="brand" aria-label="Servforce Quiz 管理后台">
           <span class="brand-badge" aria-hidden="true"></span>
           <span>Servforce Quiz</span>
@@ -195,7 +195,7 @@
       </div>
     </header>
 
-    <main class="container page exam-frame">
+    <main class="container workspace-frame page">
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}

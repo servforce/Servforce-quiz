@@ -49,6 +49,46 @@ code {
 
 /* Default site width. */
 .container { max-width: 1240px; margin: 0 auto; padding: 0 18px; }
+/* Wide workspace width for admin pages (GitLab-like "filled" content area). */
+.container.workspace-frame {
+  max-width: 1720px;
+  width: min(1720px, calc(100vw - 20px));
+}
+/* Wide workspace: larger typography scale for better readability on large screens. */
+.container.workspace-frame.page {
+  padding-top: 22px;
+  padding-bottom: 40px;
+}
+.container.workspace-frame .surface { border-radius: 16px; }
+.container.workspace-frame .section { padding: 20px; }
+.container.workspace-frame .title {
+  font-size: clamp(32px, 2.1vw, 40px);
+  letter-spacing: -0.2px;
+}
+.container.workspace-frame .sub { font-size: 18px; }
+.container.workspace-frame .field label { font-size: 18px; }
+.container.workspace-frame .input,
+.container.workspace-frame select,
+.container.workspace-frame textarea {
+  font-size: 19px;
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+.container.workspace-frame .btn {
+  font-size: 19px;
+  padding: 10px 16px;
+  border-radius: 12px;
+}
+.container.workspace-frame table th { font-size: 18px; }
+.container.workspace-frame table td { font-size: 20px; }
+.container.workspace-frame.topbar-inner { height: 68px; }
+.container.workspace-frame.topbar-inner .brand { font-size: 24px; }
+.container.workspace-frame.topbar-inner .nav-link { font-size: 24px; }
+.container.workspace-frame.topbar-inner .status-badge {
+  font-size: 17px;
+  height: 22px;
+  min-width: 22px;
+}
 .page {
   padding: 18px 0 36px;
   flex: 1;

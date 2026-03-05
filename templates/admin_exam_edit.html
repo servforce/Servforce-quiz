@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/codemirror/lib/codemirror.css') }}" />
     <style>
-      body { font-size: 17px; }
+      body { font-size: 19px; }
       /* Show textarea only when CodeMirror is not ready (fallback). */
       body.cm-ready textarea.editor { display: none; }
       textarea.editor {
@@ -20,7 +20,7 @@
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(255, 255, 255, 0.92);
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 19px;
+        font-size: 21px;
         line-height: 1.12;
       }
       .editor-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -30,7 +30,7 @@
         min-height: 0;
         height: auto;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 19px;
+        font-size: 21px;
         color: var(--text);
         border-radius: 14px;
         border: 1px solid rgba(15, 23, 42, 0.12);
@@ -60,16 +60,16 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 12px;
+        padding: 12px 16px;
         border-radius: 12px;
         font-weight: 700;
-        font-size: 16px;
+        font-size: 22px;
         color: var(--text);
         text-decoration: none;
         border: 1px solid transparent;
         background: transparent;
       }
-      .exam-tabs .ico { font-size: 15px; line-height: 1; opacity: 0.9; }
+      .exam-tabs .ico { font-size: 21px; line-height: 1; opacity: 0.9; }
       .exam-tabs a:hover { background: rgba(15, 23, 42, 0.04); text-decoration: none; }
       .exam-tabs a.active { background: rgba(37, 99, 235, 0.10); border-color: rgba(37, 99, 235, 0.22); color: #1d4ed8; }
 
@@ -91,7 +91,7 @@
   </head>
   <body>
     <header class="topbar">
-      <div class="container topbar-inner exam-frame">
+      <div class="container workspace-frame topbar-inner">
         <div class="brand" aria-label="Servforce Quiz 管理后台">
           <span class="brand-badge" aria-hidden="true"></span>
           <span>Servforce Quiz</span>
@@ -120,7 +120,7 @@
       </div>
     </header>
 
-    <main class="container page exam-frame">
+    <main class="container workspace-frame page">
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}

@@ -16,9 +16,15 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
+      /* Match candidate-side pages with a wider reading area. */
+      .container.exam-frame {
+        max-width: 1240px;
+        width: min(1240px, 100%);
+      }
+
       .md { white-space: normal; }
       .md img {
-        width: min(100%, 1080px);
+        width: min(100%, 1240px);
         max-width: 100%;
         height: auto;
         border-radius: 10px;
@@ -72,7 +78,7 @@
         position: fixed;
         top: 120px; /* below topbar */
         /* Default: align with exam surface left padding. */
-        left: max(18px, calc((100vw - 1080px) / 2 + 18px));
+        left: max(18px, calc((100vw - 1240px) / 2 + 18px));
         z-index: 12;
         width: 260px;
         max-width: calc(100vw - 36px);
@@ -114,9 +120,9 @@
         }
       }
       /* Wide screens: stick the card to the exam surface edge (in the left gutter). */
-      @media (min-width: 1500px) {
+      @media (min-width: 1660px) {
         .floating-time-card {
-          left: calc((100vw - 1080px) / 2 - 12px);
+          left: calc((100vw - 1240px) / 2 - 12px);
           transform: translateX(-100%);
         }
       }

@@ -11,15 +11,15 @@
         margin: 0;
         display: grid;
         place-items: center;
-        padding: 28px 18px;
+        padding: 24px 16px;
         -webkit-text-size-adjust: 100%;
         text-size-adjust: 100%;
       }
       .login-wrap {
-        width: min(1120px, 100%);
+        width: min(1520px, calc(100vw - 32px));
         display: grid;
         grid-template-columns: 1.2fr 0.8fr;
-        gap: 18px;
+        gap: 20px;
         align-items: stretch;
       }
       .hero {
@@ -32,7 +32,8 @@
           radial-gradient(700px 380px at 88% 22%, rgba(124, 58, 237, 0.14), transparent 58%),
           linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.82));
         box-shadow: 0 16px 40px rgba(2, 6, 23, 0.10);
-        padding: 30px 28px;
+        min-height: 620px;
+        padding: 36px 32px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
@@ -53,37 +54,37 @@
         background-size: contain;
         box-shadow: 0 12px 26px rgba(2, 6, 23, 0.14);
       }
-      .brand-title { font-size: 34px; font-weight: 900; line-height: 1.1; letter-spacing: -0.02em; color: #0b1f44; }
-      .brand-sub { margin-top: 6px; font-size: 16px; font-weight: 700; color: rgba(15, 23, 42, 0.75); }
-      .hero-copy p { margin: 0; font-size: 18px; line-height: 1.75; color: rgba(30, 41, 59, 0.88); max-width: none; width: 100%; }
+      .brand-title { font-size: 38px; font-weight: 900; line-height: 1.1; letter-spacing: -0.02em; color: #0b1f44; }
+      .brand-sub { margin-top: 6px; font-size: 20px; font-weight: 700; color: rgba(15, 23, 42, 0.75); }
+      .hero-copy p { margin: 0; font-size: 22px; line-height: 1.75; color: rgba(30, 41, 59, 0.88); max-width: none; width: 100%; }
       .feature-grid {
-        margin-top: 18px;
+        margin-top: 16px;
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
+        gap: 14px;
       }
       .feature-item {
         border: 1px solid rgba(15, 23, 42, 0.12);
         border-radius: 12px;
         background: rgba(255, 255, 255, 0.60);
-        padding: 10px 12px;
+        padding: 12px 14px;
       }
       .feature-item strong {
         display: block;
-        font-size: 15px;
+        font-size: 19px;
         color: #0b1f44;
         line-height: 1.2;
       }
       .feature-item span {
         display: block;
-        margin-top: 4px;
-        font-size: 14px;
+        margin-top: 6px;
+        font-size: 18px;
         color: rgba(15, 23, 42, 0.72);
         line-height: 1.35;
       }
       .flow-line {
-        margin-top: 12px;
-        font-size: 15px;
+        margin-top: 18px;
+        font-size: 19px;
         font-weight: 800;
         color: rgba(15, 23, 42, 0.78);
       }
@@ -103,7 +104,7 @@
         background: rgba(255, 255, 255, 0.70);
         border: 1px solid rgba(15, 23, 42, 0.10);
         color: rgba(15, 23, 42, 0.86);
-        font-size: 15px;
+        font-size: 19px;
         font-weight: 800;
       }
       .dot {
@@ -122,25 +123,28 @@
           radial-gradient(700px 380px at 88% 22%, rgba(124, 58, 237, 0.11), transparent 58%),
           linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.90));
         box-shadow: 0 16px 40px rgba(2, 6, 23, 0.10);
-        padding: 24px;
+        min-height: 620px;
+        padding: 30px 34px;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
       }
       .card-inner {
         width: 100%;
-        max-width: 500px;
+        max-width: 640px;
         margin: 0 auto;
-        min-height: 100%;
-        display: grid;
-        align-content: center;
+        min-height: auto;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
       }
       .card-head {
-        margin-bottom: 12px;
-        padding-left: 2px;
+        margin-bottom: 18px;
+        padding-left: 0;
       }
       .card-head h2 {
         margin: 0;
-        font-size: 36px;
+        font-size: 40px;
         line-height: 1.22;
         letter-spacing: -0.01em;
         color: #0b1f44;
@@ -148,46 +152,47 @@
       .card-head::after {
         content: "";
         display: block;
-        width: 72px;
+        width: 86px;
         height: 3px;
-        margin-top: 8px;
+        margin-top: 10px;
         border-radius: 999px;
         background: rgba(15, 37, 82, 0.24);
       }
       .login-form {
-        margin-top: 14px;
-        padding: 14px;
+        margin-top: auto;
+        margin-bottom: auto;
+        padding: 18px 18px 16px;
         border-radius: 16px;
-        border: 1px solid transparent;
-        background: transparent;
+        border: 1px solid rgba(148, 163, 184, 0.24);
+        background: rgba(255, 255, 255, 0.65);
       }
       .card-head p {
         margin: 8px 0 20px;
-        font-size: 15px;
+        font-size: 19px;
         color: rgba(15, 23, 42, 0.62);
         font-weight: 700;
       }
       .field {
-        margin-bottom: 14px;
+        margin-bottom: 16px;
         display: grid;
-        grid-template-columns: 58px 1fr;
-        align-items: center;
-        gap: 12px;
+        grid-template-columns: 1fr;
+        align-items: start;
+        gap: 8px;
       }
       .field label {
         margin: 0;
-        font-size: 19px;
+        font-size: 22px;
         font-weight: 850;
         color: rgba(15, 23, 42, 0.82);
-        justify-self: end;
+        justify-self: start;
       }
       .login-form input[type="text"],
       .login-form input[type="password"] {
         width: 100%;
-        height: 50px;
+        height: 56px;
         padding: 0 14px;
         border-radius: 13px;
-        font-size: 20px !important;
+        font-size: 24px !important;
         line-height: 1.2 !important;
         font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Segoe UI", Arial, sans-serif !important;
         font-weight: 600 !important;
@@ -201,7 +206,7 @@
       .login-form input[type="text"]:focus,
       .login-form input[type="password"]:focus {
         outline: none;
-        font-size: 20px !important;
+        font-size: 24px !important;
         line-height: 1.2 !important;
         font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Segoe UI", Arial, sans-serif !important;
         font-weight: 600 !important;
@@ -210,9 +215,9 @@
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
       }
       .login-form input[type="text"]::-webkit-input-placeholder,
-      .login-form input[type="password"]::-webkit-input-placeholder { font-size: 20px; font-weight: 500; }
+      .login-form input[type="password"]::-webkit-input-placeholder { font-size: 24px; font-weight: 500; }
       .login-form input[type="text"]::placeholder,
-      .login-form input[type="password"]::placeholder { font-size: 20px; font-weight: 500; }
+      .login-form input[type="password"]::placeholder { font-size: 24px; font-weight: 500; }
       .login-form input[type="text"]:-webkit-autofill,
       .login-form input[type="text"]:-webkit-autofill:hover,
       .login-form input[type="text"]:-webkit-autofill:focus,
@@ -222,7 +227,7 @@
       .login-form input[type="password"]:-webkit-autofill:focus,
       .login-form input[type="password"]:-webkit-autofill:active {
         -webkit-text-fill-color: #0f172a !important;
-        font-size: 20px !important;
+        font-size: 24px !important;
         line-height: 1.2 !important;
         font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Segoe UI", Arial, sans-serif !important;
         font-weight: 600 !important;
@@ -230,14 +235,14 @@
         transition: background-color 99999s ease-in-out 0s;
       }
       .card .btn {
-        width: clamp(160px, 46%, 220px);
-        height: 42px;
+        width: 100%;
+        height: 52px;
         margin-top: 8px;
-        margin-left: auto;
-        margin-right: auto;
+        margin-left: 0;
+        margin-right: 0;
         display: block;
         border-radius: 12px;
-        font-size: 19px;
+        font-size: 23px;
         font-weight: 900;
         border: 1px solid rgba(15, 23, 42, 0.14);
         background: #0f2552;
@@ -249,14 +254,10 @@
       }
 
       @media (max-width: 980px) {
-        .login-wrap { grid-template-columns: 1fr; width: min(560px, 100%); }
+        .login-wrap { grid-template-columns: 1fr; width: min(980px, 100%); }
         .hero { display: none; }
-        .card { padding: 22px 18px; }
-        .card-head h2 { font-size: 32px; }
-      }
-      @media (max-width: 420px) {
-        .field { grid-template-columns: 1fr; gap: 6px; }
-        .field label { justify-self: start; }
+        .card { min-height: auto; padding: 26px 20px; }
+        .card-head h2 { font-size: 36px; }
       }
     </style>
   </head>

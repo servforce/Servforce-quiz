@@ -3372,7 +3372,7 @@ def create_app() -> Flask:
         except Exception:
             flash("删除失败")
             return redirect(url_for("admin_candidates"))
-        flash("操作失败，请稍后重试")
+        flash("删除成功")
         return redirect(url_for("admin_candidates"))
 
     # 分发试卷

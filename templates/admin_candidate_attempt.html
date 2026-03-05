@@ -18,7 +18,7 @@
     <style>
       .md { white-space: normal; }
       .md img {
-        width: min(100%, 1080px);
+        width: min(100%, 1600px);
         max-width: 100%;
         height: auto;
         border-radius: 10px;
@@ -139,7 +139,7 @@
   </head>
   <body class="review-page">
     <header class="topbar">
-      <div class="container topbar-inner exam-frame">
+      <div class="container workspace-frame topbar-inner">
         <div class="brand" aria-label="Servforce Quiz 管理后台">
           <span class="brand-badge" aria-hidden="true"></span>
           <span>Servforce Quiz</span>
@@ -168,7 +168,7 @@
       </div>
     </header>
 
-    <main class="container page exam-frame">
+    <main class="container workspace-frame page">
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}
       <div class="flash error">{{ m }}</div>
