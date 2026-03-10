@@ -32,17 +32,17 @@ from markupsafe import Markup
 
 from config import ADMIN_PASSWORD, ADMIN_USERNAME, BASE_DIR, SECRET_KEY, STORAGE_DIR, logger
 from db import (
+    cleanup_duplicate_system_alert_logs,
     create_candidate,
     create_exam_paper,
-    create_system_log,
+    count_candidates,
     count_exam_papers,
     count_operation_logs,
     count_operation_logs_by_category,
     delete_candidate,
-    has_system_alert,
-    touch_system_alert,
     get_exam_paper_by_token,
     get_candidate,
+    get_candidate_name_from_logs,
     get_candidate_by_phone,
     get_candidate_resume,
     init_db,
@@ -77,6 +77,7 @@ from services.assignment_service import (
 from services.aliyun_dypns import check_sms_verify_code, send_sms_verify_code
 from services.audit_context import audit_context, get_audit_context
 from services.grading_service import generate_candidate_remark, grade_attempt
+from services.exam_generation_service import check_exam_prompt_completeness, generate_exam_from_prompt
 from services.resume_service import (
     clean_projects_raw_for_display,
     extract_resume_text,
@@ -89,7 +90,12 @@ from services.resume_service import (
     split_projects_raw_into_blocks,
 )
 from services.system_log import log_event
-from services.system_metrics import get_daily_metric, incr_sms_calls_and_alert
+from services.system_metrics import (
+    backfill_missing_system_alert_levels,
+    emit_alerts_for_current_snapshot,
+    get_daily_metric,
+    incr_sms_calls_and_alert,
+)
 from services.university_tags import classify_university
 from storage.json_store import ensure_dirs, read_json, write_json
 from web.auth import admin_required
@@ -358,36 +364,6 @@ def _compute_system_status_summary() -> dict[str, object]:
     overall = _status_overall_level([(llm_level, llm_sev), (sms_level, sms_sev)])
 
     day = str(today.isoformat())
-    for kind, level, used, limit, ratio in (
-        ("llm_tokens", llm_level, used_llm, llm_limit, llm_ratio),
-        ("sms_calls", sms_level, used_sms, sms_limit, sms_ratio),
-    ):
-        if level in {"warn", "danger", "critical"}:
-            try:
-                if has_system_alert(day=day, kind=kind, level=level):
-                    touch_system_alert(
-                        day=day,
-                        kind=kind,
-                        level=level,
-                        used=int(used or 0),
-                        limit=int(limit or 0),
-                        ratio=float(ratio or 0.0),
-                    )
-                else:
-                    create_system_log(
-                        actor="system",
-                        event_type="system.alert",
-                        meta={
-                            "day": day,
-                            "kind": kind,
-                            "level": level,
-                            "used": int(used or 0),
-                            "limit": int(limit or 0),
-                            "ratio": float(ratio or 0.0),
-                        },
-                    )
-            except Exception:
-                pass
 
     return {
         "day": day,
@@ -396,6 +372,73 @@ def _compute_system_status_summary() -> dict[str, object]:
         "llm": {"used": used_llm, "limit": llm_limit, "ratio": llm_ratio, "level": llm_level},
         "sms": {"used": used_sms, "limit": sms_limit, "ratio": sms_ratio, "level": sms_level},
     }
+
+
+_SYSTEM_STATUS_SUMMARY_CACHE_LOCK = threading.Lock()
+_SYSTEM_STATUS_SUMMARY_CACHE: dict[str, object] = {"at": 0.0, "value": {}}
+_SYSTEM_STATUS_SUMMARY_TTL_SECONDS = 15.0
+_ADMIN_LOGS_CONTEXT_CACHE_LOCK = threading.Lock()
+_ADMIN_LOGS_CONTEXT_CACHE: dict[tuple[str, ...], dict[str, object]] = {}
+_ADMIN_LOGS_CONTEXT_TTL_SECONDS = 15.0
+_ADMIN_ASSIGNMENTS_CONTEXT_CACHE_LOCK = threading.Lock()
+_ADMIN_ASSIGNMENTS_CONTEXT_CACHE: dict[tuple[str, ...], dict[str, object]] = {}
+_ADMIN_ASSIGNMENTS_CONTEXT_TTL_SECONDS = 8.0
+
+
+def _peek_cached_system_status_summary() -> dict[str, object]:
+    with _SYSTEM_STATUS_SUMMARY_CACHE_LOCK:
+        cached_val = _SYSTEM_STATUS_SUMMARY_CACHE.get("value") or {}
+        return dict(cached_val) if isinstance(cached_val, dict) else {}
+
+
+def _get_cached_system_status_summary(*, force: bool = False) -> dict[str, object]:
+    now_ts = time_module.time()
+    with _SYSTEM_STATUS_SUMMARY_CACHE_LOCK:
+        cached_at = float(_SYSTEM_STATUS_SUMMARY_CACHE.get("at") or 0.0)
+        cached_val = _SYSTEM_STATUS_SUMMARY_CACHE.get("value") or {}
+        if (not force) and cached_val and (now_ts - cached_at) < _SYSTEM_STATUS_SUMMARY_TTL_SECONDS:
+            return dict(cached_val) if isinstance(cached_val, dict) else {}
+    fresh = _compute_system_status_summary()
+    with _SYSTEM_STATUS_SUMMARY_CACHE_LOCK:
+        _SYSTEM_STATUS_SUMMARY_CACHE["at"] = now_ts
+        _SYSTEM_STATUS_SUMMARY_CACHE["value"] = fresh if isinstance(fresh, dict) else {}
+    return dict(fresh) if isinstance(fresh, dict) else {}
+
+
+def _get_cached_logs_context(key: tuple[str, ...]) -> dict[str, Any] | None:
+    now_ts = time_module.time()
+    with _ADMIN_LOGS_CONTEXT_CACHE_LOCK:
+        item = _ADMIN_LOGS_CONTEXT_CACHE.get(key)
+        if not item:
+            return None
+        at = float(item.get("at") or 0.0)
+        value = item.get("value") or {}
+        if (now_ts - at) >= _ADMIN_LOGS_CONTEXT_TTL_SECONDS:
+            return None
+        return dict(value) if isinstance(value, dict) else None
+
+
+def _set_cached_logs_context(key: tuple[str, ...], value: dict[str, Any]) -> None:
+    with _ADMIN_LOGS_CONTEXT_CACHE_LOCK:
+        _ADMIN_LOGS_CONTEXT_CACHE[key] = {"at": time_module.time(), "value": dict(value)}
+
+
+def _get_cached_assignments_context(key: tuple[str, ...]) -> dict[str, Any] | None:
+    now_ts = time_module.time()
+    with _ADMIN_ASSIGNMENTS_CONTEXT_CACHE_LOCK:
+        item = _ADMIN_ASSIGNMENTS_CONTEXT_CACHE.get(key)
+        if not item:
+            return None
+        at = float(item.get("at") or 0.0)
+        value = item.get("value") or {}
+        if (now_ts - at) >= _ADMIN_ASSIGNMENTS_CONTEXT_TTL_SECONDS:
+            return None
+        return dict(value) if isinstance(value, dict) else None
+
+
+def _set_cached_assignments_context(key: tuple[str, ...], value: dict[str, Any]) -> None:
+    with _ADMIN_ASSIGNMENTS_CONTEXT_CACHE_LOCK:
+        _ADMIN_ASSIGNMENTS_CONTEXT_CACHE[key] = {"at": time_module.time(), "value": dict(value)}
 
 
 # 系统日志：将内部事件类型映射为页面展示标签。
@@ -429,9 +472,70 @@ def _oplog_join_plus2(*parts: str) -> str:
     return "+".join(items)
 
 
+def _oplog_phone_from_assignment(token: str) -> str:
+    t = str(token or "").strip()
+    if not t:
+        return ""
+    p = STORAGE_DIR / "assignments" / f"{t}.json"
+    if not p.exists():
+        return ""
+    try:
+        obj = read_json(p)
+    except Exception:
+        return ""
+    if not isinstance(obj, dict):
+        return ""
+    sms = obj.get("sms_verify") if isinstance(obj.get("sms_verify"), dict) else {}
+    pending = obj.get("pending_verify") if isinstance(obj.get("pending_verify"), dict) else {}
+    raw = str((sms or {}).get("phone") or (pending or {}).get("phone") or "").strip()
+    if not raw:
+        return ""
+    p2 = _normalize_phone(raw)
+    if len(p2) == 11 and p2.startswith("1"):
+        return p2
+    return ""
+
+
+def _oplog_is_deleted_marker(v: str) -> bool:
+    s = str(v or "").strip().lower()
+    if not s:
+        return False
+    if s in {"已删除", "deleted", "???", "????"}:
+        return True
+    if "?" in s and len(s) <= 12:
+        return True
+    return s.startswith("deleted_")
+
+
 def _oplog_pick_name_phone2(it: dict[str, Any], meta: dict[str, Any]) -> tuple[str, str]:
-    n = str(meta.get("name") or it.get("candidate_name") or "").strip()
-    p = _normalize_phone(str(meta.get("phone") or it.get("candidate_phone") or "").strip())
+    meta_name = str(meta.get("name") or "").strip()
+    candidate_name = str(it.get("candidate_name") or "").strip()
+    raw_name = meta_name if meta_name else candidate_name
+    raw_phone = str(meta.get("phone") or it.get("candidate_phone") or "").strip()
+    cid = _oplog_safe_int2(it.get("candidate_id")) or 0
+
+    deleted_phone_placeholder = str(raw_phone or "").strip().upper().startswith("DELETED_")
+
+    n = ""
+    if not _oplog_is_deleted_marker(raw_name):
+        n = raw_name
+    elif candidate_name and not _oplog_is_deleted_marker(candidate_name):
+        # Backward-compat for old rows where meta.name was overwritten by delete marker.
+        n = candidate_name
+    if not n and cid > 0:
+        n = f"候选人#{cid}"
+
+    p = ""
+    if raw_phone and not deleted_phone_placeholder:
+        p2 = _normalize_phone(raw_phone)
+        # Guard against malformed placeholder leftovers; only keep mainland 11-digit number.
+        if len(p2) == 11 and p2.startswith("1"):
+            p = p2
+    if not p:
+        try:
+            p = _oplog_phone_from_assignment(str(it.get("token") or ""))
+        except Exception:
+            p = p or ""
     return n, p
 
 
@@ -969,10 +1073,32 @@ def _rewrite_exam_asset_paths(exam_key: str, spec: dict, public_spec: dict) -> N
 
 
 # 首次写入试卷：解析 Markdown -> 落盘 source/spec/public -> 同步资源文件。
-def _write_exam_to_storage(exam_text: str, *, assets: dict[str, bytes] | None = None) -> str:
+def _write_exam_to_storage(
+    exam_text: str,
+    *,
+    assets: dict[str, bytes] | None = None,
+    ensure_unique_key: bool = False,
+) -> str:
     spec, public_spec = parse_qml_markdown(exam_text)
     exam_key = spec["id"]
     exam_dir = STORAGE_DIR / "exams" / exam_key
+    if ensure_unique_key and exam_dir.exists():
+        base = str(exam_key or "").strip()[:52] or "exam-ai"
+        stamp = datetime.now().strftime("%m%d%H%M%S")
+        new_key = f"{base}-{stamp}"
+        n = 1
+        while (STORAGE_DIR / "exams" / new_key).exists():
+            n += 1
+            new_key = f"{base}-{stamp}-{n}"
+        exam_key = new_key[:64]
+        spec["id"] = exam_key
+        try:
+            public_spec["id"] = exam_key
+        except Exception:
+            pass
+        # Keep source.md consistent with the final exam id.
+        exam_text = re.sub(r"(?mi)^id:\s*.+$", f"id: {exam_key}", str(exam_text or ""), count=1)
+        exam_dir = STORAGE_DIR / "exams" / exam_key
     exam_dir.mkdir(parents=True, exist_ok=True)
     (exam_dir / "source.md").write_text(exam_text, encoding="utf-8")
 
@@ -1379,7 +1505,9 @@ def create_app() -> Flask:
         except Exception:
             return {}
         try:
-            return {"system_status_summary": _compute_system_status_summary()}
+            # Never block template render on live status aggregation.
+            # The topbar is hydrated asynchronously by system_status.js after first paint.
+            return {"system_status_summary": _peek_cached_system_status_summary()}
         except Exception:
             return {"system_status_summary": {}}
 
@@ -1408,7 +1536,7 @@ def create_app() -> Flask:
     @app.get("/admin/api/system-status/summary")
     @admin_required
     def admin_system_status_summary_api():
-        return jsonify(_compute_system_status_summary())
+        return jsonify(_get_cached_system_status_summary())
 
     @app.get("/admin/api/system-status")
     @admin_required
@@ -1426,22 +1554,73 @@ def create_app() -> Flask:
         if not isinstance(body, dict):
             body = {}
         cfg = _save_system_status_cfg(body)
-        return jsonify({"ok": True, "config": cfg, "summary": _compute_system_status_summary()})
+        try:
+            # Re-check once after threshold changes:
+            # if still over limit, emit one fresh alert snapshot.
+            emit_alerts_for_current_snapshot()
+        except Exception:
+            pass
+        return jsonify({"ok": True, "config": cfg, "summary": _get_cached_system_status_summary(force=True)})
 
-    @app.get("/admin")     # 进入到登录主页面
-    @admin_required     # session.get("admin_logged_in")只有管理员登录后才能查看这个页面
-    def admin_dashboard():
+    @app.post("/admin/api/system-status/alerts/cleanup")
+    @admin_required
+    def admin_system_alerts_cleanup_api():
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            body = {}
+        day = str(body.get("day") or "").strip()
+        kind = str(body.get("kind") or "").strip()
+        try:
+            deleted = int(cleanup_duplicate_system_alert_logs(day=(day or None), kind=(kind or None)))
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": True, "deleted": deleted, "day": day, "kind": kind})
+
+    @app.post("/admin/api/system-status/alerts/backfill")
+    @admin_required
+    def admin_system_alerts_backfill_api():
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict):
+            body = {}
+        day = str(body.get("day") or "").strip()
+        kind = str(body.get("kind") or "").strip()
+        if not day or kind not in {"llm_tokens", "sms_calls"}:
+            return jsonify({"ok": False, "error": "invalid day/kind"}), 400
+        try:
+            inserted = int(backfill_missing_system_alert_levels(day=day, kind=kind))
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+        return jsonify({"ok": True, "inserted": inserted, "day": day, "kind": kind})
+
+    def _admin_status_label(v: str) -> str:
+        s = _normalize_exam_status(v)
+        m = {
+            "verified": "验证通过",
+            "invited": "已邀约",
+            "in_exam": "正在答题",
+            "grading": "正在判卷",
+            "finished": "判卷结束",
+            "expired": "失效",
+        }
+        return m.get(s, "未知")
+
+    def _admin_looks_deleted_marker(text: str) -> bool:
+        s = str(text or "").strip().lower()
+        if not s:
+            return False
+        if s in {"已删除", "deleted", "????", "???", "null", "none", "历史试卷"}:
+            return True
+        if "?" in s and len(s) <= 12:
+            return True
+        return "删除" in s and len(s) <= 8
+
+    def _build_admin_exams_context(args) -> dict[str, Any]:
         exams_all = _list_exams()   # 获取考试列表
-        candidates = list_candidates(limit=200)
-
         exam_q = (request.args.get("exam_q") or "").strip()
-        attempt_q = (request.args.get("attempt_q") or "").strip()
-        attempt_start_from_raw = (request.args.get("attempt_start_from") or "").strip()
-        attempt_start_to_raw = (request.args.get("attempt_start_to") or "").strip()
-        chart_start_raw = (request.args.get("chart_start") or "").strip()
-        chart_end_raw = (request.args.get("chart_end") or "").strip()
-        assign_exam_key = (request.args.get("assign_exam_key") or "").strip()
-        assign_candidate_id = (request.args.get("assign_candidate_id") or "").strip()
+        ai_notice = (args.get("ai_notice") or "").strip()
+        ai_notice_level = (args.get("ai_notice_level") or "").strip().lower()
+        if ai_notice_level not in {"ok", "error"}:
+            ai_notice_level = "error"
         if exam_q:
             ql = exam_q.lower()
             digits = ql.isdigit()
@@ -1453,12 +1632,10 @@ def create_app() -> Flask:
                 or (digits and ql in str(e.get("id") or ""))
             ]
 
-        # Always show most recently updated first.
         exams_all.sort(key=lambda x: float(x.get("_mtime") or 0), reverse=True)
-
         per_page = 20
         try:
-            exam_page = int(request.args.get("exam_page") or "1")
+            exam_page = int(args.get("exam_page") or "1")
         except Exception:
             exam_page = 1
         exam_page = max(1, exam_page)
@@ -1492,21 +1669,58 @@ def create_app() -> Flask:
             e["public_invite_enabled"] = bool(cfg.get("enabled"))
             e["public_invite_token"] = str(cfg.get("token") or "").strip()
 
-        def _status_label(v: str) -> str:
-            s = _normalize_exam_status(v)
-            m = {
-                "verified": "验证通过",
-                "invited": "已邀约",
-                "in_exam": "正在答题",
-                "grading": "正在判卷",
-                "finished": "判卷结束",
-                "expired": "失效",
-            }
-            return m.get(s, "未知")
+        return {
+            "exams_all": exams_all,
+            "exams_page": exams_page,
+            "exam_page": exam_page,
+            "total_exams": total_exams,
+            "total_exam_pages": total_exam_pages,
+            "exam_q": exam_q,
+            "exam_per_page": per_page,
+            "ai_exam_prompt": "",
+            "ai_exam_include_diagrams": False,
+            "ai_notice": ai_notice,
+            "ai_notice_level": ai_notice_level,
+        }
+
+    def _build_assignment_attempts_context(args) -> dict[str, Any]:
+        cache_key = (
+            str(args.get("exam_q") or "").strip(),
+            str(args.get("attempt_q") or "").strip(),
+            str(args.get("attempt_start_from") or "").strip(),
+            str(args.get("attempt_start_to") or "").strip(),
+            str(args.get("assign_exam_key") or "").strip(),
+            str(args.get("assign_candidate_id") or "").strip(),
+            str(args.get("attempt_page") or "1").strip() or "1",
+        )
+        cached = _get_cached_assignments_context(cache_key)
+        if cached is not None:
+            return cached
+
+        exams_all = _list_exams()
+        candidates = list_candidates(limit=200)
+        exam_q = (args.get("exam_q") or "").strip()
+        attempt_q = (args.get("attempt_q") or "").strip()
+        attempt_start_from_raw = (args.get("attempt_start_from") or "").strip()
+        attempt_start_to_raw = (args.get("attempt_start_to") or "").strip()
+        assign_exam_key = (args.get("assign_exam_key") or "").strip()
+        assign_candidate_id = (args.get("assign_candidate_id") or "").strip()
+
+        if exam_q:
+            ql = exam_q.lower()
+            digits = ql.isdigit()
+            exams_all = [
+                e
+                for e in exams_all
+                if ql in str(e.get("exam_key") or "").lower()
+                or ql in str(e.get("title") or "").lower()
+                or (digits and ql in str(e.get("id") or ""))
+            ]
+        exams_all.sort(key=lambda x: float(x.get("_mtime") or 0), reverse=True)
 
         attempt_per_page = 20
         try:
-            attempt_page = int(request.args.get("attempt_page") or "1")
+            attempt_page = int(args.get("attempt_page") or "1")
         except Exception:
             attempt_page = 1
         attempt_page = max(1, attempt_page)
@@ -1561,7 +1775,8 @@ def create_app() -> Flask:
             invite_end_date = _date_to_iso(r.get("invite_end_date"))
 
             if token and (not invite_start_date or not invite_end_date):
-                # Backward compat: older exam_paper rows may not have invite dates. Load from assignment and backfill.
+                # Backward compat only: recover best-effort from assignment JSON, but never write back here.
+                # Page render must stay cheap; persistence fixes should happen in dedicated maintenance paths.
                 try:
                     with assignment_locked(token):
                         a = load_assignment(token)
@@ -1569,12 +1784,14 @@ def create_app() -> Flask:
                         if isinstance(inv, dict):
                             invite_start_date = invite_start_date or str(inv.get("start_date") or "").strip()
                             invite_end_date = invite_end_date or str(inv.get("end_date") or "").strip()
-                    if invite_start_date or invite_end_date:
-                        set_exam_paper_invite_window_if_missing(
-                            token,
-                            invite_start_date=(invite_start_date or None),
-                            invite_end_date=(invite_end_date or None),
-                        )
+                        if not invite_start_date or not invite_end_date:
+                            t0 = a.get("timing") or {}
+                            if isinstance(t0, dict):
+                                started0 = _parse_iso_dt(str(t0.get("start_at") or "").strip() or None)
+                                if started0 is not None:
+                                    d0 = started0.astimezone().date()
+                                    invite_start_date = invite_start_date or d0.isoformat()
+                                    invite_end_date = invite_end_date or (d0 + timedelta(days=1)).isoformat()
                 except Exception:
                     pass
 
@@ -1583,24 +1800,53 @@ def create_app() -> Flask:
                 if ed is not None and today_local > ed:
                     status = "expired"
 
+            candidate_id = int(r.get("candidate_id") or 0)
+            name = str(r.get("name") or "").strip()
+            candidate_deleted = bool(r.get("candidate_deleted_at"))
+            if _admin_looks_deleted_marker(name) or not name:
+                name = f"候选人#{candidate_id}" if candidate_id > 0 else "候选人"
+            if candidate_id > 0 and (not candidate_deleted) and name.startswith("候选人#"):
+                try:
+                    recovered_name = str(get_candidate_name_from_logs(candidate_id) or "").strip()
+                except Exception:
+                    recovered_name = ""
+                if recovered_name:
+                    name = recovered_name
+            candidate_clickable = (candidate_id > 0) and (not candidate_deleted)
+
+            exam_key = str(r.get("exam_key") or "").strip()
+            if _admin_looks_deleted_marker(exam_key):
+                recovered_exam_key = ""
+                if token:
+                    try:
+                        with assignment_locked(token):
+                            a2 = load_assignment(token)
+                            recovered_exam_key = str(a2.get("exam_key") or "").strip()
+                    except Exception:
+                        recovered_exam_key = ""
+                exam_key = recovered_exam_key if recovered_exam_key else "历史试卷"
+            exam_exists = bool(exam_key and (STORAGE_DIR / "exams" / exam_key / "spec.json").exists())
+
             attempt_href = None
             attempt_msg = None
             if token:
                 if status == "finished":
                     attempt_href = url_for("admin_attempt", token=token)
                 else:
-                    attempt_msg = f"当前状态：{_status_label(status)}，不可查看答题结果"
+                    attempt_msg = f"当前状态：{_admin_status_label(status)}，不可查看答题结果"
 
             attempt_candidates_page.append(
                 {
                     "attempt_id": int(r.get("attempt_id") or 0),
-                    "candidate_id": int(r.get("candidate_id") or 0),
-                    "name": str(r.get("name") or ""),
+                    "candidate_id": candidate_id,
+                    "candidate_clickable": candidate_clickable,
+                    "name": name,
                     "phone": str(r.get("phone") or ""),
-                    "exam_key": str(r.get("exam_key") or ""),
+                    "exam_key": exam_key,
+                    "exam_exists": exam_exists,
                     "token": token,
                     "status": status,
-                    "status_label": _status_label(status),
+                    "status_label": _admin_status_label(status),
                     "score": r.get("score"),
                     "invite_start_date": invite_start_date,
                     "invite_end_date": invite_end_date,
@@ -1609,14 +1855,38 @@ def create_app() -> Flask:
                 }
             )
 
-        # ---------------- Logs (system_log) ----------------
-        # The template expects:
-        # - log_counts: category counts
-        # - chart_days/chart_counts + chart_range_start/end: density chart
-        # - logs: paged rows with derived type_key/type_label/detail_text
+        result = {
+            "exams_all": exams_all,
+            "assign_exam_key": assign_exam_key,
+            "assign_candidate_id": assign_candidate_id,
+            "candidates": candidates,
+            "attempt_q": attempt_q,
+            "attempt_start_from": attempt_start_from_raw,
+            "attempt_start_to": attempt_start_to_raw,
+            "attempt_candidates": attempt_candidates_page,
+            "attempt_page": attempt_page,
+            "total_attempts": total_attempts,
+            "total_attempt_pages": total_attempt_pages,
+            "attempt_per_page": attempt_per_page,
+            "exam_q": exam_q,
+        }
+        _set_cached_assignments_context(cache_key, result)
+        return result
+
+    def _build_admin_logs_context(args) -> dict[str, Any]:
+        chart_start_raw = (args.get("chart_start") or "").strip()
+        chart_end_raw = (args.get("chart_end") or "").strip()
+        cache_key = (
+            str(args.get("log_page") or "1").strip() or "1",
+            chart_start_raw,
+            chart_end_raw,
+        )
+        cached = _get_cached_logs_context(cache_key)
+        if cached is not None:
+            return cached
         log_per_page = 20
         try:
-            log_page = int(request.args.get("log_page") or "1")
+            log_page = int(args.get("log_page") or "1")
         except Exception:
             log_page = 1
         log_page = max(1, log_page)
@@ -1746,37 +2016,48 @@ def create_app() -> Flask:
             it["type_label"] = label
             it["detail_text"] = _detail_text_v2(it)
 
-        return render_template(
-            "admin_dashboard.html",
-            exams_all=exams_all,
-            exams_page=exams_page,
-            exam_page=exam_page,
-            total_exams=total_exams,
-            total_exam_pages=total_exam_pages,
-            exam_q=exam_q,
-            exam_per_page=per_page,
-            attempt_q=attempt_q,
-            attempt_start_from=attempt_start_from_raw,
-            attempt_start_to=attempt_start_to_raw,
-            assign_exam_key=assign_exam_key,
-            assign_candidate_id=assign_candidate_id,
-            candidates=candidates,
-            attempt_candidates=attempt_candidates_page,
-            attempt_page=attempt_page,
-            total_attempts=total_attempts,
-            total_attempt_pages=total_attempt_pages,
-            attempt_per_page=attempt_per_page,
-            logs=ops,
-            log_page=log_page,
-            total_logs=total_logs,
-            total_log_pages=total_log_pages,
-            log_per_page=log_per_page,
-            log_counts=log_counts,
-            chart_days=chart_days,
-            chart_counts=chart_counts,
-            chart_range_start=chart_range_start,
-            chart_range_end=chart_range_end,
-        )
+        result = {
+            "logs": ops,
+            "log_page": log_page,
+            "total_logs": total_logs,
+            "total_log_pages": total_log_pages,
+            "log_per_page": log_per_page,
+            "log_counts": log_counts,
+            "chart_days": chart_days,
+            "chart_counts": chart_counts,
+            "chart_range_start": chart_range_start,
+            "chart_range_end": chart_range_end,
+        }
+        _set_cached_logs_context(cache_key, result)
+        return result
+
+    def _build_admin_status_context() -> dict[str, Any]:
+        return {}
+
+    @app.get("/admin")
+    @admin_required
+    def admin_dashboard():
+        return redirect(url_for("admin_exams"))
+
+    @app.get("/admin/exams")
+    @admin_required
+    def admin_exams():
+        return render_template("admin_exams.html", **_build_admin_exams_context(request.args))
+
+    @app.get("/admin/assignments")
+    @admin_required
+    def admin_assignments():
+        return render_template("admin_assignments.html", **_build_assignment_attempts_context(request.args))
+
+    @app.get("/admin/logs")
+    @admin_required
+    def admin_logs():
+        return render_template("admin_logs.html", **_build_admin_logs_context(request.args))
+
+    @app.get("/admin/status")
+    @admin_required
+    def admin_status():
+        return render_template("admin_status.html", **_build_admin_status_context())
 
     @app.get("/admin/api/attempt-status")
     @admin_required
@@ -1878,6 +2159,111 @@ def create_app() -> Flask:
         # id ASC so the client can prepend in reverse order (keep "newest first" view).
         out.sort(key=lambda x: int(x.get("id") or 0))
         return jsonify({"ok": True, "items": out})
+
+    @app.post("/admin/exams/ai")
+    @admin_required
+    def admin_exams_ai_generate():
+        def _ai_notice_redirect(msg: str, *, ok: bool = False):
+            txt = str(msg or "").strip()[:220]
+            level = "ok" if ok else "error"
+            return redirect(url_for("admin_exams", ai_notice=txt, ai_notice_level=level))
+
+        op = str(request.form.get("op") or "generate").strip().lower()
+        prompt = str(request.form.get("ai_exam_prompt") or "").strip()
+        include_diagrams = str(request.form.get("ai_include_diagrams") or "").strip().lower() in {
+            "1",
+            "true",
+            "on",
+            "yes",
+        }
+
+        check = check_exam_prompt_completeness(prompt)
+        missing = check.get("missing") if isinstance(check, dict) else []
+        if not isinstance(missing, list):
+            missing = []
+
+        if op == "check":
+            if bool(check.get("complete")):
+                return _ai_notice_redirect("提示词检查通过，可以直接生成试卷。", ok=True)
+            else:
+                return _ai_notice_redirect("提示词不完整：" + "；".join([str(x) for x in missing[:8]]) + "。请补充后再生成。")
+
+        if not bool(check.get("complete")):
+            return _ai_notice_redirect("提示词不完整：" + "；".join([str(x) for x in missing[:8]]) + "。请补充后再生成。")
+
+        ai_llm_tokens = 0
+        try:
+            with audit_context(meta={}):
+                exam_md, assets, meta = generate_exam_from_prompt(prompt, include_diagrams=bool(include_diagrams))
+                ctx = get_audit_context()
+                ctx_meta = ctx.get("meta") if isinstance(ctx.get("meta"), dict) else {}
+                try:
+                    ai_llm_tokens = int(ctx_meta.get("llm_total_tokens_sum") or 0)
+                except Exception:
+                    ai_llm_tokens = 0
+        except Exception as e:
+            logger.exception("AI exam generation failed before storage")
+            return _ai_notice_redirect(f"自动生成失败：{e}")
+
+        try:
+            exam_key = _write_exam_to_storage(exam_md, assets=assets, ensure_unique_key=True)
+        except QmlParseError as e:
+            logger.exception("AI exam generation parse/save failed: QML parse error")
+            return _ai_notice_redirect(f"生成内容解析失败：{e}（line={e.line}）。请完善提示词后重试。")
+        except Exception as e:
+            logger.exception("AI exam generation save failed")
+            return _ai_notice_redirect(f"保存生成试卷失败：{e}")
+
+        try:
+            q_cnt = int((meta or {}).get("question_count") or 0)
+        except Exception:
+            q_cnt = 0
+        try:
+            a_cnt = int((meta or {}).get("asset_count") or 0)
+        except Exception:
+            a_cnt = 0
+        msg_ok = f"自动生成并解析成功：{exam_key}（题目 {q_cnt}，示意图 {a_cnt}）"
+        try:
+            log_event(
+                "exam.upload",
+                actor="admin",
+                exam_key=str(exam_key or "").strip(),
+                llm_total_tokens=(int(ai_llm_tokens or 0) if int(ai_llm_tokens or 0) > 0 else None),
+                meta={
+                    "source": "ai.generate",
+                    "prompt_chars": int(len(prompt)),
+                    "question_count": int(q_cnt),
+                    "asset_count": int(a_cnt),
+                    "include_diagrams": bool(include_diagrams),
+                    "llm_total_tokens_sum": int(ai_llm_tokens or 0),
+                },
+            )
+        except Exception:
+            pass
+        return _ai_notice_redirect(msg_ok, ok=True)
+
+    @app.post("/admin/exams/ai/check")
+    @admin_required
+    def admin_exams_ai_check():
+        prompt = str(request.form.get("ai_exam_prompt") or "").strip()
+        try:
+            check = check_exam_prompt_completeness(prompt)
+            missing = check.get("missing") if isinstance(check, dict) else []
+            if not isinstance(missing, list):
+                missing = []
+            complete = bool(check.get("complete")) if isinstance(check, dict) else False
+            score = int(check.get("score") or 0) if isinstance(check, dict) else 0
+            return jsonify(
+                {
+                    "ok": True,
+                    "complete": complete,
+                    "score": score,
+                    "missing": [str(x) for x in missing[:12]],
+                }
+            )
+        except Exception as e:
+            logger.exception("AI prompt check failed")
+            return jsonify({"ok": False, "complete": False, "missing": [], "error": f"检查异常：{type(e).__name__}"}), 500
 
     @app.post("/admin/exams/upload")    # 上传
     @admin_required
@@ -2275,7 +2661,7 @@ def create_app() -> Flask:
         exam_dir = STORAGE_DIR / "exams" / exam_key
         if not exam_dir.exists():
             flash("操作失败，请稍后重试")
-            return redirect(url_for("admin_dashboard") + "#tab-exams")
+            return redirect(url_for("admin_exams"))
 
         affected = 0
         try:
@@ -2295,7 +2681,7 @@ def create_app() -> Flask:
             log_event("exam.delete", actor="admin", exam_key=str(exam_key or "").strip(), meta={"affected": int(affected or 0)})
         except Exception:
             pass
-        return redirect(url_for("admin_dashboard") + "#tab-exams")
+        return redirect(url_for("admin_exams"))
 
     @app.post("/admin/exams/<exam_key>/public-invite")
     @admin_required
@@ -2353,6 +2739,11 @@ def create_app() -> Flask:
         created_from_raw = (request.args.get("created_from") or "").strip()
         created_to_raw = (request.args.get("created_to") or "").strip()
 
+        if not created_to_raw:
+            created_to_raw = datetime.now().date().isoformat()
+        if not created_from_raw:
+            created_from_raw = (datetime.now().date() - timedelta(days=29)).isoformat()
+
         def _parse_dt(v: str, *, end_of_day: bool = False) -> datetime | None:
             s = str(v or "").strip()
             if not s:
@@ -2371,8 +2762,6 @@ def create_app() -> Flask:
         created_from = _parse_dt(created_from_raw, end_of_day=False)
         created_to = _parse_dt(created_to_raw, end_of_day=True)
 
-        candidates_all = list_candidates(query=q, created_from=created_from, created_to=created_to)
-
         per_page = 20
 
         try:
@@ -2380,7 +2769,15 @@ def create_app() -> Flask:
         except Exception:
             page = 1
         page = max(1, page)
-        total = len(candidates_all)
+        per_page = 20
+        try:
+            total = count_candidates(
+                query=q or None,
+                created_from=created_from,
+                created_to=created_to,
+            )
+        except Exception:
+            total = 0
         total_pages = (total + per_page - 1) // per_page
         if total_pages > 0:
             page = min(page, total_pages)
@@ -2389,7 +2786,16 @@ def create_app() -> Flask:
 
         start = (page - 1) * per_page
         end = start + per_page
-        candidates = candidates_all[start:end]
+        try:
+            candidates = list_candidates(
+                limit=per_page,
+                offset=start,
+                query=q or None,
+                created_from=created_from,
+                created_to=created_to,
+            )
+        except Exception:
+            candidates = []
 
         return render_template(
             "admin_candidates.html",
@@ -2786,7 +3192,7 @@ def create_app() -> Flask:
                 url_for("admin_candidate_profile", candidate_id=candidate_id, _anchor="evaluations")
             )
 
-        flash("操作失败，请稍后重试")
+        flash("保存成功")
         return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id, _anchor="evaluations"))
 
     @app.get("/admin/candidates/<int:candidate_id>/resume/download")
@@ -2834,21 +3240,21 @@ def create_app() -> Flask:
             abort(404)
 
         file = request.files.get("file")
-        if not file or not getattr(file, "filename", ""):
-            flash("操作失败，请稍后重试")
+        if not (file and getattr(file, "filename", "")):
+            flash("请先上传新的简历")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
-
         try:
             data = file.read() or b""
         except Exception:
             flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
+        filename = str(file.filename or "")
+        mime = str(getattr(file, "mimetype", "") or "")
 
         if len(data) > 10 * 1024 * 1024:
             flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
-        filename = str(file.filename or "")
         ext = os.path.splitext(filename)[1].lower()
         if ext not in _ALLOWED_RESUME_EXTS:
             flash("操作失败，请稍后重试")
@@ -2861,7 +3267,6 @@ def create_app() -> Flask:
             flash(f"简历解析失败：{type(e).__name__}({e})")
             return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
-        mime = str(getattr(file, "mimetype", "") or "")
         resume_llm_total_tokens = 0
 
         # Keep behavior aligned with /admin/candidates/resume/upload:
@@ -3016,7 +3421,7 @@ def create_app() -> Flask:
             )
         except Exception:
             pass
-        flash("重新上传成功")
+        flash("重新解析成功")
         return redirect(url_for("admin_candidate_profile", candidate_id=candidate_id))
 
     #
@@ -3049,6 +3454,97 @@ def create_app() -> Flask:
         except Exception:
             flash("操作失败，请稍后重试")
             return redirect(url_for("admin_candidates"))
+        flash("候选人创建成功")
+        return redirect(url_for("admin_candidates"))
+
+    @app.post("/admin/candidates/quick-create")
+    @admin_required
+    def admin_candidates_quick_create():
+        name = (request.form.get("name") or "").strip()
+        phone_input = (request.form.get("phone") or "").strip()
+        phone = _normalize_phone(phone_input)
+        file = request.files.get("file")
+
+        has_file = bool(file and getattr(file, "filename", ""))
+        has_name_phone = bool(name and phone_input)
+
+        # Resume-only creation reuses the existing resume upload flow.
+        if has_file and not has_name_phone:
+            return admin_candidates_resume_upload()
+
+        # Name + phone creation without resume reuses the existing manual create flow.
+        if not has_file:
+            return admin_candidates_create()
+
+        if not name or not phone:
+            flash("请填写姓名和手机号，或仅上传简历")
+            return redirect(url_for("admin_candidates"))
+        if not _is_valid_name(name):
+            flash("操作失败，请稍后重试")
+            return redirect(url_for("admin_candidates"))
+        if not _is_valid_phone(phone):
+            flash("操作失败，请稍后重试")
+            return redirect(url_for("admin_candidates"))
+
+        existed = get_candidate_by_phone(phone)
+        if existed:
+            flash("候选人已创建，请勿重复创建")
+            return redirect(url_for("admin_candidates"))
+
+        try:
+            data = file.read() or b""
+        except Exception:
+            flash("操作失败，请稍后重试")
+            return redirect(url_for("admin_candidates"))
+
+        if len(data) > 10 * 1024 * 1024:
+            flash("操作失败，请稍后重试")
+            return redirect(url_for("admin_candidates"))
+
+        filename = str(file.filename or "")
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in _ALLOWED_RESUME_EXTS:
+            flash("操作失败，请稍后重试")
+            return redirect(url_for("admin_candidates"))
+
+        mime = str(getattr(file, "mimetype", "") or "")
+
+        try:
+            cid = create_candidate(name=name, phone=phone)
+        except Exception:
+            flash("操作失败，请稍后重试")
+            return redirect(url_for("admin_candidates"))
+
+        resume_meta: dict[str, Any] = {
+            "source_filename": filename,
+            "source_mime": mime,
+            "method": {"quick_create": "manual_with_resume"},
+            "details": {"status": "pending"},
+        }
+
+        try:
+            update_candidate_resume(
+                cid,
+                resume_bytes=data,
+                resume_filename=filename,
+                resume_mime=mime,
+                resume_size=len(data),
+                resume_parsed=resume_meta,
+            )
+        except Exception:
+            logger.exception("Quick create candidate resume save failed (cid=%s)", cid)
+            flash("候选人已创建，但简历保存失败")
+            return redirect(url_for("admin_candidates"))
+
+        try:
+            log_event(
+                "candidate.create",
+                actor="admin",
+                candidate_id=int(cid),
+                meta={"name": name, "phone": phone, "with_resume": True},
+            )
+        except Exception:
+            pass
         flash("候选人创建成功")
         return redirect(url_for("admin_candidates"))
 
@@ -3264,7 +3760,7 @@ def create_app() -> Flask:
         p = _find_latest_archive(c)
         if not p:
             flash("候选者未提交答卷")
-            return redirect(url_for("admin_dashboard") + "#tab-assign")
+            return redirect(url_for("admin_assignments"))
         try:
             archive = read_json(p)
         except Exception:
@@ -3385,7 +3881,7 @@ def create_app() -> Flask:
         time_limit_seconds = _parse_duration_seconds(time_limit_raw)
         if not time_limit_raw or time_limit_seconds is None:
             flash("操作失败，请稍后重试")
-            return redirect(url_for("admin_dashboard") + "#tab-assign")
+            return redirect(url_for("admin_assignments"))
         min_submit_seconds_raw = (request.form.get("min_submit_seconds") or "").strip()
         min_submit_seconds: int | None = None
         if min_submit_seconds_raw != "":
@@ -3399,38 +3895,38 @@ def create_app() -> Flask:
         spec_path = STORAGE_DIR / "exams" / exam_key / "spec.json"
         if not spec_path.exists():
             flash("操作失败，请稍后重试")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_assignments"))
 
         c = get_candidate(candidate_id)
         if not c:
             flash("操作失败，请稍后重试")
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("admin_assignments"))
 
         invite_start_date_raw = (request.form.get("invite_start_date") or "").strip()
         invite_end_date_raw = (request.form.get("invite_end_date") or "").strip()
         if not invite_start_date_raw:
             flash("操作失败，请稍后重试")
-            return redirect(url_for("admin_dashboard") + "#tab-assign")
+            return redirect(url_for("admin_assignments"))
         if not invite_end_date_raw:
             flash("请选择答题结束日期")
-            return redirect(url_for("admin_dashboard") + "#tab-assign")
+            return redirect(url_for("admin_assignments"))
         sd = _parse_date_ymd(invite_start_date_raw) if invite_start_date_raw else None
         ed = _parse_date_ymd(invite_end_date_raw) if invite_end_date_raw else None
         if sd is None:
             flash("操作失败，请稍后重试")
-            return redirect(url_for("admin_dashboard") + "#tab-assign")
+            return redirect(url_for("admin_assignments"))
         if ed is None:
             flash("操作失败，请稍后重试")
-            return redirect(url_for("admin_dashboard") + "#tab-assign")
+            return redirect(url_for("admin_assignments"))
         if invite_start_date_raw and sd is None:
             flash("操作失败，请稍后重试")
-            return redirect(url_for("admin_dashboard") + "#tab-assign")
+            return redirect(url_for("admin_assignments"))
         if invite_end_date_raw and ed is None:
             flash("操作失败，请稍后重试")
-            return redirect(url_for("admin_dashboard") + "#tab-assign")
+            return redirect(url_for("admin_assignments"))
         if sd is not None and ed is not None and ed < sd:
             flash("操作失败，请稍后重试")
-            return redirect(url_for("admin_dashboard") + "#tab-assign")
+            return redirect(url_for("admin_assignments"))
 
         base_url = request.url_root.rstrip("/")
         result = create_assignment(
@@ -4475,6 +4971,34 @@ def create_app() -> Flask:
                     )
                 except Exception:
                     pass
+            # Public invite rule:
+            # start_date = enter date (local), end_date = next day (local).
+            # Fill only when invite_window is missing; keep existing values unchanged.
+            try:
+                if bool(assignment.get("public_invite")):
+                    inv = assignment.get("invite_window") or {}
+                    if not isinstance(inv, dict):
+                        inv = {}
+                    sd = str(inv.get("start_date") or "").strip()
+                    ed = str(inv.get("end_date") or "").strip()
+                    if not sd or not ed:
+                        started_dt = _parse_iso_dt(str(timing.get("start_at") or "").strip() or None)
+                        if started_dt is None:
+                            started_dt = datetime.now(timezone.utc)
+                        local_day = started_dt.astimezone().date()
+                        sd2 = sd or local_day.isoformat()
+                        ed2 = ed or (local_day + timedelta(days=1)).isoformat()
+                        assignment["invite_window"] = {"start_date": sd2, "end_date": ed2}
+                        try:
+                            set_exam_paper_invite_window_if_missing(
+                                token,
+                                invite_start_date=sd2,
+                                invite_end_date=ed2,
+                            )
+                        except Exception:
+                            pass
+            except Exception:
+                pass
             # Transition status to "in_exam" once the candidate enters the exam page.
             try:
                 if ep_status == "verified":

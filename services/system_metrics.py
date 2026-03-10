@@ -7,6 +7,7 @@ from typing import Any
 from config import STORAGE_DIR, logger
 from db import create_system_log
 from db import estimate_sms_calls_for_day
+from db import list_system_alert_levels, list_system_alert_limits
 from storage.json_store import read_json, write_json
 
 _LOCK = threading.Lock()
@@ -90,6 +91,41 @@ def _save_metrics_raw(obj: dict[str, Any]) -> None:
         pass
 
 
+def _get_alert_state(*, day: str, kind: str) -> dict[str, Any]:
+    d = str(day or "").strip()[:10]
+    k = str(kind or "").strip()
+    if not d or not k:
+        return {}
+    obj = _load_metrics_raw()
+    row = obj.get(d)
+    if not isinstance(row, dict):
+        return {}
+    alerts = row.get("_alert_state")
+    if not isinstance(alerts, dict):
+        return {}
+    st = alerts.get(k)
+    return dict(st) if isinstance(st, dict) else {}
+
+
+def _set_alert_state(*, day: str, kind: str, state: dict[str, Any]) -> None:
+    d = str(day or "").strip()[:10]
+    k = str(kind or "").strip()
+    if not d or not k:
+        return
+    st = dict(state or {})
+    obj = _load_metrics_raw()
+    row = obj.get(d)
+    if not isinstance(row, dict):
+        row = {}
+    alerts = row.get("_alert_state")
+    if not isinstance(alerts, dict):
+        alerts = {}
+    alerts[k] = st
+    row["_alert_state"] = alerts
+    obj[d] = row
+    _save_metrics_raw(obj)
+
+
 def get_daily_metric(*, day: str, key: str) -> int:
     d = str(day or "").strip()[:10]
     k = str(key or "").strip()
@@ -152,6 +188,17 @@ def _level_from_ratio(ratio: float) -> str:
     return "ok"
 
 
+def _level_rank(level: str) -> int:
+    lv = str(level or "").strip().lower()
+    if lv == "warn":
+        return 1
+    if lv == "danger":
+        return 2
+    if lv == "critical":
+        return 3
+    return 0
+
+
 def _safe_ratio(used: int, limit: int) -> float:
     try:
         u = int(used or 0)
@@ -169,25 +216,74 @@ def _safe_ratio(used: int, limit: int) -> float:
 def _maybe_emit_system_alert(*, day: str, kind: str, used: int, limit: int) -> None:
     ratio = _safe_ratio(used, limit)
     level = _level_from_ratio(ratio)
-    if level not in {"warn", "danger", "critical"}:
+    d = str(day or "").strip()[:10]
+    k = str(kind or "").strip()
+    if not d or not k:
         return
-    # Always append a new alert log row when usage crosses/keeps warning levels.
-    # This keeps a complete chronological trail for operations and audits.
-    try:
-        create_system_log(
-            actor="system",
-            event_type="system.alert",
-            meta={
-                "day": day,
-                "kind": kind,
+
+    with _LOCK:
+        prev = _get_alert_state(day=d, kind=k)
+        prev_level = str(prev.get("level") or "").strip()
+        try:
+            prev_limit = int(prev.get("limit") or 0)
+        except Exception:
+            prev_limit = 0
+
+        # Not exceeded: only update state, never emit.
+        if level not in {"warn", "danger", "critical"}:
+            _set_alert_state(
+                day=d,
+                kind=k,
+                state={
+                    "level": "ok",
+                    "limit": int(limit or 0),
+                    "used": int(used or 0),
+                    "ratio": float(ratio or 0.0),
+                    "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                },
+            )
+            return
+
+        # Exceeded:
+        # - first exceed of the day => emit one
+        # - threshold changed and still exceeded => emit one
+        # - escalated level (warn->danger->critical) => emit one
+        should_emit = False
+        if prev_level not in {"warn", "danger", "critical"}:
+            should_emit = True
+        elif int(limit or 0) != prev_limit:
+            should_emit = True
+        elif _level_rank(level) > _level_rank(prev_level):
+            should_emit = True
+
+        if should_emit:
+            try:
+                create_system_log(
+                    actor="system",
+                    event_type="system.alert",
+                    meta={
+                        "day": d,
+                        "kind": k,
+                        "level": level,
+                        "used": int(used or 0),
+                        "limit": int(limit or 0),
+                        "ratio": float(ratio or 0.0),
+                    },
+                )
+            except Exception:
+                logger.exception("Failed to emit system.alert (kind=%s, level=%s)", kind, level)
+
+        _set_alert_state(
+            day=d,
+            kind=k,
+            state={
                 "level": level,
-                "used": int(used or 0),
                 "limit": int(limit or 0),
+                "used": int(used or 0),
                 "ratio": float(ratio or 0.0),
+                "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             },
         )
-    except Exception:
-        logger.exception("Failed to emit system.alert (kind=%s, level=%s)", kind, level)
 
 
 def incr_sms_calls_and_alert(delta: int = 1) -> int:
@@ -231,6 +327,69 @@ def emit_alerts_for_current_snapshot(*, day: str | None = None) -> None:
     sms_used = get_daily_metric(day=d, key="sms_calls")
     _maybe_emit_system_alert(day=d, kind="llm_tokens", used=llm_used, limit=llm_limit)
     _maybe_emit_system_alert(day=d, kind="sms_calls", used=sms_used, limit=sms_limit)
+
+
+def backfill_missing_system_alert_levels(*, day: str, kind: str) -> int:
+    """
+    Rebuild missing warn/danger/critical alert rows for a historical day+kind.
+    It uses that day's `used` metric and historical limits observed in alert logs.
+    """
+    d = str(day or "").strip()[:10]
+    k = str(kind or "").strip()
+    if not d or k not in {"llm_tokens", "sms_calls"}:
+        return 0
+    used = int(get_daily_metric(day=d, key=k) or 0)
+    if used <= 0:
+        return 0
+
+    limits = list_system_alert_limits(day=d, kind=k)
+    if not limits:
+        # Fallback for today when historical alert rows are absent.
+        if d == _today_local_day():
+            cfg = _load_cfg()
+            lim = int(cfg.get("llm_tokens_limit" if k == "llm_tokens" else "sms_calls_limit") or 0)
+            if lim > 0:
+                limits = [lim]
+    inserted = 0
+    for limit in limits:
+        try:
+            lim = int(limit or 0)
+        except Exception:
+            lim = 0
+        if lim <= 0:
+            continue
+        ratio = _safe_ratio(used, lim)
+        expected: list[str] = []
+        if ratio >= 0.7:
+            expected.append("warn")
+        if ratio >= 0.9:
+            expected.append("danger")
+        if ratio >= 1.0:
+            expected.append("critical")
+        if not expected:
+            continue
+        existing = list_system_alert_levels(day=d, kind=k, limit=lim)
+        for lv in expected:
+            if lv in existing:
+                continue
+            try:
+                create_system_log(
+                    actor="system",
+                    event_type="system.alert",
+                    meta={
+                        "day": d,
+                        "kind": k,
+                        "level": lv,
+                        "used": int(used or 0),
+                        "limit": int(lim or 0),
+                        "ratio": float(ratio or 0.0),
+                        "backfill": True,
+                    },
+                )
+                inserted += 1
+            except Exception:
+                logger.exception("Failed to backfill system.alert (day=%s, kind=%s, level=%s)", d, k, lv)
+    return inserted
 
 
 def ensure_sms_calls_metric(*, day: str, tz_offset_seconds: int) -> int:

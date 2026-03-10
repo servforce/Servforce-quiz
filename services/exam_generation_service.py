@@ -1,11 +1,36 @@
 ﻿from __future__ import annotations
 
 import json
+import os
 import re
+import hashlib
 from datetime import datetime
 from typing import Any
 
 from services.llm_client import call_llm_structured_ex
+
+
+def _env_int(name: str, default: int, *, min_v: int, max_v: int) -> int:
+    v = str(os.getenv(name, "") or "").strip()
+    if not v:
+        return int(default)
+    try:
+        n = int(float(v))
+    except Exception:
+        return int(default)
+    return max(min_v, min(max_v, n))
+
+
+def _diagram_mode() -> str:
+    """
+    Diagram strategy:
+    - dynamic: prefer model SVG content, fallback to local templates.
+    - template: force local templates for speed/stability.
+    """
+    v = str(os.getenv("AI_EXAM_DIAGRAM_MODE", "dynamic") or "").strip().lower()
+    if v in {"template", "fixed", "fast"}:
+        return "template"
+    return "dynamic"
 
 
 def _extract_json_object(raw: str) -> dict[str, Any]:
@@ -22,6 +47,28 @@ def _extract_json_object(raw: str) -> dict[str, Any]:
     except Exception:
         return {}
     return obj if isinstance(obj, dict) else {}
+
+
+def _repair_invalid_json(raw_text: str) -> dict[str, Any]:
+    """
+    Best-effort repair when model output is not valid JSON.
+    This consumes fewer tokens than re-generating a whole paper.
+    """
+    text = str(raw_text or "").strip()
+    if not text:
+        return {}
+    repair_system = (
+        "你是 JSON 修复器。"
+        "请把用户提供的文本修复成一个合法 JSON 对象，"
+        "只输出 JSON，不要解释，不要 markdown 代码块。"
+    )
+    repair_prompt = (
+        "将下面内容修复为合法 JSON 对象；"
+        "若包含额外文字，请移除无关文本并保留原语义字段：\n\n"
+        f"{text}"
+    )
+    fixed_raw, _err = call_llm_structured_ex(repair_prompt, system=repair_system)
+    return _extract_json_object(fixed_raw)
 
 
 def _slugify_ascii(text: str) -> str:
@@ -64,6 +111,123 @@ def _safe_svg_text(raw: Any) -> str:
     if "<svg" not in s or "</svg>" not in s:
         return ""
     return s
+
+
+def _xml_escape_text(text: str) -> str:
+    s = str(text or "")
+    s = s.replace("&", "&amp;")
+    s = s.replace("<", "&lt;").replace(">", "&gt;")
+    s = s.replace('"', "&quot;").replace("'", "&apos;")
+    return s
+
+
+def _first_nonempty_line(text: str, max_len: int = 36) -> str:
+    for ln in str(text or "").splitlines():
+        t = ln.strip()
+        if t:
+            return t[:max_len]
+    t = str(text or "").strip()
+    return t[:max_len] if t else "题目示意图"
+
+
+def _semantic_svg_fallback(*, stem: str, alt: str, requested_type: str) -> str:
+    """
+    Dynamic local fallback: generate a non-fixed semantic sketch from question text.
+    This avoids reusing static templates when LLM SVG generation fails.
+    """
+    seed_src = f"{stem}|{alt}|{requested_type}".encode("utf-8", errors="ignore")
+    h = hashlib.sha1(seed_src).hexdigest()
+    vals = [int(h[i : i + 2], 16) for i in range(0, 12, 2)]
+
+    title = _xml_escape_text(_first_nonempty_line(alt or stem, max_len=32))
+    subtitle = _xml_escape_text(_first_nonempty_line(stem, max_len=56))
+
+    x0 = 180
+    y0 = 390
+    points: list[str] = []
+    for i in range(6):
+        x = x0 + i * 150
+        y = y0 - int(28 + (vals[i % len(vals)] / 255.0) * 240)
+        points.append(f"{x},{y}")
+    polyline = " ".join(points)
+
+    k_words = re.findall(r"[\u4e00-\u9fffA-Za-z0-9_]{2,}", str(stem or ""))
+    k_words = [w for w in k_words if w not in {"题目", "请问", "根据", "以下", "其中", "以及"}]
+    k1 = _xml_escape_text(k_words[0] if len(k_words) > 0 else "语义")
+    k2 = _xml_escape_text(k_words[1] if len(k_words) > 1 else "趋势")
+    k3 = _xml_escape_text(k_words[2] if len(k_words) > 2 else "分析")
+
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520">
+  <style>
+    text{{font-family:'Microsoft YaHei','PingFang SC','Segoe UI',Arial,sans-serif;fill:#0f172a}}
+    .title{{font-size:30px;font-weight:700}}
+    .sub{{font-size:18px;font-weight:600;fill:#334155}}
+    .lab{{font-size:16px;font-weight:600;fill:#475569}}
+  </style>
+  <rect x="0" y="0" width="1200" height="520" fill="#ffffff"/>
+  <text x="600" y="48" text-anchor="middle" class="title">{title}</text>
+  <text x="600" y="80" text-anchor="middle" class="sub">{subtitle}</text>
+  <rect x="120" y="110" width="960" height="320" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <line x1="170" y1="390" x2="1040" y2="390" stroke="#334155" stroke-width="2"/>
+  <line x1="170" y1="150" x2="170" y2="390" stroke="#334155" stroke-width="2"/>
+  <polyline points="{polyline}" fill="none" stroke="#2563eb" stroke-width="4"/>
+  <circle cx="{x0 + 150}" cy="{y0 - int(28 + (vals[1] / 255.0) * 240)}" r="7" fill="#ef4444"/>
+  <circle cx="{x0 + 450}" cy="{y0 - int(28 + (vals[3] / 255.0) * 240)}" r="7" fill="#ef4444"/>
+  <circle cx="{x0 + 750}" cy="{y0 - int(28 + (vals[5] / 255.0) * 240)}" r="7" fill="#ef4444"/>
+  <text x="860" y="156" class="lab">关键词: {k1} / {k2} / {k3}</text>
+</svg>"""
+
+
+def _generate_svg_with_llm(*, stem: str, alt: str, requested_type: str) -> str:
+    hint = str(requested_type or "").strip().lower()
+    system = (
+        "你是技术笔试配图生成器。"
+        "请只输出 JSON 对象，字段为 svg。"
+        "svg 必须是完整、可渲染、无外链、中文可读、不裁切。"
+        "图内容必须和题干语义一致，不得复用固定模板。"
+    )
+    prompt = (
+        "根据题干生成一张示意图 SVG。\n"
+        f"题干：{stem}\n"
+        f"配图说明：{alt or '示意图'}\n"
+        f"类型提示：{hint or 'auto'}\n\n"
+        '输出格式：{"svg":"<svg ...>...</svg>"}'
+    )
+    raw, _err = call_llm_structured_ex(prompt, system=system)
+    obj = _extract_json_object(raw)
+    if not obj:
+        obj = _repair_invalid_json(raw)
+    s = _safe_svg_text(obj.get("svg") if isinstance(obj, dict) else "")
+    if not s:
+        return ""
+    return normalize_svg_text(s)
+
+
+def _question_needs_figure(*, stem: str, fig_type: str, alt: str) -> bool:
+    text = f"{stem} {fig_type} {alt}".lower()
+    keys = [
+        "如下图",
+        "根据图",
+        "图示",
+        "示意图",
+        "曲线",
+        "趋势",
+        "热力图",
+        "混淆矩阵",
+        "决策边界",
+        "架构图",
+        "流程图",
+        "时序图",
+        "拓扑",
+        "表格",
+        "指标对比",
+        "柱状图",
+        "折线图",
+        "监控图",
+        "p99",
+        "gc",
+    ]
+    return any(k in text for k in keys)
 
 
 def _extract_svg_bounds(svg: str) -> tuple[float, float]:
@@ -232,6 +396,81 @@ def _safe_asset_name(raw: Any, fallback_qid: str) -> str:
 
 def _template_svg_by_type(chart_type: str) -> str:
     t = str(chart_type or "").strip().lower()
+    if t == "latency_curve":
+        return """<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520">
+  <style>
+    text{font-family:'Microsoft YaHei','PingFang SC','Segoe UI',Arial,sans-serif;fill:#0f172a}
+    .title{font-size:30px;font-weight:700}
+    .axis{font-size:18px;font-weight:600}
+    .tick{font-size:15px;font-weight:600}
+  </style>
+  <rect x="0" y="0" width="1200" height="520" fill="#ffffff"/>
+  <text x="600" y="48" text-anchor="middle" class="title">并发数与 P99 延迟趋势</text>
+  <line x1="110" y1="430" x2="1080" y2="430" stroke="#334155" stroke-width="2"/>
+  <line x1="110" y1="90" x2="110" y2="430" stroke="#334155" stroke-width="2"/>
+  <line x1="110" y1="430" x2="1080" y2="430" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="110" y1="362" x2="1080" y2="362" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="110" y1="294" x2="1080" y2="294" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="110" y1="226" x2="1080" y2="226" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="110" y1="158" x2="1080" y2="158" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="110" y1="90" x2="1080" y2="90" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="110" y1="430" x2="110" y2="90" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="303" y1="430" x2="303" y2="90" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="497" y1="430" x2="497" y2="90" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="691" y1="430" x2="691" y2="90" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="885" y1="430" x2="885" y2="90" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="1080" y1="430" x2="1080" y2="90" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="96" y="435" text-anchor="end" class="tick">10</text>
+  <text x="96" y="367" text-anchor="end" class="tick">20</text>
+  <text x="96" y="299" text-anchor="end" class="tick">40</text>
+  <text x="96" y="231" text-anchor="end" class="tick">80</text>
+  <text x="96" y="163" text-anchor="end" class="tick">160</text>
+  <text x="96" y="95" text-anchor="end" class="tick">320</text>
+  <text x="110" y="452" text-anchor="middle" class="tick">50</text>
+  <text x="303" y="452" text-anchor="middle" class="tick">100</text>
+  <text x="497" y="452" text-anchor="middle" class="tick">150</text>
+  <text x="691" y="452" text-anchor="middle" class="tick">200</text>
+  <text x="885" y="452" text-anchor="middle" class="tick">250</text>
+  <text x="1080" y="452" text-anchor="middle" class="tick">300</text>
+  <text x="595" y="486" text-anchor="middle" class="axis">并发数</text>
+  <text x="32" y="260" transform="rotate(-90,32,260)" class="axis">P99 延迟(ms)</text>
+  <polyline points="110,414 303,405 497,392 691,345 885,250 1080,140"
+            fill="none" stroke="#1d4ed8" stroke-width="4"/>
+  <line x1="691" y1="95" x2="691" y2="430" stroke="#dc2626" stroke-dasharray="8 8" stroke-width="2"/>
+  <text x="700" y="118" class="tick" fill="#dc2626">拐点（并发约 200）</text>
+  <rect x="850" y="98" width="18" height="18" fill="#1d4ed8"/><text x="876" y="113" class="tick">P99</text>
+</svg>"""
+    if t == "service_heatmap":
+        return """<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520">
+  <style>
+    text{font-family:'Microsoft YaHei','PingFang SC','Segoe UI',Arial,sans-serif;fill:#0f172a}
+    .title{font-size:30px;font-weight:700}
+    .lab{font-size:20px;font-weight:600}
+    .v{font-size:22px;font-weight:700}
+  </style>
+  <rect x="0" y="0" width="1200" height="520" fill="#ffffff"/>
+  <text x="600" y="48" text-anchor="middle" class="title">微服务调用错误率热力图</text>
+  <text x="290" y="120" text-anchor="middle" class="lab">订单接口</text>
+  <text x="500" y="120" text-anchor="middle" class="lab">支付接口</text>
+  <text x="710" y="120" text-anchor="middle" class="lab">库存接口</text>
+  <text x="920" y="120" text-anchor="middle" class="lab">用户接口</text>
+  <text x="120" y="205" text-anchor="middle" class="lab">网关</text>
+  <text x="120" y="290" text-anchor="middle" class="lab">订单服务</text>
+  <text x="120" y="375" text-anchor="middle" class="lab">支付服务</text>
+  <rect x="180" y="150" width="220" height="70" fill="#fecaca" stroke="#ef4444"/><text x="290" y="193" text-anchor="middle" class="v">8.1%</text>
+  <rect x="390" y="150" width="220" height="70" fill="#991b1b" stroke="#7f1d1d"/><text x="500" y="193" text-anchor="middle" class="v" fill="#fff">12.4%</text>
+  <rect x="600" y="150" width="220" height="70" fill="#fee2e2" stroke="#ef4444"/><text x="710" y="193" text-anchor="middle" class="v">4.0%</text>
+  <rect x="810" y="150" width="220" height="70" fill="#fee2e2" stroke="#ef4444"/><text x="920" y="193" text-anchor="middle" class="v">3.6%</text>
+  <rect x="180" y="235" width="220" height="70" fill="#fee2e2" stroke="#ef4444"/><text x="290" y="278" text-anchor="middle" class="v">3.2%</text>
+  <rect x="390" y="235" width="220" height="70" fill="#fecaca" stroke="#ef4444"/><text x="500" y="278" text-anchor="middle" class="v">7.3%</text>
+  <rect x="600" y="235" width="220" height="70" fill="#fee2e2" stroke="#ef4444"/><text x="710" y="278" text-anchor="middle" class="v">2.8%</text>
+  <rect x="810" y="235" width="220" height="70" fill="#fee2e2" stroke="#ef4444"/><text x="920" y="278" text-anchor="middle" class="v">2.1%</text>
+  <rect x="180" y="320" width="220" height="70" fill="#fee2e2" stroke="#ef4444"/><text x="290" y="363" text-anchor="middle" class="v">2.4%</text>
+  <rect x="390" y="320" width="220" height="70" fill="#fecaca" stroke="#ef4444"/><text x="500" y="363" text-anchor="middle" class="v">6.8%</text>
+  <rect x="600" y="320" width="220" height="70" fill="#fee2e2" stroke="#ef4444"/><text x="710" y="363" text-anchor="middle" class="v">1.9%</text>
+  <rect x="810" y="320" width="220" height="70" fill="#fee2e2" stroke="#ef4444"/><text x="920" y="363" text-anchor="middle" class="v">1.5%</text>
+  <text x="180" y="440" class="lab">颜色越深代表错误率越高，优先排查网关 -> 支付接口链路</text>
+</svg>"""
     if t == "loss_curve":
         return """<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520">
   <style>
@@ -427,6 +666,10 @@ def _template_svg_by_type(chart_type: str) -> str:
 
 def _infer_chart_type(*, relpath: str, alt: str, stem: str) -> str:
     text = f"{relpath} {alt} {stem}".lower()
+    if any(k in text for k in ["热力图", "错误率", "service-heatmap", "服务调用", "微服务"]):
+        return "service_heatmap"
+    if any(k in text for k in ["p99", "延迟趋势", "响应时间", "full gc", "young gc", "gc暂停", "并发数"]):
+        return "latency_curve"
     if any(k in text for k in ["loss", "训练/测试损失", "损失曲线", "train/test"]):
         return "loss_curve"
     if any(k in text for k in ["confusion", "混淆矩阵", "heatmap", "热力图", "matrix"]):
@@ -444,9 +687,32 @@ def _infer_chart_type(*, relpath: str, alt: str, stem: str) -> str:
     return ""
 
 
-def _choose_final_svg(relpath: str, raw_svg: Any, *, alt: str, stem: str) -> str:
-    # Use stable templates for known chart families to avoid chaotic LLM drawing quality.
-    chart_type = _infer_chart_type(relpath=relpath, alt=alt, stem=stem)
+def _choose_final_svg(
+    relpath: str,
+    raw_svg: Any,
+    *,
+    alt: str,
+    stem: str,
+    requested_type: str,
+    prefer_model_svg: bool,
+) -> str:
+    # Dynamic mode: prioritize model-provided SVG so figure content varies with prompt.
+    if prefer_model_svg:
+        s = _safe_svg_text(raw_svg)
+        if s:
+            return normalize_svg_text(s)
+        s2 = _generate_svg_with_llm(stem=stem, alt=alt, requested_type=requested_type)
+        if s2:
+            return s2
+        # Last-resort dynamic fallback: still semantic and variable, not a fixed template.
+        s3 = _semantic_svg_fallback(stem=stem, alt=alt, requested_type=requested_type)
+        return normalize_svg_text(s3)
+    # Fallback to local templates for stability.
+    # Do not blindly trust requested figure.type from model: content semantics in stem/alt
+    # should win to avoid mismatch (e.g. Java GC question paired with loss curve).
+    requested = str(requested_type or "").strip().lower()
+    inferred = _infer_chart_type(relpath=relpath, alt=alt, stem=stem)
+    chart_type = inferred or requested
     templ = _template_svg_by_type(chart_type)
     if templ:
         return normalize_svg_text(templ)
@@ -550,9 +816,21 @@ def _build_generation_prompt_body(user_prompt: str, include_diagrams: bool, targ
             "否则视为无效。"
         )
 
+    mode = _diagram_mode()
+    if include_diagrams and mode == "dynamic":
+        diagram_rule = (
+            "示意图要求：仅在题干确实需要图示时返回 figure.svg（合法SVG，不能外链）；"
+            "图数据与标题必须跟随题干变化，不能复用固定图内容。"
+        )
+    elif include_diagrams:
+        diagram_rule = "示意图要求：仅返回 figure.type/filename/alt，图由系统模板生成。"
+    else:
+        diagram_rule = "本次无需示意图。"
+
     return (
         "优先级规则：用户提示词 > 其他默认规则；若冲突，以用户提示词为准。\n\n"
         f"用户提示词：\n{user_prompt}\n\n"
+        f"{diagram_rule}\n"
         f"include_diagrams={'true' if include_diagrams else 'false'}\n"
         f"{count_rule}{retry_rule}"
     )
@@ -563,6 +841,7 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
     if not user_prompt:
         raise ValueError("提示词不能为空")
 
+    diagram_mode = _diagram_mode()
     system = """
 你是“试卷生成助手”。请严格输出 JSON（不要 Markdown、不要解释）。目标：根据用户提示词生成可被 QML 解析器解析的试卷草案。
 输出 JSON schema:
@@ -578,7 +857,7 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
       "stem": "题干",
       "options": [{"key":"A","text":"...","correct":false}],
       "rubric": ["评分点1","评分点2"],
-      "figure": {"filename":"img/q1-diagram.svg","type":"loss_curve|confusion_matrix|model_compare|feature_distribution|decision_boundary|architecture|metric_table","alt":"示意图","svg":"<svg ...</svg>"}
+      "figure": {"filename":"img/q1-diagram.svg","type":"latency_curve|service_heatmap|loss_curve|confusion_matrix|model_compare|feature_distribution|decision_boundary|architecture|metric_table","alt":"示意图"}
     }
   ]
 }
@@ -589,14 +868,18 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
 2) short 必须提供 rubric 数组（至少 3 条）。
 3) points/max_points 必须是正整数。
 4) 若 include_diagrams=false，请不要输出 figure。
-5) 若输出 figure，必须是合法 SVG 文本，不要外链；并尽量提供 figure.type（如 loss_curve/confusion_matrix 等）。
-6) 图示可读性要求：字体>=20px，画布建议>=1200x420，元素不能被裁切。
+5) 若 include_diagrams=true，请输出与题干强相关的图信息。
+6) 若需要，figure 可以包含 svg 字段；若没有 svg，至少给出 figure.type/filename/alt。
+7) 图示必须跟随题目变化，不得整卷复用同一图内容；保证文字可读、元素不裁切。
 """.strip()
+    if diagram_mode == "template":
+        system += "\n8) 当前为模板图模式：请不要返回 figure.svg，仅返回 figure.type/filename/alt。"
 
     target_count = _extract_target_question_count(user_prompt)
     obj: dict[str, Any] = {}
     last_err = ""
-    for attempt in range(2):
+    max_attempts = _env_int("AI_EXAM_GEN_MAX_ATTEMPTS", 2, min_v=1, max_v=3)
+    for attempt in range(max_attempts):
         prompt_body = _build_generation_prompt_body(
             user_prompt,
             include_diagrams,
@@ -608,6 +891,8 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
             last_err = (err or "LLM 无返回").strip()
             continue
         obj = _extract_json_object(raw)
+        if not obj:
+            obj = _repair_invalid_json(raw)
         if not obj:
             last_err = "LLM 输出不是合法 JSON"
             continue
@@ -690,15 +975,27 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
         lines.append(stem)
 
         fig = item.get("figure") if isinstance(item.get("figure"), dict) else {}
-        if include_diagrams and fig:
-            rel = _safe_asset_name(fig.get("filename"), qid)
+        if include_diagrams:
             alt = str(fig.get("alt") or "示意图").strip() or "示意图"
             fig_type = str(fig.get("type") or "").strip().lower()
-            stem_for_hint = f"{stem}\n[figure_type={fig_type}]"
-            svg_text = _choose_final_svg(rel, fig.get("svg"), alt=alt, stem=stem_for_hint)
-            if svg_text:
-                assets[rel] = svg_text.encode("utf-8", errors="ignore")
-                lines.append(f"![{alt}]({rel})")
+            need_fig = _question_needs_figure(stem=stem, fig_type=fig_type, alt=alt)
+            if need_fig:
+                if not fig:
+                    fig = {"filename": f"img/{qid.lower()}-diagram.svg", "alt": "题目示意图", "type": ""}
+                rel = _safe_asset_name(fig.get("filename"), qid)
+                # Dynamic mode: prioritize semantic SVG generation.
+                # Template mode: use local deterministic templates.
+                svg_text = _choose_final_svg(
+                    rel,
+                    fig.get("svg"),
+                    alt=alt,
+                    stem=stem,
+                    requested_type=fig_type,
+                    prefer_model_svg=(diagram_mode == "dynamic"),
+                )
+                if svg_text:
+                    assets[rel] = svg_text.encode("utf-8", errors="ignore")
+                    lines.append(f"![{alt}]({rel})")
 
         if qtype in {"single", "multiple"}:
             opts = item.get("options") if isinstance(item.get("options"), list) else []

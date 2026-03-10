@@ -1,7 +1,7 @@
 (() => {
   const ENDPOINT = "/admin/api/system-status/summary";
   // Keep this small so the topbar badge feels "real-time" without needing a full push channel (SSE/WebSocket).
-  const POLL_SECONDS = 2;
+  const POLL_SECONDS = 10;
 
   const maxRatioPct = (summary) => {
     const llm = summary && summary.llm ? summary.llm : {};
@@ -25,6 +25,33 @@
     for (const n of nodes) applyBadge(n, summary);
   };
 
+  const pct = (ratio) => {
+    const n = typeof ratio === "number" ? ratio : parseFloat(String(ratio || "0"));
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(100, Math.max(0, Math.round(n * 100)));
+  };
+
+  const applyResources = (summary) => {
+    const llm = summary && summary.llm ? summary.llm : {};
+    const sms = summary && summary.sms ? summary.sms : {};
+    const level = String(summary && summary.overall_level ? summary.overall_level : "ok");
+    const llmText = `${pct(llm.ratio)}%`;
+    const smsText = `${pct(sms.ratio)}%`;
+    document.querySelectorAll('[data-system-status-resource="llm"]').forEach((el) => {
+      el.textContent = llmText;
+    });
+    document.querySelectorAll('[data-system-status-resource="sms"]').forEach((el) => {
+      el.textContent = smsText;
+    });
+    document.querySelectorAll("[data-system-status-text]").forEach((el) => {
+      el.textContent = level === "ok" ? "运行正常" : "资源告警";
+    });
+    document.querySelectorAll(".status-chip__dot").forEach((el) => {
+      el.classList.remove("level-ok", "level-warn", "level-danger", "level-critical");
+      el.classList.add(`level-${level}`);
+    });
+  };
+
   const fetchSummary = async () => {
     try {
       const resp = await fetch(ENDPOINT, { method: "GET", headers: { Accept: "application/json" } });
@@ -45,6 +72,7 @@
       const s = await fetchSummary();
       if (!s) return;
       updateAllBadges(s);
+      applyResources(s);
       try {
         const ev = new CustomEvent("system-status:update", { detail: s });
         window.dispatchEvent(ev);

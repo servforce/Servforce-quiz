@@ -1,16 +1,22 @@
-﻿<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>候选人详情</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+{% extends "admin_base.html" %}
+{% set admin_active = "candidates" %}
+{% set admin_page_title = "Candidate Detail" %}
+{% set admin_page_subtitle = "Resume, evaluations, and attempt overview" %}
+{% block head_extra %}
     <style>
-      .container { max-width: 1200px; width: min(1200px, 100%); }
-      /* Keep the white surface width consistent across views (even when content is empty). */
-      #candidateProfileSurface { width: 100%; align-self: stretch; }
+      /* Match the main admin workspace width/height so all 3 views fill the page consistently. */
+      .admin-content {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      #candidateProfileSurface {
+        width: 100%;
+        max-width: none;
+        min-height: clamp(760px, calc(100vh - 120px), 920px);
+        align-self: stretch;
+        font-size: var(--admin-font-size-base);
+      }
       /* Page tone: softer colors and clearer hierarchy (avoid all-black/bold look). */
-      .surface[aria-label="候选人详情"] { color: #333; font-size: 20px; }
+      .surface[aria-label="候选人详情"] { color: #333; font-size: var(--admin-font-size-base); }
       .surface[aria-label="候选人详情"] .mutedv { color: rgba(51, 51, 51, 0.70); }
       .surface[aria-label="候选人详情"] .time { color: #080; font-weight: 800; }
       .head-row {
@@ -31,7 +37,7 @@
         border: 1px solid rgba(15, 23, 42, 0.10);
         background: rgba(248, 250, 252, 0.75);
         font-weight: 800;
-        font-size: 19px;
+        font-size: var(--admin-font-size-control);
         color: rgba(15, 23, 42, 0.80);
       }
       /* Segmented control (looks like a pager-style switch, not 3 separate buttons). */
@@ -40,9 +46,9 @@
         align-items: center;
         flex-wrap: nowrap;
         border-radius: 999px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(248, 250, 252, 0.80);
-        padding: 4px;
+        border: 0;
+        background: transparent;
+        padding: 0;
         gap: 0;
       }
       .head-tab {
@@ -53,7 +59,7 @@
         height: 40px;
         padding: 0 16px;
         font-weight: 800;
-        font-size: 21px;
+        font-size: var(--admin-font-size-control);
         line-height: 1;
         cursor: pointer;
         user-select: none;
@@ -69,18 +75,72 @@
         outline: none;
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
       }
-      .head-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+      .head-actions {
+        display: inline-flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: nowrap;
+        padding: 0;
+      }
       /* Make <button> and <a> look identical in the header actions. */
       .head-actions .btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        min-width: 120px;
         height: 46px;
         padding: 0 18px;
         line-height: 1;
-        font-size: 19px;
+        font-size: var(--admin-font-size-control);
         border-radius: 16px;
         text-decoration: none;
+        font-weight: 800;
+        border: 1px solid transparent;
+        transition: transform 140ms ease, box-shadow 140ms ease, background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+      }
+      .head-actions .btn:hover {
+        transform: translateY(-1px);
+      }
+      .head-actions .btn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+      }
+      .head-actions form {
+        margin: 0;
+        display: inline-flex;
+      }
+      .head-actions .download-btn {
+        min-width: 46px;
+        background: linear-gradient(180deg, #2f3a4f, #1f2937);
+        border-color: rgba(31, 41, 55, 0.94);
+        color: #fff;
+        box-shadow: 0 8px 18px rgba(31, 41, 55, 0.18);
+      }
+      .head-actions .download-btn:hover {
+        background: linear-gradient(180deg, #374151, #253041);
+        box-shadow: 0 10px 22px rgba(31, 41, 55, 0.22);
+      }
+      .head-actions .btn.reparse-btn {
+        background: linear-gradient(180deg, #fde047, #eab308) !important;
+        border-color: rgba(234, 179, 8, 0.30) !important;
+        color: #422006 !important;
+        box-shadow: 0 8px 18px rgba(234, 179, 8, 0.16);
+        padding: 0 22px;
+      }
+      .head-actions .btn.reparse-btn:hover {
+        background: linear-gradient(180deg, #facc15, #d97706) !important;
+        border-color: rgba(202, 138, 4, 0.36) !important;
+        color: #422006 !important;
+        box-shadow: 0 10px 22px rgba(234, 179, 8, 0.20);
+      }
+      .head-actions .back-btn {
+        background: rgba(255, 255, 255, 0.88);
+        border-color: rgba(15, 23, 42, 0.12);
+        color: rgba(15, 23, 42, 0.82);
+      }
+      .head-actions .back-btn:hover {
+        background: #fff;
+        border-color: rgba(15, 23, 42, 0.2);
       }
       .head-actions .btn-icon {
         display: inline-flex;
@@ -89,21 +149,19 @@
         width: 46px;
         height: 46px;
         padding: 0;
+        border-radius: 16px;
       }
       .head-actions .btn-icon svg {
-        width: 34px !important;
-        height: 34px !important;
+        width: 24px !important;
+        height: 24px !important;
         display: block;
       }
       .head-actions .btn-icon svg.resume-doc-icon {
-        width: 40px !important;
-        height: 40px !important;
+        width: 24px !important;
+        height: 24px !important;
       }
       .head-actions .btn-icon svg path {
-        stroke-width: 3.2 !important;
-      }
-      .head-actions .btn-icon svg.resume-doc-icon path {
-        stroke-width: 3.6 !important;
+        stroke-width: 2.4 !important;
       }
       .head-actions-main { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; }
       /* Keep legacy class for in-page buttons, but align with system primary style. */
@@ -117,7 +175,7 @@
         border: 1px solid rgba(15, 23, 42, 0.16);
         background: rgba(255, 255, 255, 0.92);
         font-weight: 800;
-        font-size: 17px;
+        font-size: var(--admin-font-size-control);
       }
       textarea.input-sm { max-width: 100%; min-height: 140px; }
       .table-mini {
@@ -131,7 +189,7 @@
         border-bottom: 1px solid rgba(15, 23, 42, 0.08);
         vertical-align: top;
       }
-      .table-mini th { font-size: 15px; font-weight: 900; background: rgba(248, 250, 252, 0.75); }
+      .table-mini th { font-size: var(--admin-font-size-table-head); font-weight: 900; background: rgba(248, 250, 252, 0.75); }
       .row-actions { display:flex; gap:8px; }
       .btn-mini { padding: 7px 10px; border-radius: 12px; font-weight: 900; }
       .pill {
@@ -143,7 +201,7 @@
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(248, 250, 252, 0.75);
         font-weight: 800;
-        font-size: 15px;
+        font-size: var(--admin-font-size-pill);
         color: rgba(15, 23, 42, 0.75);
       }
       .grid {
@@ -162,22 +220,27 @@
         border-left: 1px solid rgba(15, 23, 42, 0.10);
       }
       .card {
-        border: 1px solid rgba(15, 23, 42, 0.10);
+        border: 0;
         border-radius: 16px;
         background: rgba(255, 255, 255, 0.94);
-        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+        box-shadow: none;
         overflow: hidden;
       }
       .card-head {
         padding: 14px 16px;
-        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        border-bottom: 0;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        background: rgba(248, 250, 252, 0.75);
+        background: transparent;
       }
-      .card-title { font-weight: 900; letter-spacing: 0.2px; font-size: 20px; }
+      .card-title {
+        font-weight: 900;
+        letter-spacing: 0.2px;
+        font-size: calc(var(--admin-font-size-title) + 4px);
+        color: #7c3aed;
+      }
       .card-body { padding: 14px 16px; }
       .kv {
         display: grid;
@@ -185,12 +248,12 @@
         gap: 8px 12px;
         align-items: start;
       }
-      .k { font-weight: 700; font-size: 15px; color: rgba(51, 51, 51, 0.70); }
+      .k { font-weight: 700; font-size: var(--admin-font-size-label); color: rgba(51, 51, 51, 0.70); }
       .v { font-weight: 650; color: #333; }
       .mutedv { font-weight: 700; }
       .info-kv { display: grid; grid-template-columns: 120px 1fr; gap: 10px 16px; align-items: start; }
-      .info-kv .k { font-size: 17px; white-space: nowrap; }
-      .info-kv .v { font-size: 21px; letter-spacing: 0.1px; }
+      .info-kv .k { font-size: var(--admin-font-size-label); white-space: nowrap; }
+      .info-kv .v { font-size: var(--admin-font-size-table-body); letter-spacing: 0.1px; }
       .info-kv .v strong { font-weight: 800; }
       .eval {
         margin-top: 14px;
@@ -200,12 +263,12 @@
         background: rgba(248, 250, 252, 0.85);
       }
       .eval-title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom: 8px; }
-      .eval-title .k { margin: 0; font-size: 15px; }
+      .eval-title .k { margin: 0; font-size: var(--admin-font-size-label); }
       .eval-body { font-weight: 750; line-height: 1.8; }
       .eng-title { color: rgba(15, 23, 42, 0.78); font-weight: 900; margin-bottom: 10px; }
       .eng-kv { display:grid; grid-template-columns: 120px 1fr; gap: 10px 14px; align-items: center; }
-      .eng-kv .k { font-size: 15px; }
-      .eng-kv .v { font-size: 17px; font-weight: 800; }
+      .eng-kv .k { font-size: var(--admin-font-size-label); }
+      .eng-kv .v { font-size: var(--admin-font-size-control); font-weight: 800; }
       .edu-item { padding: 10px 0; border-bottom: 1px dashed rgba(15, 23, 42, 0.12); }
       .edu-item:last-child { border-bottom: 0; }
       .edu-row {
@@ -224,13 +287,13 @@
       .edu-degree { font-weight: 900; }
       .edu-school { font-weight: 800; }
       .edu-major { font-weight: 700; }
-      .edu-time { font-weight: 800; font-size: 19px; white-space: nowrap; color: #080; }
+      .edu-time { font-weight: 800; font-size: var(--admin-font-size-control); white-space: nowrap; color: #080; }
       .uni-badge {
         display: inline-flex;
         align-items: center;
         padding: 2px 8px;
         border-radius: 999px;
-        font-size: 15px;
+        font-size: var(--admin-font-size-pill);
         font-weight: 900;
         letter-spacing: 0.2px;
         border: 1px solid rgba(15, 23, 42, 0.12);
@@ -263,10 +326,10 @@
         margin: 0;
       }
       .attempt-results-table { width: 100%; table-layout: fixed; }
-      .attempt-results-table { font-size: 20px; }
+      .attempt-results-table { font-size: var(--admin-font-size-table-body); }
       .attempt-results-table th,
       .attempt-results-table td { padding-left: 12px; padding-right: 12px; }
-      .attempt-results-table th { font-size: 19px; font-weight: 950; }
+      .attempt-results-table th { font-size: var(--admin-font-size-table-head); font-weight: 950; }
       .attempt-results-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .attempt-results-table th:nth-child(2),
       .attempt-results-table td:nth-child(2) { text-align: center; }
@@ -279,16 +342,16 @@
       .attempt-results-table tr.row-link { cursor: pointer; }
       .attempt-results-table tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
       .proj {
-        border: 1px solid rgba(15, 23, 42, 0.10);
+        border: 0;
         border-radius: 14px;
-        background: rgba(248, 250, 252, 0.6);
+        background: transparent;
         padding: 12px 12px;
       }
       .proj.eval-item { display: flex; flex-direction: column; }
       .proj-head { display:flex; align-items: baseline; justify-content: space-between; gap: 12px; }
       .proj-head--meta-only { justify-content: flex-end; }
       .proj-name { font-weight: 900; }
-      .proj-meta { font-weight: 800; font-size: 17px; white-space: nowrap; color: #080; }
+      .proj-meta { font-weight: 800; font-size: var(--admin-font-size-small); white-space: nowrap; color: #080; }
       .eval-foot {
         margin-top: auto;
         padding-top: 10px;
@@ -302,6 +365,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 10px;
+        margin-bottom: 8px;
       }
       .eval-tag {
         display: inline-flex;
@@ -309,27 +373,92 @@
         gap: 6px;
         padding: 6px 12px;
         border-radius: 999px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(248, 250, 252, 0.75);
+        border: 0;
+        background: transparent;
         font-weight: 900;
-        font-size: 17px;
+        font-size: var(--admin-font-size-control);
         line-height: 1;
         color: rgba(51, 51, 51, 0.92);
         white-space: nowrap;
       }
-      .eval-tag.llm { border-color: rgba(37, 99, 235, 0.25); background: rgba(37, 99, 235, 0.10); color: rgb(30, 64, 175); }
-      .eval-tag.admin { border-color: rgba(124, 58, 237, 0.22); background: rgba(124, 58, 237, 0.10); color: rgb(88, 28, 135); }
+      .eval-tag.llm { background: transparent; color: rgb(30, 64, 175); }
+      .eval-tag.admin { background: transparent; color: rgb(88, 28, 135); }
       .eval-time {
         text-align: right;
         font-weight: 800;
-        font-size: 17px;
+        font-size: var(--admin-font-size-control);
         white-space: nowrap;
         color: #080;
       }
-      .proj-role { margin-top: 6px; font-weight: 800; font-size: 16px; color: rgba(15, 23, 42, 0.78); }
+      .eval-block {
+        padding-left: 10px;
+      }
+      .eval-block .resume-raw,
+      .eval-block .mutedv,
+      .eval-block textarea.input-sm,
+      .eval-block .eval-foot,
+      .eval-block .eval-form-actions {
+        margin-left: 0;
+      }
+      .eval-form-actions {
+        margin-top: 10px;
+        display: flex;
+        justify-content: flex-end;
+      }
+      .proj-role { margin-top: 6px; font-weight: 800; font-size: var(--admin-font-size-small); color: rgba(15, 23, 42, 0.78); }
       .proj-desc { margin: 8px 0 0; padding-left: 18px; }
       .proj-desc li { margin: 6px 0; }
       .span2 { grid-column: 1 / -1; }
+      .card[data-view="evaluations"] {
+        border: 0;
+        box-shadow: none;
+        background: transparent;
+      }
+      .card[data-view="attempts"] {
+        border: 0;
+        box-shadow: none;
+        background: transparent;
+      }
+      .card[data-view="attempts"] .card-head {
+        padding-left: 0;
+        padding-right: 0;
+        border-bottom: 0;
+        background: transparent;
+      }
+      .card[data-view="attempts"] .card-body {
+        padding: 0;
+      }
+      .card[data-view="evaluations"] .card-head {
+        padding-left: 0;
+        padding-right: 0;
+        border-bottom: 0;
+        background: transparent;
+      }
+      .card[data-view="evaluations"] .card-body {
+        padding: 0;
+      }
+      .card[data-view="evaluations"] .projects {
+        gap: 12px;
+      }
+      .card[data-view="evaluations"] .proj,
+      .card[data-view="evaluations"] .proj.eval-item {
+        border: 0;
+        box-shadow: none;
+        background: transparent !important;
+        padding-left: 0;
+        padding-right: 0;
+      }
+      .card[data-view="evaluations"] form {
+        margin: 0;
+      }
+      .card[data-view="evaluations"] .input-sm {
+        border: 0;
+        box-shadow: none;
+        background: rgba(255, 255, 255, 0.72);
+      }
+      .card[data-view="evaluations"] form textarea.input-sm {
+        border: 1px solid rgba(15, 23, 42, 0.16);
+      }
       @media (max-width: 980px) {
         .grid { grid-template-columns: 1fr; }
         .kv { grid-template-columns: 110px 1fr; }
@@ -339,60 +468,23 @@
         .info-kv { grid-template-columns: 120px 1fr; }
       }
       @media (max-width: 720px) {
-        .head-tab { height: 38px; font-size: 19px; padding: 0 12px; }
-        .head-actions .btn { height: 42px; font-size: 17px; padding: 0 14px; border-radius: 14px; }
-        .head-actions .btn-icon { width: 42px; height: 42px; }
-        .head-actions .btn-icon svg { width: 30px !important; height: 30px !important; }
-        .head-actions .btn-icon svg.resume-doc-icon { width: 36px !important; height: 36px !important; }
-        .head-actions .btn-icon svg path { stroke-width: 3 !important; }
-        .head-actions .btn-icon svg.resume-doc-icon path { stroke-width: 3.4 !important; }
-        .card-title { font-size: 19px; }
-        .info-kv .v { font-size: 19px; }
-        .edu-time { font-size: 17px; }
-        .eval-tag { font-size: 16px; padding: 5px 10px; }
+        .head-tab { height: 38px; font-size: var(--admin-font-size-control); padding: 0 12px; }
+        .head-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+        .head-actions .btn { min-width: 108px; height: 44px; font-size: var(--admin-font-size-control); padding: 0 14px; border-radius: 14px; }
+        .head-actions .reparse-btn { padding: 0 16px; }
+        .head-actions .download-btn { min-width: 44px; }
+        .head-actions .btn-icon { width: 44px; height: 44px; border-radius: 14px; }
+        .head-actions .btn-icon svg { width: 22px !important; height: 22px !important; }
+        .head-actions .btn-icon svg.resume-doc-icon { width: 22px !important; height: 22px !important; }
+        .head-actions .btn-icon svg path { stroke-width: 2.3 !important; }
+        .card-title { font-size: var(--admin-font-size-title); }
+        .info-kv .v { font-size: var(--admin-font-size-table-body); }
+        .edu-time { font-size: var(--admin-font-size-control); }
+        .eval-tag { font-size: var(--admin-font-size-pill); padding: 5px 10px; }
       }
     </style>
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="container workspace-frame topbar-inner">
-        <div class="brand" aria-label="Servforce Quiz 管理后台">
-          <span class="brand-badge" aria-hidden="true"></span>
-          <span>Servforce Quiz</span>
-        </div>
-
-        <nav class="nav" aria-label="主导航">
-          <a class="nav-link" href="/admin#tab-exams"><span class="nav-ico exams" aria-hidden="true"></span>试卷管理</a>
-          <a class="nav-link active" href="/admin/candidates"><span class="nav-ico candidates" aria-hidden="true"></span>候选人管理</a>
-          <a class="nav-link" href="/admin#tab-assign"><span class="nav-ico assign" aria-hidden="true"></span>答题邀请</a>
-          <a class="nav-link" href="/admin#tab-logs"><span class="nav-ico logs" aria-hidden="true"></span>系统日志</a>
-          {% set _ss = system_status_summary if system_status_summary else {} %}
-          {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
-          {% set _badge = '' %}
-          {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_max = _r_llm if _r_llm > _r_sms else _r_sms %}
-          {% set _pct = (_r_max * 100) | round(0) | int %}
-          {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
-          {% if _lvl != 'ok' %}{% set _badge = _pct ~ '%' %}{% endif %}
-          <a class="nav-link" href="/admin#tab-status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
-            <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
-          </a>
-        </nav>
-
-        <form method="post" action="/admin/logout" style="margin:0;">
-          <button class="btn btn-danger" type="submit">退出</button>
-        </form>
-      </div>
-    </header>
-
-    <main class="container workspace-frame page">
-      {% for m in get_flashed_messages() %}
-      {% if m and (m|string)|trim %}
-      <div class="flash">{{ m }}</div>
-      {% endif %}
-      {% endfor %}
-
+{% endblock %}
+{% block content %}
       <div class="surface admin-surface" role="region" aria-label="候选人详情" id="candidateProfileSurface">
         <section class="section">
             <div class="head-row">
@@ -404,30 +496,30 @@
               </div>
             </div>
             <div class="head-actions">
-              <div class="head-actions-main" id="headActionsMain">
-                {% if c.resume_size %}
-                  <a class="btn btn-primary btn-icon" href="/admin/candidates/{{ c.id }}/resume/download" title="下载PDF" aria-label="下载PDF">
-                    <svg class="resume-doc-icon" viewBox="4 2 16 20" fill="none" aria-hidden="true">
-                      <path d="M7 3h7l5 5v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-linejoin="round" />
-                      <path d="M14 3v5h5" stroke="currentColor" stroke-linejoin="round" />
-                      <path d="M12 10v7" stroke="currentColor" stroke-linecap="round" />
-                      <path d="m8.8 14.8 3.2 3.2 3.2-3.2" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                  </a>
-                {% else %}
-                  <span class="btn btn-primary btn-icon" style="opacity:.55; pointer-events:none;" aria-label="暂无PDF可下载" title="暂无PDF可下载">
-                    <svg class="resume-doc-icon" viewBox="4 2 16 20" fill="none" aria-hidden="true">
-                      <path d="M7 3h7l5 5v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" stroke="currentColor" stroke-linejoin="round" />
-                      <path d="M14 3v5h5" stroke="currentColor" stroke-linejoin="round" />
-                    </svg>
-                  </span>
-                {% endif %}
-                <form id="reparseForm" method="post" action="/admin/candidates/{{ c.id }}/resume/reparse" enctype="multipart/form-data" style="margin:0;">
-                  <input id="reparseFile" type="file" name="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
-                  <button type="button" id="reparseBtn" class="btn btn-primary">上传简历并解析</button>
-                </form>
-              </div>
-              <a class="btn btn-primary" href="/admin/candidates" id="backBtn">返回</a>
+              {% if c.resume_size %}
+              <a class="btn btn-icon download-btn" href="{{ url_for('admin_candidate_resume_download', candidate_id=c.id) }}" title="&#19979;&#36733;&#31616;&#21382;" aria-label="&#19979;&#36733;&#31616;&#21382;">
+                <svg class="resume-doc-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M14 3v4h4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M12 11v6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="m9.5 14.5 2.5 2.5 2.5-2.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+              </a>
+              {% else %}
+              <span class="btn btn-icon download-btn" style="opacity:.55; pointer-events:none;" title="&#26242;&#26080;&#31616;&#21382;" aria-label="&#26242;&#26080;&#31616;&#21382;">
+                <svg class="resume-doc-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M14 3v4h4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="M12 11v6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                  <path d="m9.5 14.5 2.5 2.5 2.5-2.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+              </span>
+              {% endif %}
+              <form method="post" action="{{ url_for('admin_candidate_resume_reparse', candidate_id=c.id) }}" enctype="multipart/form-data" id="candidateReparseForm">
+                <input id="candidateReparseFile" type="file" name="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+                <button class="btn btn-warning reparse-btn" type="button" id="candidateReparseBtn">&#19978;&#20256;&#31616;&#21382;&#24182;&#35299;&#26512;</button>
+              </form>
+              <a class="btn back-btn" href="/admin/candidates" id="backBtn">返回</a>
             </div>
           </div>
         </section>
@@ -550,9 +642,6 @@
             </div>
 
             <div class="card span2" data-view="attempts" style="display:none;">
-              <div class="card-head">
-                <div class="card-title">答题结果</div>
-              </div>
               <div class="card-body">
                 {% if attempt_results and attempt_results|length > 0 %}
                   <div class="table-scroll">
@@ -593,25 +682,24 @@
             </div>
 
             <div class="card span2" data-view="evaluations" style="display:none;">
-              <div class="card-head">
-                <div class="card-title">评价</div>
-              </div>
               <div class="card-body">
                 <div class="projects">
                   <div class="proj eval-item">
                     <div class="eval-head">
                       <span class="eval-tag llm">大模型评价</span>
                     </div>
-                    {% if evaluation_llm %}
-                      <pre class="resume-raw" style="margin-top:10px;">{{ evaluation_llm }}</pre>
-                    {% else %}
-                      <div class="mutedv">暂无大模型评价信息（可能仍在解析中）。</div>
-                    {% endif %}
-                    {% if c.resume_parsed_at %}
-                      <div class="eval-foot">
-                             <div class="eval-time time">{{ c.resume_parsed_at.strftime("%Y-%m-%d %H:%M:%S") }}</div>
-                      </div>
-                    {% endif %}
+                    <div class="eval-block">
+                      {% if evaluation_llm %}
+                        <pre class="resume-raw">{{ evaluation_llm }}</pre>
+                      {% else %}
+                        <div class="mutedv">暂无大模型评价信息（可能仍在解析中）。</div>
+                      {% endif %}
+                      {% if c.resume_parsed_at %}
+                        <div class="eval-foot">
+                               <div class="eval-time time">{{ c.resume_parsed_at.strftime("%Y-%m-%d %H:%M:%S") }}</div>
+                        </div>
+                      {% endif %}
+                    </div>
                   </div>
 
                   {% if admin_evaluations and admin_evaluations|length > 0 %}
@@ -620,11 +708,13 @@
                         <div class="eval-head">
                           <span class="eval-tag admin">管理员评价</span>
                         </div>
-                        <pre class="resume-raw" style="margin-top:10px;">{{ it.text }}</pre>
-                        <div class="eval-foot">
-                          {% if (it.at_display or it.at) %}
-                             <div class="eval-time time">{{ it.at_display or it.at }}</div>
-                          {% endif %}
+                        <div class="eval-block">
+                          <pre class="resume-raw">{{ it.text }}</pre>
+                          <div class="eval-foot">
+                            {% if (it.at_display or it.at) %}
+                               <div class="eval-time time">{{ it.at_display or it.at }}</div>
+                            {% endif %}
+                          </div>
                         </div>
                       </div>
                     {% endfor %}
@@ -632,12 +722,14 @@
 
                   <div class="proj" style="background: rgba(255, 255, 255, 0.75);">
                     <form method="post" action="/admin/candidates/{{ c.id }}/evaluation/update" style="margin:0;">
-                      <div class="eval-head" style="margin-bottom:10px;">
+                      <div class="eval-head">
                         <span class="eval-tag admin">新增管理员评价</span>
                       </div>
-                      <textarea class="input-sm" name="evaluation" placeholder="评价内容"></textarea>
-                      <div style="margin-top:10px; display:flex; justify-content:flex-end;">
-                        <button class="btn btn-purple" type="submit">保存</button>
+                      <div class="eval-block">
+                        <textarea class="input-sm" name="evaluation" placeholder="评价内容"></textarea>
+                        <div class="eval-form-actions">
+                          <button class="btn btn-purple" type="submit">保存</button>
+                        </div>
                       </div>
                     </form>
                   </div>
@@ -647,13 +739,10 @@
           </div>
         </section>
       </div>
-    </main>
+{% endblock %}
+{% block scripts %}
     <script>
       (function () {
-        const reparseBtn = document.getElementById('reparseBtn');
-        const reparseFile = document.getElementById('reparseFile');
-        const reparseForm = document.getElementById('reparseForm');
-
         const setView = (v) => {
           const view = (v || 'resume').trim();
           document.querySelectorAll('.head-tab[data-view]').forEach((btn) => {
@@ -665,10 +754,6 @@
             const show = card.getAttribute('data-view') === view;
             card.style.display = show ? '' : 'none';
           });
-
-          // Only show upload/download actions on "resume" view.
-          const actionsMain = document.getElementById('headActionsMain');
-          if (actionsMain) actionsMain.style.display = view === 'resume' ? '' : 'none';
         };
 
         const hashView = () => {
@@ -685,16 +770,6 @@
           });
         });
 
-        if (reparseBtn && reparseFile && reparseForm) {
-          reparseBtn.addEventListener('click', () => reparseFile.click());
-          reparseFile.addEventListener('change', () => {
-            if (!reparseFile.files || reparseFile.files.length <= 0) return;
-            reparseBtn.disabled = true;
-            reparseBtn.textContent = '解析中…';
-            reparseForm.submit();
-          });
-        }
-
         // Navigate to attempt detail when clicking an attempt row.
         document.querySelectorAll('.attempt-results-table tr.row-link').forEach((row) => {
           const href = row.getAttribute('data-href');
@@ -705,10 +780,23 @@
             window.location.href = href;
           });
         });
+
+        const reparseForm = document.getElementById('candidateReparseForm');
+        const reparseBtn = document.getElementById('candidateReparseBtn');
+        const reparseFile = document.getElementById('candidateReparseFile');
+        if (reparseForm && reparseBtn && reparseFile) {
+          reparseBtn.addEventListener('click', () => {
+            reparseFile.click();
+          });
+          reparseFile.addEventListener('change', () => {
+            if (!reparseFile.files || reparseFile.files.length <= 0) return;
+            reparseBtn.disabled = true;
+            reparseBtn.textContent = '解析中...';
+            reparseForm.submit();
+          });
+        }
       })();
     </script>
-    <script src="{{ url_for('static', filename='system_status.js') }}"></script>
-  </body>
-</html>
+{% endblock %}
 
 

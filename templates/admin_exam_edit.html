@@ -1,13 +1,11 @@
-﻿<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>修改试卷</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+{% extends "admin_base.html" %}
+{% set admin_active = "exams" %}
+{% set admin_page_title = "Edit Exam" %}
+{% set admin_page_subtitle = "Markdown editing and reparsing" %}
+{% block head_extra %}
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/codemirror/lib/codemirror.css') }}" />
     <style>
-      body { font-size: 19px; }
+      body { font-size: var(--admin-font-size-base); }
       /* Show textarea only when CodeMirror is not ready (fallback). */
       body.cm-ready textarea.editor { display: none; }
       textarea.editor {
@@ -20,7 +18,7 @@
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(255, 255, 255, 0.92);
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 21px;
+        font-size: var(--admin-font-size-control);
         line-height: 1.12;
       }
       .editor-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -30,7 +28,7 @@
         min-height: 0;
         height: auto;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 21px;
+        font-size: var(--admin-font-size-control);
         color: var(--text);
         border-radius: 14px;
         border: 1px solid rgba(15, 23, 42, 0.12);
@@ -63,7 +61,7 @@
         padding: 12px 16px;
         border-radius: 12px;
         font-weight: 700;
-        font-size: 22px;
+        font-size: var(--admin-font-size-control);
         color: var(--text);
         text-decoration: none;
         border: 1px solid transparent;
@@ -87,40 +85,36 @@
       .section.compact { padding-bottom: 8px; }
       .section.compact .section-head { margin-bottom: 0; }
       .head-actions { display: inline-flex; align-items: center; gap: 10px; }
+      .head-actions .btn-eq {
+        min-width: 120px;
+        height: 46px;
+        padding: 0 18px;
+        text-align: center;
+        justify-content: center;
+        border-radius: 16px;
+        font-weight: 900;
+      }
+      .head-actions .save-btn {
+        background: linear-gradient(180deg, #fde047, #eab308) !important;
+        border-color: rgba(234, 179, 8, 0.30) !important;
+        color: #422006 !important;
+      }
+      .head-actions .save-btn:hover {
+        background: linear-gradient(180deg, #facc15, #d97706) !important;
+        border-color: rgba(202, 138, 4, 0.36) !important;
+        color: #422006 !important;
+      }
+      .head-actions .back-btn {
+        background: #fff;
+        border-color: rgba(15, 23, 42, 0.14);
+        color: rgba(15, 23, 42, 0.86);
+      }
+      .head-actions .back-btn:hover {
+        background: rgba(248, 250, 252, 0.96);
+      }
     </style>
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="container workspace-frame topbar-inner">
-        <div class="brand" aria-label="Servforce Quiz 管理后台">
-          <span class="brand-badge" aria-hidden="true"></span>
-          <span>Servforce Quiz</span>
-        </div>
-        <nav class="nav" aria-label="主导航">
-          <a class="nav-link active" href="/admin#tab-exams"><span class="nav-ico exams" aria-hidden="true"></span>试卷管理</a>
-          <a class="nav-link" href="/admin/candidates"><span class="nav-ico candidates" aria-hidden="true"></span>候选人管理</a>
-          <a class="nav-link" href="/admin#tab-assign"><span class="nav-ico assign" aria-hidden="true"></span>答题邀请</a>
-          <a class="nav-link" href="/admin#tab-logs"><span class="nav-ico logs" aria-hidden="true"></span>系统日志</a>
-          {% set _ss = system_status_summary if system_status_summary else {} %}
-          {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
-          {% set _badge = '' %}
-          {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_max = _r_llm if _r_llm > _r_sms else _r_sms %}
-          {% set _pct = (_r_max * 100) | round(0) | int %}
-          {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
-          {% if _lvl != 'ok' %}{% set _badge = _pct ~ '%' %}{% endif %}
-          <a class="nav-link" href="/admin#tab-status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
-            <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
-          </a>
-        </nav>
-        <form method="post" action="/admin/logout" style="margin:0;">
-          <button class="btn btn-danger" type="submit">退出</button>
-        </form>
-      </div>
-    </header>
-
-    <main class="container workspace-frame page">
+{% endblock %}
+{% block content %}
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}
@@ -142,8 +136,8 @@
               </div>
               <div class="right">
                 <div class="head-actions">
-                  <button class="btn btn-primary" type="submit" form="editForm">保存并重新解析</button>
-                  <a class="btn" href="/admin#tab-exams">返回</a>
+                  <button class="btn btn-eq btn-warning save-btn" type="submit" form="editForm">保存</button>
+                  <a class="btn btn-eq back-btn" href="/admin/exams">返回</a>
                 </div>
               </div>
             </div>
@@ -158,8 +152,8 @@
           </form>
         </section>
       </div>
-    </main>
-
+{% endblock %}
+{% block scripts %}
     <script src="{{ url_for('static', filename='vendor/codemirror/lib/codemirror.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/codemirror/addon/mode/overlay.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/codemirror/addon/edit/matchbrackets.js') }}"></script>
@@ -238,7 +232,5 @@
         }
       })();
     </script>
-    <script src="{{ url_for('static', filename='system_status.js') }}"></script>
-  </body>
-</html>
+{% endblock %}
 

@@ -1,10 +1,8 @@
-﻿<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>候选人管理</title>
-      <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+{% extends "admin_base.html" %}
+{% set admin_active = "candidates" %}
+{% set admin_page_title = "候选人管理" %}
+{% set admin_page_subtitle = "候选人建档、简历解析与查询" %}
+{% block head_extra %}
       <style>
       .form-grid {
         display: grid;
@@ -25,29 +23,38 @@
         height: 40px;
         padding: 0 16px;
         line-height: 1;
-        font-size: 14px;
+        font-size: var(--admin-font-size-control);
         border-radius: 14px;
       }
       /* Avoid nested forms: let form children participate in the grid. */
       .form-grid form { display: contents; }
       .status-code { display: inline-block; white-space: nowrap; }
-      .search-inline { display:flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0; width: 100%; }
+      .search-inline { display:flex; flex-wrap: nowrap; align-items: center; gap: 18px; margin: 0; width: 100%; }
       .search-inline .field { margin: 0; flex: 1 1 240px; }
-      .search-inline .field.field-q { flex: 0 1 620px; max-width: 620px; min-width: 260px; }
+      .search-inline .field.field-q { flex: 0 0 280px; max-width: 280px; min-width: 280px; }
       .search-inline .field.field-sm { flex: 0 0 190px; }
+      .section-head .search-inline label { display: none; }
       /* Ensure date inputs match the text input height (hard requirement). */
       .search-inline .input {
         height: 40px;
         padding-top: 0;
         padding-bottom: 0;
-        line-height: 38px;
+        line-height: 1.25;
       }
-      .range-group { display: flex; align-items: flex-end; gap: 10px; margin-left: auto; }
+      .range-group { display: flex; align-items: center; gap: 10px; margin-left: 110px; flex: 0 0 430px; min-width: 430px; }
       .range-group .field { flex: 1 1 190px; }
       .search-actions {
         display: inline-flex;
         gap: 10px;
-        align-items: flex-end;
+        align-items: center;
+        margin-left: auto;
+      }
+      .search-actions { display: none; }
+      .search-create {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
       }
       .range-sep {
         height: 40px;
@@ -82,8 +89,9 @@
         align-items: center;
         justify-content: center;
         border-radius: 10px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(255, 255, 255, 0.92);
+        border: 0;
+        background: transparent;
+        box-shadow: none;
         cursor: pointer;
         padding: 0;
       }
@@ -96,36 +104,51 @@
         height: 40px;
         padding: 0 16px;
         line-height: 1;
-        font-size: 14px;
+        font-size: var(--admin-font-size-control);
         border-radius: 14px;
         text-decoration: none;
       }
       .search-inline a.btn:hover { text-decoration: none; }
+      .search-create .btn {
+        width: auto;
+        min-width: 118px;
+        padding: 0 18px;
+        font-weight: 900;
+      }
       .btn-icon {
         min-width: 64px;
         padding: 9px 12px;
         text-align: center;
-        font-size: 18px;
+        font-size: var(--admin-font-size-control);
         line-height: 1;
       }
       .resume-upload-cell { display: flex; align-items: center; }
-      .cand-actions { display: inline-flex; gap: 10px; align-items: center; justify-content: flex-end; }
+      .cand-actions { display: inline-flex; gap: 8px; align-items: center; justify-content: flex-end; white-space: nowrap; }
       .cand-actions .btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        height: 44px;
-        padding: 0 16px;
-        font-size: 16px;
+        height: 42px;
+        padding: 0 14px;
+        font-size: var(--admin-font-size-control);
         font-weight: 900;
-        border-radius: 14px;
+        border-radius: 16px;
         line-height: 1;
       }
       .cand-actions .btn-icon {
-        min-width: 44px;
-        width: 44px;
-        padding: 0;
-        font-size: 20px;
+        min-width: 0;
+        width: auto;
+        padding: 0 14px;
+        font-size: var(--admin-font-size-control);
+      }
+      .cand-actions .invite-create-btn {
+        background: #16a34a;
+        border-color: #16a34a;
+        color: #fff;
+      }
+      .cand-actions .invite-create-btn:hover {
+        background: #15803d;
+        border-color: #15803d;
       }
       .flash-center {
         position: fixed;
@@ -141,7 +164,7 @@
         background: rgba(239, 246, 255, 0.97);
         box-shadow: 0 18px 40px rgba(2, 6, 23, 0.20);
         color: rgba(15, 23, 42, 0.92);
-        font-size: 16px;
+        font-size: var(--admin-font-size-control);
         font-weight: 800;
         text-align: center;
         transition: opacity 220ms ease, transform 220ms ease;
@@ -152,23 +175,83 @@
       }
 
       /* Make Candidate Management font scale match Exams Management (admin dashboard). */
-      .admin-surface { font-size: 16px; }
-      .admin-surface .title { font-size: 22px; letter-spacing: 0.2px; }
-      .admin-surface .field label { font-size: 17px; font-weight: 800; color: rgba(15, 23, 42, 0.78); }
+      .admin-surface { font-size: var(--admin-font-size-base); }
+      .admin-surface {
+        min-height: clamp(760px, calc(100vh - 120px), 920px);
+      }
+      .admin-surface > .section:last-child {
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .admin-surface .table-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      .admin-surface .tri-pager {
+        margin-top: auto;
+        justify-content: flex-end;
+        padding-top: 12px;
+      }
+      .admin-surface .title { font-size: var(--admin-font-size-title-lg); letter-spacing: -0.02em; }
+      .admin-surface .field label { font-size: var(--admin-font-size-label); font-weight: 800; color: rgba(15, 23, 42, 0.78); }
       .admin-surface .input,
       .admin-surface select {
         height: 40px;
         padding-top: 0;
         padding-bottom: 0;
-        line-height: 38px;
-        font-size: 18px;
+        line-height: 1.25;
+        font-size: var(--admin-font-size-control);
       }
       .form-grid #candidateCreateForm .btn.btn-primary,
-      .form-grid #resumePickBtn.btn.btn-primary { font-size: 17px; }
-      .search-inline .btn { font-size: 17px; }
+      .form-grid #resumePickBtn.btn.btn-primary { font-size: var(--admin-font-size-control); }
+      .search-inline .btn { font-size: var(--admin-font-size-control); }
       .date-proxy .date-btn { width: 32px; height: 32px; right: 8px; }
-      table.cands-table { font-size: 19px; }
-      table.cands-table th { font-size: 17px; }
+      table.cands-table {
+        width: 100%;
+        table-layout: fixed;
+        font-size: var(--admin-font-size-table-body);
+      }
+      table.cands-table th {
+        font-size: var(--admin-font-size-table-head);
+        color: rgba(71, 85, 105, 0.96);
+      }
+      table.cands-table th,
+      table.cands-table td {
+        padding: 18px 22px;
+        vertical-align: middle;
+        text-align: left;
+      }
+      table.cands-table th:first-child,
+      table.cands-table td:first-child {
+        padding-left: 10px;
+        padding-right: 16px;
+      }
+      table.cands-table th:nth-child(2),
+      table.cands-table td:nth-child(2) {
+        padding-left: 68px;
+      }
+      table.cands-table th:nth-child(3),
+      table.cands-table td:nth-child(3),
+      table.cands-table th:nth-child(4),
+      table.cands-table td:nth-child(4) {
+        padding-left: 28px;
+      }
+      table.cands-table th:nth-child(5),
+      table.cands-table td:nth-child(5) {
+        padding-left: 24px;
+        padding-right: 24px;
+      }
+      table.cands-table th:last-child,
+      table.cands-table td:last-child {
+        padding-left: 16px;
+        padding-right: 10px;
+      }
+      .admin-surface .table-scroll { overflow-x: hidden; }
+      .status-code {
+        display: inline-flex;
+        min-width: 74px;
+        justify-content: center;
+      }
       .parsing-overlay {
         position: fixed;
         inset: 0;
@@ -190,7 +273,7 @@
         display: inline-flex;
         align-items: center;
         gap: 10px;
-        font-size: 18px;
+        font-size: var(--admin-font-size-control);
         font-weight: 900;
         color: rgba(15, 23, 42, 0.9);
       }
@@ -211,9 +294,57 @@
         pointer-events: none;
         user-select: none;
       }
+      .quick-create-modal {
+        width: min(440px, 92vw);
+        padding: 18px;
+        border-radius: 18px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 24px 48px rgba(2, 6, 23, 0.24);
+      }
+      .quick-create-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      .quick-create-head h3 {
+        margin: 0;
+        font-size: var(--admin-font-size-title);
+        font-weight: 900;
+      }
+      #quickCreateCloseBtn { display: none !important; }
+      .quick-create-form { display: grid; gap: 12px; }
+      .quick-create-form .field { margin: 0; }
+      .quick-create-form .input {
+        width: 100%;
+        height: 42px;
+      }
+      .quick-create-form input[type="file"] {
+        display: block;
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.94);
+        font-size: var(--admin-font-size-control);
+      }
+      .quick-create-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 4px;
+      }
+      .quick-create-actions .btn-primary {
+        background: linear-gradient(180deg, #22c55e, #16a34a);
+        border-color: rgba(22, 163, 74, 0.20);
+      }
+      .quick-create-actions .btn-primary:hover {
+        background: linear-gradient(180deg, #16a34a, #15803d);
+        border-color: rgba(21, 128, 61, 0.22);
+      }
 
-      /* Keep header/body columns perfectly aligned: use fixed table layout + colgroup widths. */
-      table.cands-table { table-layout: fixed; }
       /* Center Resume header/value so they sit on the same vertical line (like “题数 / 62”). */
       table.cands-table th:nth-child(5),
       table.cands-table td:nth-child(5) { text-align: center; }
@@ -223,51 +354,23 @@
       tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
       @media (max-width: 980px) {
         .form-grid { grid-template-columns: 1fr; max-width: 100%; }
-        .search-inline .field.field-q { flex: 1 1 100%; max-width: 100%; }
+        .search-inline { flex-wrap: wrap; }
+        .search-inline .field.field-q { flex: 1 1 100%; max-width: 100%; min-width: 0; }
         .search-inline .field.field-sm { flex: 1 1 100%; }
+        .range-group { margin-left: 0; flex: 1 1 100%; min-width: 0; }
+        .search-create { margin-left: 0; }
       }
+      .admin-surface > .section:first-child { display: none; }
     </style>
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="container workspace-frame topbar-inner">
-        <div class="brand" aria-label="Servforce Quiz 管理后台">
-          <span class="brand-badge" aria-hidden="true"></span>
-          <span>Servforce Quiz</span>
-        </div>
-
-        <nav class="nav" aria-label="主导航">
-          <a class="nav-link" href="/admin#tab-exams"><span class="nav-ico exams" aria-hidden="true"></span>试卷管理</a>
-          <a class="nav-link active" href="/admin/candidates"><span class="nav-ico candidates" aria-hidden="true"></span>候选人管理</a>
-          <a class="nav-link" href="/admin#tab-assign"><span class="nav-ico assign" aria-hidden="true"></span>答题邀请</a>
-          <a class="nav-link" href="/admin#tab-logs"><span class="nav-ico logs" aria-hidden="true"></span>系统日志</a>
-          {% set _ss = system_status_summary if system_status_summary else {} %}
-          {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
-          {% set _badge = '' %}
-          {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_max = _r_llm if _r_llm > _r_sms else _r_sms %}
-          {% set _pct = (_r_max * 100) | round(0) | int %}
-          {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
-          {% if _lvl != 'ok' %}{% set _badge = _pct ~ '%' %}{% endif %}
-          <a class="nav-link" href="/admin#tab-status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
-            <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
-          </a>
-        </nav>
-
-        <form method="post" action="/admin/logout" style="margin:0;">
-          <button class="btn btn-danger" type="submit">退出</button>
-        </form>
-      </div>
-    </header>
-
-    <main class="container workspace-frame page">
+{% endblock %}
+{% block flashes %}
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}
       <div class="flash flash-center">{{ m }}</div>
       {% endif %}
       {% endfor %}
-
+{% endblock %}
+{% block content %}
       <div class="surface admin-surface" role="region" aria-label="候选人管理">
         <section class="section">
           <div class="section-head">
@@ -337,6 +440,9 @@
                   </div>
                 </div>
               </div>
+              <div class="search-create">
+                <button id="quickCreateOpenBtn" class="btn btn-primary" type="button">创建候选人</button>
+              </div>
               <div class="search-actions">
                 <button class="btn btn-primary" type="submit">查询</button>
                 <a class="btn btn-primary" href="/admin/candidates">重置</a>
@@ -347,12 +453,12 @@
           <div class="table-scroll">
             <table class="cands-table" aria-label="候选人列表">
               <colgroup>
-                <col style="width: 90px;" />
+                <col style="width: 7%;" />
+                <col style="width: 18%;" />
+                <col style="width: 18%;" />
+                <col style="width: 25%;" />
+                <col style="width: 12%;" />
                 <col style="width: 20%;" />
-                <col style="width: 24%;" />
-                <col style="width: 22%;" />
-                <col style="width: 22%;" />
-                <col style="width: 170px;" />
               </colgroup>
               <thead>
                 <tr>
@@ -384,7 +490,7 @@
                       <form method="post" action="/admin/candidates/{{ c.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该候选人？');">
                         <button class="btn btn-danger" type="submit">删除</button>
                       </form>
-                      <a class="btn btn-primary btn-icon" href="/admin?assign_candidate_id={{ c.id }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
+                      <a class="btn btn-primary btn-icon invite-create-btn" href="/admin/assignments?assign_candidate_id={{ c.id }}" title="创建邀约" aria-label="创建邀约">创建邀约</a>
                     </div>
                   </td>
                 </tr>
@@ -409,14 +515,42 @@
           </div>
         </section>
       </div>
-    </main>
+{% endblock %}
+{% block outside_shell %}
     <div id="parsingOverlay" class="parsing-overlay" role="status" aria-live="assertive" aria-label="正在解析简历">
       <div class="parsing-card">
         <span class="parsing-spinner" aria-hidden="true"></span>
         <span>正在解析简历，请稍候...</span>
       </div>
     </div>
-
+    <div id="quickCreateModal" class="parsing-overlay" hidden>
+      <div class="quick-create-modal" role="dialog" aria-modal="true" aria-label="创建候选人">
+        <div class="quick-create-head">
+          <h3>创建候选人</h3>
+          <button id="quickCreateCloseBtn" class="btn" type="button">关闭</button>
+        </div>
+        <form class="quick-create-form" method="post" action="/admin/candidates/quick-create" enctype="multipart/form-data">
+          <div class="field">
+            <label for="quick_create_name">姓名</label>
+            <input id="quick_create_name" class="input" name="name" />
+          </div>
+          <div class="field">
+            <label for="quick_create_phone">手机号</label>
+            <input id="quick_create_phone" class="input" name="phone" inputmode="numeric" />
+          </div>
+          <div class="field">
+            <label for="quick_create_file">简历</label>
+            <input id="quick_create_file" type="file" name="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+          </div>
+          <div class="quick-create-actions">
+            <button id="quickCreateCancelBtn" class="btn" type="button">取消</button>
+            <button class="btn btn-primary" type="submit">创建候选人</button>
+          </div>
+        </form>
+      </div>
+    </div>
+{% endblock %}
+{% block scripts %}
     <script>
       // Live fuzzy search (debounced) for candidates.
       const qInput = document.getElementById("q");
@@ -530,6 +664,31 @@
             }
           });
         });
+
+        const quickCreateModal = document.getElementById("quickCreateModal");
+        const quickCreateOpenBtn = document.getElementById("quickCreateOpenBtn");
+        const quickCreateCloseBtn = document.getElementById("quickCreateCloseBtn");
+        const quickCreateCancelBtn = document.getElementById("quickCreateCancelBtn");
+        const quickCreateName = document.getElementById("quick_create_name");
+        const openQuickCreate = () => {
+          if (!quickCreateModal) return;
+          quickCreateModal.hidden = false;
+          quickCreateModal.classList.add("show");
+          if (quickCreateName) quickCreateName.focus();
+        };
+        const closeQuickCreate = () => {
+          if (!quickCreateModal) return;
+          quickCreateModal.classList.remove("show");
+          quickCreateModal.hidden = true;
+        };
+        if (quickCreateOpenBtn) quickCreateOpenBtn.addEventListener("click", openQuickCreate);
+        if (quickCreateCloseBtn) quickCreateCloseBtn.addEventListener("click", closeQuickCreate);
+        if (quickCreateCancelBtn) quickCreateCancelBtn.addEventListener("click", closeQuickCreate);
+        if (quickCreateModal) {
+          quickCreateModal.addEventListener("click", (e) => {
+            if (e.target === quickCreateModal) closeQuickCreate();
+          });
+        }
 	    </script>
       <script>
         (() => {
@@ -545,8 +704,5 @@
           }
         })();
       </script>
-      <script src="{{ url_for('static', filename='system_status.js') }}"></script>
-	  </body>
-	</html>
-
+{% endblock %}
 

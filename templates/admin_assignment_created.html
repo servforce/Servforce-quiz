@@ -1,10 +1,8 @@
-﻿<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>答题邀请已生成</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+{% extends "admin_base.html" %}
+{% set admin_active = "assign" %}
+{% set admin_page_title = "Invite Created" %}
+{% set admin_page_subtitle = "Link and QR code are ready" %}
+{% block head_extra %}
     <style>
       /* Match the screenshot: larger white surface (page size unchanged, only this view). */
       .container { max-width: 1080px; width: min(1080px, 100%); }
@@ -63,41 +61,8 @@
         .copy-btn { width: 100%; }
       }
     </style>
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="container workspace-frame topbar-inner">
-        <div class="brand" aria-label="Servforce Quiz 管理后台">
-          <span class="brand-badge" aria-hidden="true"></span>
-          <span>Servforce Quiz</span>
-        </div>
-
-        <nav class="nav" aria-label="主导航">
-          <a class="nav-link" href="/admin#tab-exams"><span class="nav-ico exams" aria-hidden="true"></span>试卷管理</a>
-          <a class="nav-link" href="/admin/candidates"><span class="nav-ico candidates" aria-hidden="true"></span>候选人管理</a>
-          <a class="nav-link active" href="/admin#tab-assign"><span class="nav-ico assign" aria-hidden="true"></span>答题邀请</a>
-          <a class="nav-link" href="/admin#tab-logs"><span class="nav-ico logs" aria-hidden="true"></span>系统日志</a>
-          {% set _ss = system_status_summary if system_status_summary else {} %}
-          {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
-          {% set _badge = '' %}
-          {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_max = _r_llm if _r_llm > _r_sms else _r_sms %}
-          {% set _pct = (_r_max * 100) | round(0) | int %}
-          {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
-          {% if _lvl != 'ok' %}{% set _badge = _pct ~ '%' %}{% endif %}
-          <a class="nav-link" href="/admin#tab-status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
-            <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
-          </a>
-        </nav>
-
-        <form method="post" action="/admin/logout" style="margin:0;">
-          <button class="btn btn-danger" type="submit">退出</button>
-        </form>
-      </div>
-    </header>
-
-    <main class="container workspace-frame page">
+{% endblock %}
+{% block content %}
       <div class="surface" role="region" aria-label="答题邀请已生成" id="inviteSurface">
         <section class="section">
           <div class="section-head">
@@ -105,7 +70,7 @@
               <h2 class="title">答题邀请已生成</h2>
               <p class="sub">链接与二维码已生成，可复制链接发送给候选人。</p>
             </div>
-            <a class="btn btn-primary" href="/admin#tab-assign">返回答题邀请</a>
+            <a class="btn" href="/admin/assignments">返回答题邀请</a>
           </div>
         </section>
 
@@ -124,8 +89,8 @@
           </div>
         </section>
       </div>
-    </main>
-
+{% endblock %}
+{% block scripts %}
     <script>
       async function copyText(text) {
         const t = String(text || "").trim();
@@ -172,8 +137,6 @@
         btn.addEventListener("click", () => copyQrImage(btn.dataset.copyQr, btn.dataset.copyQrFallback || ""));
       }
     </script>
-    <script src="{{ url_for('static', filename='system_status.js') }}"></script>
-  </body>
-</html>
+{% endblock %}
 
 

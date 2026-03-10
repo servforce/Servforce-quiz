@@ -1,10 +1,8 @@
-﻿<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>答题回看</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+{% extends "admin_base.html" %}
+{% set admin_active = "assign" %}
+{% set admin_page_title = "Attempt Review" %}
+{% set admin_page_subtitle = "Candidate answers and score details" %}
+{% block head_extra %}
     <script>
       window.MathJax = {
         tex: {
@@ -33,10 +31,10 @@
       /* Review cards: visually align with the exam question cards in ui.css. */
       .q {
         position: relative;
-        border: 1px solid rgba(15, 23, 42, 0.10);
+        border: 0;
         border-radius: 18px;
         background: rgba(255, 255, 255, 0.92);
-        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+        box-shadow: none;
         overflow: hidden;
         padding: 14px 14px 16px;
         margin: 14px 0;
@@ -63,11 +61,11 @@
         gap: 6px;
         padding: 4px 10px;
         border-radius: 999px;
-        border: 1px solid rgba(37, 99, 235, 0.26);
+        border: 0;
         background: rgba(37, 99, 235, 0.10);
         color: #1d4ed8;
         font-weight: 900;
-        font-size: 12px;
+        font-size: var(--admin-font-size-control);
       }
 
       .pill {
@@ -77,13 +75,13 @@
         padding: 4px 10px;
         border-radius: 999px;
         font-weight: 900;
-        font-size: 12px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
+        font-size: var(--admin-font-size-control);
+        border: 0;
         background: rgba(255, 255, 255, 0.92);
         white-space: nowrap;
       }
-      .pill.ok { border-color: rgba(22, 163, 74, 0.30); color: #166534; background: rgba(22, 163, 74, 0.10); }
-      .pill.bad { border-color: rgba(220, 38, 38, 0.25); color: #991b1b; background: rgba(220, 38, 38, 0.08); }
+      .pill.ok { color: #166534; background: rgba(22, 163, 74, 0.10); }
+      .pill.bad { color: #991b1b; background: rgba(220, 38, 38, 0.08); }
 
       .opt {
         display: flex;
@@ -91,11 +89,11 @@
         align-items: flex-start;
         padding: 12px 14px;
         border-radius: 16px;
-        border: 1px solid rgba(15, 23, 42, 0.10);
+        border: 0;
         background: rgba(255, 255, 255, 0.92);
       }
-      .opt.ok { border-color: rgba(22, 163, 74, 0.26); background: rgba(22, 163, 74, 0.06); }
-      .opt.bad { border-color: rgba(220, 38, 38, 0.22); background: rgba(220, 38, 38, 0.05); }
+      .opt.ok { background: rgba(22, 163, 74, 0.06); }
+      .opt.bad { background: rgba(220, 38, 38, 0.05); }
       .opt > div:first-child b {
         display: inline-flex;
         align-items: center;
@@ -103,7 +101,7 @@
         min-width: 34px;
         height: 26px;
         border-radius: 10px;
-        border: 1px solid rgba(15, 23, 42, 0.10);
+        border: 0;
         background: rgba(15, 23, 42, 0.03);
         font-weight: 950;
         color: rgba(15, 23, 42, 0.86);
@@ -111,7 +109,7 @@
 
       .ans {
         margin-top: 14px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
+        border: 0;
         border-radius: 16px;
         padding: 12px 14px;
         background: rgba(255, 255, 255, 0.92);
@@ -119,56 +117,26 @@
       pre.code { white-space: pre-wrap; margin: 0; line-height: 1.7; }
 
       /* Font scale for review page (especially the header area). */
-      .review-page { font-size: 16px; }
-      .review-page .section-head .title { font-size: 26px; }
-      .review-page .section-head .sub { font-size: 17px; }
-      .review-page .section-head .sub code { font-size: 16px; padding: 4px 10px; }
+      .review-page { font-size: var(--admin-font-size-base); }
+      .review-page .section-head .title { font-size: var(--admin-font-size-title-lg); }
+      .review-page .section-head .sub { font-size: var(--admin-font-size-small); }
+      .review-page .section-head .sub code { font-size: var(--admin-font-size-control); padding: 4px 10px; }
 
-      .review-page .q { font-size: 16px; }
-      .review-page .q .md { font-size: 16px; }
-      .review-page .opt { font-size: 16px; }
-      .review-page .pill { font-size: 13px; padding: 6px 12px; }
-      .review-page .q code { font-size: 13px; padding: 5px 12px; }
+      .review-page .q { font-size: var(--admin-font-size-base); }
+      .review-page .q .md { font-size: var(--admin-font-size-base); }
+      .review-page .opt { font-size: var(--admin-font-size-base); }
+      .review-page .pill { font-size: var(--admin-font-size-pill); padding: 6px 12px; }
+      .review-page .q code { font-size: var(--admin-font-size-pill); padding: 5px 12px; }
 
       .review-page .section-head .btn {
-        font-size: 16px;
+        font-size: var(--admin-font-size-control);
         padding: 12px 18px;
         border-radius: 14px;
       }
     </style>
-  </head>
-  <body class="review-page">
-    <header class="topbar">
-      <div class="container workspace-frame topbar-inner">
-        <div class="brand" aria-label="Servforce Quiz 管理后台">
-          <span class="brand-badge" aria-hidden="true"></span>
-          <span>Servforce Quiz</span>
-        </div>
-        <nav class="nav" aria-label="主导航">
-          <a class="nav-link" href="/admin#tab-exams"><span class="nav-ico exams" aria-hidden="true"></span>试卷管理</a>
-          <a class="nav-link" href="/admin/candidates"><span class="nav-ico candidates" aria-hidden="true"></span>候选人管理</a>
-          <a class="nav-link active" href="/admin#tab-assign"><span class="nav-ico assign" aria-hidden="true"></span>答题邀请</a>
-          <a class="nav-link" href="/admin#tab-logs"><span class="nav-ico logs" aria-hidden="true"></span>系统日志</a>
-          {% set _ss = system_status_summary if system_status_summary else {} %}
-          {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
-          {% set _badge = '' %}
-          {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_max = _r_llm if _r_llm > _r_sms else _r_sms %}
-          {% set _pct = (_r_max * 100) | round(0) | int %}
-          {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
-          {% if _lvl != 'ok' %}{% set _badge = _pct ~ '%' %}{% endif %}
-          <a class="nav-link" href="/admin#tab-status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
-            <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
-          </a>
-        </nav>
-        <form method="post" action="/admin/logout" style="margin:0;">
-          <button class="btn btn-danger" type="submit">退出</button>
-        </form>
-      </div>
-    </header>
-
-    <main class="container workspace-frame page">
+{% endblock %}
+{% block body_class %}review-page{% endblock %}
+{% block content %}
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}
       <div class="flash error">{{ m }}</div>
@@ -189,8 +157,8 @@
               </p>
             </div>
             <a
-              class="btn btn-primary"
-              href="{{ back_url or '/admin#tab-assign' }}"
+              class="btn"
+              href="{{ back_url or '/admin/assignments' }}"
               onclick="if (window.history && history.length > 1) { history.back(); return false; }"
             >返回</a>
           </div>
@@ -257,8 +225,5 @@
           {% endfor %}
         </section>
       </div>
-    </main>
-    <script src="{{ url_for('static', filename='system_status.js') }}"></script>
-  </body>
-</html>
+{% endblock %}
 

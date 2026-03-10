@@ -1,10 +1,8 @@
-﻿<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>管理后台</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+{% extends "admin_base.html" %}
+{% set admin_active = "exams" %}
+{% set admin_page_title = "管理后台" %}
+{% set admin_page_subtitle = "题库、邀请、日志与资源状态统一视图" %}
+{% block head_extra %}
     <style>
       .hint {
         display: flex;
@@ -17,8 +15,8 @@
         border-radius: 12px;
         margin: 10px 0 14px;
       }
-      .hint strong { font-size: 13px; }
-      .hint span { color: var(--muted); font-size: 13px; }
+      .hint strong { font-size: var(--admin-font-size-control); }
+      .hint span { color: var(--muted); font-size: var(--admin-font-size-control); }
       .grid-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
       @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
       .assign-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -26,7 +24,18 @@
 
       .upload-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
       .upload-row .field { margin: 0; }
-      #tab-exams .upload-row { margin-top: 10px; }
+      #tab-exams .upload-row { margin-top: 0; }
+      .upload-row .field-file-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
       .upload-row .ai-gen-toggle {
         display: inline-flex;
         align-items: center;
@@ -109,7 +118,7 @@
         height: 38px;
         min-width: 86px;
         padding: 0 12px;
-        font-size: 18px;
+        font-size: var(--admin-font-size-control);
       }
       .ai-gen-panel.ai-gen-row { display: block; }
       .ai-gen-panel .field-ai-prompt { width: 100%; max-width: none; display: block; }
@@ -120,7 +129,7 @@
         border-radius: 12px;
         border: 1px solid rgba(15, 23, 42, 0.14);
         background: rgba(15, 23, 42, 0.03);
-        font-size: 14px;
+        font-size: var(--admin-font-size-control);
         line-height: 1.6;
         color: rgba(15, 23, 42, 0.86);
       }
@@ -154,7 +163,7 @@
       }
       .confirm-title {
         margin: 0 0 8px;
-        font-size: 18px;
+        font-size: var(--admin-font-size-control);
         font-weight: 900;
         color: rgba(15, 23, 42, 0.92);
       }
@@ -165,7 +174,7 @@
         gap: 10px;
       }
       .flash {
-        transition: opacity 220ms ease, transform 220ms ease;
+        transition: opacity 160ms ease, transform 160ms ease;
       }
       .flash.fade-out {
         opacity: 0;
@@ -181,7 +190,7 @@
       .ai-gen-row .field { margin: 0; }
       .ai-gen-row .field-ai-prompt { flex: 1 1 760px; max-width: 100%; }
       .ai-gen-row .ai-gen-actions { display: inline-flex; gap: 10px; align-items: flex-end; }
-      .ai-gen-row .ai-gen-actions .btn { height: 40px; font-size: 16px; border-radius: 14px; }
+      .ai-gen-row .ai-gen-actions .btn { height: 40px; font-size: var(--admin-font-size-control); border-radius: 14px; }
       .ai-prompt-head {
         display: flex;
         align-items: center;
@@ -217,11 +226,33 @@
         background: rgba(255, 255, 255, 0.92);
       }
 
+      .exam-toolbar {
+        margin: 10px 0 14px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-start;
+        gap: 18px;
+        flex-wrap: wrap;
+      }
+      .exam-toolbar .exam-search-wrap { flex: 0 1 360px; min-width: 240px; }
       .exam-search { margin: 6px 0 8px; display: flex; gap: 10px; align-items: flex-end; flex: 1; min-width: 280px; flex-wrap: wrap; }
+      .exam-toolbar .exam-search { margin: 0; flex: 0 1 auto; min-width: 0; }
       .exam-search { max-width: 100%; }
       /* Make the search box about quarter-width (while staying responsive). */
       .exam-search .field { margin: 0; flex: 0 1 360px; min-width: 220px; max-width: 25%; }
+      .exam-toolbar .exam-search .field { flex: 1 1 auto; min-width: 0; max-width: none; }
+      #tab-exams .exam-search .field label { display: none; }
+      #tab-exams {
+        flex: 1 1 auto !important;
+        min-height: clamp(760px, calc(100vh - 120px), 920px) !important;
+      }
+      #tab-exams .table-scroll { flex: 1 1 auto; min-height: 0; }
+      #tab-exams .tri-pager { margin-top: auto; justify-content: flex-end; padding-top: 12px; }
       @media (max-width: 980px) { .exam-search .field { max-width: 100%; } }
+      @media (max-width: 980px) {
+        .exam-toolbar { align-items: stretch; gap: 10px; }
+        .exam-toolbar .exam-search-wrap { flex: 1 1 100%; min-width: 0; }
+      }
 
       /* NOTE: Standard pager + fixed-height surface are defined in static/ui.css */
 
@@ -267,19 +298,19 @@
 
       /* Attempt list date range filter (scoped to #tab-assign only). */
       #tab-assign .assign-attempts .attempt-head { display:flex; flex-direction: column; align-items: stretch; gap: 10px; margin: 0 0 10px; padding: 0; }
-      #tab-assign .assign-attempts .attempt-head .title { margin: 0; font-size: 20px; }
+      #tab-assign .assign-attempts .attempt-head .title { margin: 0; font-size: var(--admin-font-size-control); }
       /* Keep filter row "top-aligned" and put actions on the right of the query. */
       #tab-assign .assign-attempts .attempt-filter { display:flex; flex-wrap: nowrap; align-items: flex-end; gap: 10px; margin: 0; width: 100%; }
       #tab-assign .assign-attempts .attempt-filter .field { margin: 0; }
-      #tab-assign .assign-attempts .attempt-filter .field.field-q label { font-size: 22px; font-weight: 800; }
+      #tab-assign .assign-attempts .attempt-filter .field.field-q label { font-size: 16px; font-weight: 800; }
       #tab-assign .assign-attempts .attempt-filter .field.field-q { flex: 0 1 520px; max-width: 520px; min-width: 300px; }
       #tab-assign .assign-attempts .attempt-filter .field.field-sm { flex: 0 0 230px; }
-      #tab-assign .assign-attempts .attempt-filter .input { height: 48px; padding-top: 0; padding-bottom: 0; line-height: 46px; font-size: 21px; }
+      #tab-assign .assign-attempts .attempt-filter .input { height: 42px; padding-top: 0; padding-bottom: 0; line-height: 1.25; font-size: var(--admin-font-size-control); }
       #tab-assign .assign-attempts .range-group { display: flex; align-items: flex-end; gap: 10px; margin-left: auto; }
       #tab-assign .assign-attempts .range-group .field { flex: 1 1 230px; }
       #tab-assign .assign-attempts .attempt-actions { display: inline-flex; gap: 10px; margin-left: 0; align-items: flex-end; }
       #tab-assign .assign-attempts .range-sep {
-        height: 48px;
+        height: 42px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -316,22 +347,21 @@
         padding: 0;
       }
       #tab-assign .assign-attempts .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
-      #tab-assign .assign-attempts .attempt-filter .btn { height: 48px; min-width: 92px; padding: 0 18px; line-height: 1; font-size: 20px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+      #tab-assign .assign-attempts .attempt-filter .btn { height: 42px; min-width: 84px; padding: 0 16px; line-height: 1; font-size: var(--admin-font-size-control); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; }
       @media (max-width: 1100px) {
         #tab-assign .assign-attempts .attempt-filter { flex-wrap: wrap; }
         #tab-assign .assign-attempts .attempt-actions { margin-left: 0; }
       }
 
-      table.exam-table { table-layout: fixed; width: 100%; }
-      table.exam-table th, table.exam-table td { vertical-align: middle; }
+      table.exam-table { width: 100%; table-layout: auto; }
+      table.exam-table th, table.exam-table td {
+        vertical-align: middle;
+        padding: 16px 20px;
+      }
       table.exam-table th { white-space: nowrap; }
-      table.exam-table th, table.exam-table td { padding-left: 12px; padding-right: 12px; }
-      /* Tighten spacing between ID and EXAM_KEY (keep other columns unchanged). */
-      th.col-id, td.col-id { padding-right: 8px; }
-      th.col-exam-key, td.col-key { text-align: left; padding-left: 8px; padding-right: 12px; }
+      th.col-id, td.col-id { text-align: left; white-space: nowrap; }
+      th.col-exam-key, td.col-key { text-align: left; }
       td.col-key, td.col-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      td.col-title { padding-right: 6px; }
-      th.col-count, td.col-count { padding-left: 6px; }
 
       /* "答题邀请" tab: fit all columns without horizontal scrolling (no font-size changes). */
       .assign-attempts .table-scroll { overflow-x: visible; padding-left: 0; padding-right: 0; }
@@ -343,18 +373,18 @@
       table.attempt-table td code { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
       table.attempt-table td.nowrap > div { white-space: nowrap; }
       td.col-key .exam-key { white-space: nowrap; display: block; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-      th.col-count, td.col-count { text-align: center; white-space: nowrap; }
-      th.col-updated, td.col-updated { text-align: center; white-space: nowrap; }
-      th.col-actions, td.col-actions { white-space: nowrap; text-align: right; min-width: 220px; padding-right: 18px; }
+      th.col-count, td.col-count { text-align: left; white-space: nowrap; }
+      th.col-updated, td.col-updated { text-align: left; white-space: nowrap; }
+      th.col-actions, td.col-actions { white-space: nowrap; text-align: right; width: 1%; }
       .shift-updated { display: inline-block; }
       .btn-icon {
         min-width: 64px;
         padding: 9px 12px;
         text-align: center;
-        font-size: 18px;
+        font-size: var(--admin-font-size-control);
         line-height: 1;
       }
-      .exam-actions { display: inline-flex; gap: 12px; align-items: center; justify-content: flex-end; }
+      .exam-actions { display: inline-flex; gap: 10px; align-items: center; justify-content: flex-end; width: 100%; }
       .exam-actions .btn { padding: 7px 10px; font-weight: 800; }
       .exam-actions .btn-icon { min-width: 44px; padding: 7px 0; }
 
@@ -362,31 +392,31 @@
       #tab-assign .assign-form { margin-top: 10px; }
 
       /* Make "试卷管理" font scale match "答题邀请" (readable/consistent). */
-      #tab-exams { font-size: 19px; }
-      #tab-exams .panel-head .title { font-size: clamp(32px, 2.1vw, 40px); letter-spacing: -0.2px; }
+      #tab-exams { font-size: var(--admin-font-size-base); }
+      #tab-exams .panel-head .title { font-size: var(--admin-font-size-title-lg); letter-spacing: -0.02em; }
       #tab-exams .panel-head .sub { display: none; }
-      #tab-exams .field label { font-size: 19px; font-weight: 800; color: rgba(15, 23, 42, 0.78); }
+      #tab-exams .field label { font-size: var(--admin-font-size-label); font-weight: 800; color: rgba(15, 23, 42, 0.78); }
       #tab-exams .input,
       #tab-exams select,
       #tab-exams input[type="file"].file-input {
         height: 40px;
         padding-top: 0;
         padding-bottom: 0;
-        line-height: 38px;
-        font-size: 20px;
+        line-height: 1.25;
+        font-size: var(--admin-font-size-control);
       }
       #tab-exams input[type="file"].file-input { padding: 6px 10px; line-height: 1.2; }
       #tab-exams .btn {
         height: 40px;
-        font-size: 19px;
+        font-size: var(--admin-font-size-control);
         border-radius: 14px;
         line-height: 1;
         display: inline-flex;
         align-items: center;
         justify-content: center;
       }
-      #tab-exams table.exam-table { font-size: 22px; }
-      #tab-exams table.exam-table th { font-size: 20px; }
+      #tab-exams table.exam-table { font-size: var(--admin-font-size-table-body); }
+      #tab-exams table.exam-table th { font-size: var(--admin-font-size-table-head); }
       #tab-exams .public-invite-toggle {
         width: 54px;
         height: 30px;
@@ -419,9 +449,9 @@
       #tab-exams .public-invite-toggle:disabled { opacity: .6; cursor: not-allowed; }
 
       /* Invite form visual polish (scoped to "答题邀请" only). */
-      #tab-assign { font-size: 21px; }
-      #tab-assign .panel-head .title { font-size: clamp(32px, 2.1vw, 40px); letter-spacing: -0.2px; }
-      #tab-assign .panel-head .sub { font-size: 20px; line-height: 1.6; color: rgba(15, 23, 42, 0.70); }
+      #tab-assign { font-size: var(--admin-font-size-base); }
+      #tab-assign .panel-head .title { font-size: var(--admin-font-size-title-lg); letter-spacing: -0.02em; }
+      #tab-assign .panel-head .sub { font-size: var(--admin-font-size-small); line-height: 1.6; color: rgba(15, 23, 42, 0.70); }
       #tab-assign .assign-form {
         max-width: 1280px;
         margin: 10px auto 0;
@@ -432,31 +462,31 @@
         box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
         backdrop-filter: blur(6px);
       }
-      /* Stable, compact grid (avoid layout "jumping" when resizing). */
-      #tab-assign .assign-form .assign-grid-2 {
+      /* Stable two-row layout: top row for exam/candidate/duration, second row for dates + action. */
+      #tab-assign .assign-form .assign-grid-inline {
         display: grid;
-        grid-template-columns: repeat(2, minmax(360px, 560px));
+        grid-template-columns: repeat(6, minmax(0, 1fr));
         gap: 16px 18px;
         align-items: end;
-        justify-content: start;
       }
-      #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: repeat(3, minmax(240px, 320px)); justify-content: start; }
-      #tab-assign .assign-form .field { margin: 0; }
-      #tab-assign .assign-form .field.field-mid { max-width: 560px; width: 100%; justify-self: start; }
-      #tab-assign .assign-form .field.field-narrow { max-width: 320px; width: 100%; justify-self: start; }
+      #tab-assign .assign-form .field { margin: 0; width: 100%; max-width: none; }
+      #tab-assign .assign-form .field.field-mid { grid-column: span 2; }
+      #tab-assign .assign-form .field.field-time { grid-column: span 2; }
+      #tab-assign .assign-form .field.field-start { grid-column: 1 / span 2; }
+      #tab-assign .assign-form .field.field-end { grid-column: 3 / span 2; }
       #tab-assign .assign-form .field label {
-        font-size: 22px;
+        font-size: var(--admin-font-size-label);
         font-weight: 800;
         color: rgba(15, 23, 42, 0.78);
         margin-bottom: 6px;
       }
       #tab-assign .assign-form .input,
       #tab-assign .assign-form select {
-        height: 56px;
-        font-size: 22px;
+        height: 44px;
+        font-size: var(--admin-font-size-control);
         padding-top: 0;
         padding-bottom: 0;
-        line-height: 54px;
+        line-height: 1.25;
       }
       #tab-assign .assign-form .field { max-width: none; }
       #tab-assign .assign-form select { font-weight: 700; }
@@ -467,24 +497,41 @@
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.20);
         border-color: rgba(37, 99, 235, 0.55);
       }
-      #tab-assign .assign-form .assign-divider {
-        height: 1px;
-        background: rgba(15, 23, 42, 0.10);
-        margin: 14px 0;
-      }
+      #tab-assign .assign-form .assign-divider { display: none; }
       #tab-assign .assign-form .assign-grid-params { margin-top: 0; }
-      #tab-assign .assign-form .field.field-narrow .input,
-      #tab-assign .assign-form .field.field-narrow select { max-width: 320px; }
-      #tab-assign .assign-form .field.field-narrow select { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      #tab-assign .assign-form .assign-actions { margin-top: 10px; display:flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
-      #tab-assign .assign-form .assign-actions .btn { height: 56px; padding: 0 26px; border-radius: 14px; font-size: 22px; }
+      #tab-assign .assign-form .field select { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #tab-assign .assign-form .assign-actions {
+        grid-column: 5 / span 2;
+        display: flex;
+        justify-content: flex-end;
+        align-self: end;
+      }
+      #tab-assign .assign-form .assign-actions .btn {
+        min-width: 180px;
+        height: 44px;
+        padding: 0 18px;
+        border-radius: 12px;
+        font-size: var(--admin-font-size-control);
+      }
+      @media (max-width: 1400px) {
+        #tab-assign .assign-form .assign-grid-inline { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        #tab-assign .assign-form .field.field-mid,
+        #tab-assign .assign-form .field.field-time,
+        #tab-assign .assign-form .field.field-start,
+        #tab-assign .assign-form .field.field-end,
+        #tab-assign .assign-form .assign-actions { grid-column: span 2; }
+      }
       @media (max-width: 1100px) {
-        #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: repeat(2, minmax(240px, 320px)); }
+        #tab-assign .assign-form .assign-grid-inline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        #tab-assign .assign-form .field.field-mid,
+        #tab-assign .assign-form .field.field-time,
+        #tab-assign .assign-form .field.field-start,
+        #tab-assign .assign-form .field.field-end,
+        #tab-assign .assign-form .assign-actions { grid-column: span 1; }
       }
       @media (max-width: 980px) {
         #tab-assign .assign-form { max-width: 100%; margin-left: 0; margin-right: 0; }
-        #tab-assign .assign-form .assign-grid-2 { grid-template-columns: 1fr; }
-        #tab-assign .assign-form .assign-grid-2.assign-grid-params { grid-template-columns: 1fr; }
+        #tab-assign .assign-form .assign-grid-inline { grid-template-columns: 1fr; }
         #tab-assign .assign-form .field.field-mid,
         #tab-assign .assign-form .field.field-narrow { max-width: 100%; }
         #tab-assign .assign-form .field.field-narrow .input,
@@ -499,7 +546,7 @@
         min-height: 0;
       }
       .table-scroll { overflow-x: auto; }
-      .attempt-table { width: 100%; min-width: 1400px; font-size: 24px; }
+      .attempt-table { width: 100%; min-width: 1200px; font-size: var(--admin-font-size-table-body); }
       /* Fill available width like candidate list: avoid hardcoded per-column pixel widths shrinking the table. */
       #tab-assign .table-scroll .attempt-table {
         width: 100% !important;
@@ -550,7 +597,7 @@
       .attempt-table th, .attempt-table td { vertical-align: middle; }
       .attempt-table th {
         white-space: nowrap;
-        font-size: 22px;
+        font-size: var(--admin-font-size-table-head);
         text-transform: none;
         letter-spacing: 0;
       }
@@ -570,7 +617,7 @@
         padding: 7px 14px;
         border-radius: 999px;
         font-weight: 900;
-        font-size: 20px;
+        font-size: var(--admin-font-size-pill);
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(15, 23, 42, 0.03);
         color: rgba(15, 23, 42, 0.86);
@@ -583,9 +630,9 @@
       .status-pill.grading { border-color: rgba(124, 58, 237, 0.30); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
       .status-pill.finished { border-color: rgba(22, 163, 74, 0.30); background: rgba(22, 163, 74, 0.10); color: #166534; }
       .status-pill.expired { border-color: rgba(220, 38, 38, 0.30); background: rgba(220, 38, 38, 0.08); color: #b91c1c; }
-      .log-table { width: 100%; min-width: 980px; font-size: 20px; }
+      .log-table { width: 100%; min-width: 980px; font-size: var(--admin-font-size-table-body); }
       .log-table th, .log-table td { vertical-align: middle; }
-      .log-table th { white-space: nowrap; font-size: 17px; }
+      .log-table th { white-space: nowrap; font-size: var(--admin-font-size-table-head); }
       .log-table td { font-variant-numeric: tabular-nums; }
       .log-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .log-table code { white-space: nowrap; }
@@ -595,7 +642,7 @@
         padding: 4px 10px;
         border-radius: 999px;
         font-weight: 900;
-        font-size: 15px;
+        font-size: var(--admin-font-size-pill);
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(15, 23, 42, 0.03);
         color: rgba(15, 23, 42, 0.86);
@@ -615,10 +662,10 @@
         margin: 12px 0;
       }
       /* Logs (tab-logs) visual scale */
-      #tab-logs .log-box-title { font-weight: 950; margin-bottom: 12px; font-size: 20px; }
+      #tab-logs .log-box-title { font-weight: 950; margin-bottom: 12px; font-size: var(--admin-font-size-title); }
       #tab-logs .log-box-head { display:flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
       #tab-logs .log-box-head .log-box-title { margin-bottom: 0; }
-      #tab-logs .log-box-sub { color: rgba(15, 23, 42, 0.60); font-size: 18px; font-weight: 950; white-space: nowrap; }
+      #tab-logs .log-box-sub { color: rgba(15, 23, 42, 0.60); font-size: var(--admin-font-size-small); font-weight: 950; white-space: nowrap; }
       #tab-logs .legend-grid { display:flex; flex-wrap: wrap; gap: 12px; }
       .legend-item {
         display: inline-flex;
@@ -629,7 +676,7 @@
         border: 1px solid rgba(15, 23, 42, 0.10);
         background: rgba(255, 255, 255, 0.78);
         font-weight: 900;
-        font-size: 20px;
+        font-size: var(--admin-font-size-control);
       }
       .legend-dot { width: 14px; height: 14px; border-radius: 999px; display:inline-block; }
       .legend-cnt { color: rgba(15, 23, 42, 0.62); font-weight: 950; }
@@ -644,7 +691,7 @@
       .density-empty {
         padding: 14px 8px 4px;
         color: rgba(15, 23, 42, 0.55);
-        font-size: 14px;
+        font-size: var(--admin-font-size-control);
         font-weight: 700;
       }
       .density-bars { display:flex; align-items: flex-end; gap: 10px; padding: 10px 4px 4px; min-height: 180px; }
@@ -667,7 +714,7 @@
         border-radius: 12px;
         background: rgba(15, 23, 42, 0.92);
         color: rgba(255, 255, 255, 0.96);
-        font-size: 13px;
+        font-size: var(--admin-font-size-control);
         font-weight: 900;
         letter-spacing: 0.2px;
         white-space: nowrap;
@@ -676,17 +723,17 @@
         box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
       }
       .density-x { display:flex; gap: 10px; padding: 0 4px 8px; }
-      .density-x span { width: 22px; font-size: 13px; color: rgba(15, 23, 42, 0.55); text-align: center; }
+      .density-x span { width: 22px; font-size: var(--admin-font-size-control); color: rgba(15, 23, 42, 0.55); text-align: center; }
 
       /* Logs: density range filter */
       #tab-logs .density-filter { display:flex; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-end; gap: 10px; margin: 0; margin-left: auto; }
       #tab-logs .density-filter .field { margin: 0; }
       #tab-logs .density-filter .field.field-sm { flex: 0 0 190px; }
-      #tab-logs .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 38px; font-size: 18px; }
+      #tab-logs .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 1.25; font-size: var(--admin-font-size-control); }
       #tab-logs .density-filter .range-group { display:flex; align-items: flex-end; gap: 10px; }
-      #tab-logs .density-filter .range-sep { padding: 0 2px; height: 40px; line-height: 40px; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
+      #tab-logs .density-filter .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
       #tab-logs .density-filter .actions { display: inline-flex; gap: 10px; align-items: flex-end; margin-left: auto; }
-      #tab-logs .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: 18px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+      #tab-logs .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: var(--admin-font-size-control); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
       @media (max-width: 980px) {
         #tab-logs .density-filter { flex-wrap: wrap; }
         #tab-logs .density-filter .actions { margin-left: 0; }
@@ -725,7 +772,7 @@
       #tab-logs .assign-attempts { margin: 0; }
 
       /* System Status */
-      #tab-status { font-size: 22px; }
+      #tab-status { font-size: var(--admin-font-size-base); }
       /* Hard requirement: status white background should fill the whole available surface (blue frame). */
       /* Also remove the top "empty bands" inside status tab. */
       #tab-status.panel { padding-top: 0; }
@@ -734,7 +781,7 @@
       /* Reduce perceived "empty band" at the top of the daily stats box. */
       #tab-status .log-box[aria-label="按天统计"] { padding-top: 10px; }
       #tab-status .log-box-head { display:grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; margin-bottom: 10px; }
-      #tab-status .log-box-title { font-weight: 950; margin: 0; font-size: 23px; line-height: 1.2; }
+      #tab-status .log-box-title { font-weight: 950; margin: 0; font-size: var(--admin-font-size-title); line-height: 1.2; }
       /* Keep titles in one line (e.g. "系统统计（按天）"). */
       #tab-status .log-box-head > div { min-width: 0; }
       #tab-status .log-box-head .log-box-title { white-space: nowrap; }
@@ -746,7 +793,7 @@
         margin: 0 0 12px;
         font-weight: 950;
         text-align: center;
-        font-size: 26px;
+        font-size: var(--admin-font-size-title-lg);
       }
       #tab-status .status-head.level-ok { border-color: rgba(22, 163, 74, 0.35); background: rgba(22, 163, 74, 0.10); color: #166534; }
       #tab-status .status-head.level-warn { border-color: rgba(249, 115, 22, 0.40); background: rgba(249, 115, 22, 0.10); }
@@ -755,26 +802,26 @@
       #tab-status .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
       #tab-status .kpi { padding: 14px 14px; border-radius: 16px; border: 1px solid rgba(15, 23, 42, 0.10); background: rgba(255, 255, 255, 0.55); }
       #tab-status .k-title { font-weight: 950; color: rgba(15, 23, 42, 0.75); margin-bottom: 6px; }
-      #tab-status .k-main { font-size: 38px; font-weight: 1100; letter-spacing: -0.02em; }
-      #tab-status .k-sub { margin-top: 4px; color: rgba(15, 23, 42, 0.62); font-size: 20px; font-weight: 950; }
+      #tab-status .k-main { font-size: var(--admin-font-size-kpi); font-weight: 1100; letter-spacing: -0.02em; }
+      #tab-status .k-sub { margin-top: 4px; color: rgba(15, 23, 42, 0.62); font-size: var(--admin-font-size-small); font-weight: 950; }
       #tab-status .status-form { display:flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
       /* Threshold settings: title on the left, controls on the right (like other header bars). */
       #tab-status .status-cfg-box .log-box-head { margin-bottom: 0; }
       #tab-status .status-cfg-box .log-box-title { margin: 0; }
       #tab-status .status-cfg-box .status-form { justify-content: flex-end; align-items: flex-end; }
       #tab-status .status-cfg-box .status-form .field label {
-        font-size: 19px;
+        font-size: var(--admin-font-size-label);
         font-weight: 900;
         color: rgba(15, 23, 42, 0.75);
       }
-      #tab-status .status-cfg-box .status-form .input { font-size: 21px; }
-      #tab-status .status-cfg-box .status-form .btn { font-size: 21px; }
+      #tab-status .status-cfg-box .status-form .input { font-size: var(--admin-font-size-control); }
+      #tab-status .status-cfg-box .status-form .btn { font-size: var(--admin-font-size-control); }
       /* We reuse `.assign-attempts` for layout, but its global margin-top is too big for status tab. */
       #tab-status .assign-attempts { margin: 0; }
       #tab-status .assign-attempts .log-box:first-child { margin-top: 0; }
       #tab-status table.status-table { width: 100%; min-width: 980px; border-collapse: collapse; }
-      #tab-status table.status-table th { text-align:left; font-size: 20px; color: rgba(15, 23, 42, 0.92); font-weight: 950; padding: 10px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.10); }
-      #tab-status table.status-table td { padding: 14px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); font-weight: 700; font-size: 22px; color: rgba(15, 23, 42, 0.65); }
+      #tab-status table.status-table th { text-align:left; font-size: var(--admin-font-size-table-head); color: rgba(15, 23, 42, 0.92); font-weight: 950; padding: 10px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.10); }
+      #tab-status table.status-table td { padding: 14px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); font-weight: 700; font-size: var(--admin-font-size-table-body); color: rgba(15, 23, 42, 0.65); }
       #tab-status #status_pager[hidden] { display: none !important; }
 
       /* Status range filter: tidy, grouped controls (avoid "floating" inputs). */
@@ -794,7 +841,7 @@
       }
       #tab-status .density-filter .field { margin: 0; }
       #tab-status .density-filter .field.field-sm { flex: 0 0 auto; }
-      #tab-status .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 38px; font-size: 20px; }
+      #tab-status .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 1.25; font-size: var(--admin-font-size-control); }
       /* Date proxy (yyyy/mm/dd) for system status filters. */
       #tab-status .density-filter .range-group { display:flex; align-items: flex-end; gap: 10px; width: auto; }
       #tab-status .density-filter .field.field-sm { flex: 0 0 auto; width: 176px; }
@@ -823,9 +870,9 @@
         color: rgba(15, 23, 42, 0.75);
       }
       #tab-status .density-filter .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
-      #tab-status .density-filter .range-sep { padding: 0 2px; height: 40px; line-height: 40px; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
+      #tab-status .density-filter .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
       #tab-status .density-filter .actions { display: inline-flex; gap: 10px; align-items: flex-end; flex: 0 0 auto; }
-      #tab-status .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: 20px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+      #tab-status .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: var(--admin-font-size-control); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
       #tab-status .density-filter .btn[type="submit"] { background: rgba(37, 99, 235, 0.10); border-color: rgba(37, 99, 235, 0.20); }
       @media (max-width: 1100px) {
         #tab-status .log-box-head { grid-template-columns: 1fr; align-items: stretch; }
@@ -837,61 +884,24 @@
         #tab-status .status-grid { grid-template-columns: 1fr; }
       }
     </style>
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="container workspace-frame topbar-inner">
-        <div class="brand" aria-label="Servforce Quiz 管理后台">
-          <span class="brand-badge" aria-hidden="true"></span>
-          <span>Servforce Quiz</span>
-        </div>
-
-        <nav class="nav" aria-label="主导航">
-          <a class="nav-link active" href="#tab-exams" data-nav="exams"><span class="nav-ico exams" aria-hidden="true"></span>试卷管理</a>
-          <a class="nav-link" href="/admin/candidates"><span class="nav-ico candidates" aria-hidden="true"></span>候选人管理</a>
-          <a class="nav-link" href="#tab-assign" data-nav="assign"><span class="nav-ico assign" aria-hidden="true"></span>答题邀请</a>
-          <a class="nav-link" href="#tab-logs" data-nav="logs"><span class="nav-ico logs" aria-hidden="true"></span>系统日志</a>
-          {% set _ss = system_status_summary if system_status_summary else {} %}
-          {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
-          {% set _badge = '' %}
-          {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_max = _r_llm if _r_llm > _r_sms else _r_sms %}
-          {% set _pct = (_r_max * 100) | round(0) | int %}
-          {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
-          {% if _lvl != 'ok' %}{% set _badge = _pct ~ '%' %}{% endif %}
-          <a class="nav-link" href="#tab-status" data-nav="status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
-            <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
-          </a>
-        </nav>
-
-        <form method="post" action="/admin/logout" style="margin:0;">
-          <button class="btn btn-danger" type="submit">退出</button>
-        </form>
-      </div>
-    </header>
-
-    <main class="container workspace-frame page">
-      {% for m in get_flashed_messages() %}
-      {% if m and (m|string)|trim %}
-      <div class="flash">{{ m }}</div>
-      {% endif %}
-      {% endfor %}
-
+{% endblock %}
+{% block content %}
       <div class="surface admin-surface" role="region" aria-label="后台内容">
         <section id="tab-exams" class="panel active" role="tabpanel" aria-label="试卷管理">
-          <div class="panel-head">
-            <div>
-              <h2 class="title">试卷管理（上传/查看）</h2>
-              <p class="sub">上传 .md 或包含试卷+图片的 .zip（建议：md 同级放 img/ 目录）后会自动解析并生成试卷数据。</p>
+          <div class="exam-toolbar">
+            <div class="exam-search-wrap">
+              <form class="exam-search" method="get" action="/admin">
+                <div class="field">
+                  <input id="exam_q" class="input" name="exam_q" value="{{ exam_q or '' }}" placeholder="ID/exam_key/标题" autocomplete="off" aria-label="搜索试卷" />
+                </div>
+              </form>
             </div>
-
-            <form class="upload-row" method="post" action="/admin/exams/upload" enctype="multipart/form-data">
-              <div class="field">
+            <form id="examUploadForm" class="upload-row" method="post" action="/admin/exams/upload" enctype="multipart/form-data">
+              <div class="field field-file-hidden" aria-hidden="true">
                 <label for="file">选择文件</label>
                 <input id="file" class="file-input" type="file" name="file" accept=".md,.zip,text/markdown,application/zip" required />
               </div>
-              <button class="btn btn-primary" type="submit">上传解析</button>
+              <button id="examUploadTrigger" class="btn btn-primary" type="button">上传解析</button>
               <button
                 id="ai_gen_toggle"
                 class="btn btn-primary ai-gen-toggle"
@@ -903,10 +913,10 @@
           </div>
 
 
-          <div id="ai_gen_modal" class="ai-gen-modal" hidden>
+          <div id="ai_gen_modal" class="ai-gen-modal modal-shell" hidden>
             <form
               id="ai_gen_panel"
-              class="ai-gen-panel ai-gen-row"
+              class="ai-gen-panel ai-gen-row modal-card modal-card--wide"
               method="post"
               action="/admin/exams/ai"
               role="dialog"
@@ -919,6 +929,14 @@
                 <button id="ai_gen_close" class="btn btn-primary ai-top-btn ai-top-btn-close" type="button">&#20851;&#38381;</button>
               </div>
               <div id="ai_check_result" class="ai-check-result" hidden></div>
+              {% if ai_notice %}
+              <div
+                id="ai_server_notice"
+                data-level="{{ ai_notice_level or 'error' }}"
+                data-text="{{ ai_notice }}"
+                hidden
+              ></div>
+              {% endif %}
               <div class="field field-ai-prompt">
                 <div class="ai-prompt-head">
                   <label class="chk-inline" for="ai_include_diagrams">
@@ -951,8 +969,8 @@
               </div>
             </form>
           </div>
-          <div id="delete_exam_confirm_modal" class="confirm-modal" hidden>
-            <div class="confirm-card" role="dialog" aria-modal="true" aria-label="删除试卷确认">
+          <div id="delete_exam_confirm_modal" class="confirm-modal modal-shell" hidden>
+            <div class="confirm-card modal-card" role="dialog" aria-modal="true" aria-label="删除试卷确认">
               <h3 class="confirm-title">是否确认删除试卷？</h3>
               <div class="confirm-actions">
                 <button id="delete_exam_confirm_ok" class="btn btn-primary" type="button">确定</button>
@@ -961,25 +979,8 @@
             </div>
           </div>
 
-          <div class="flex" style="justify-content:flex-start; margin: 10px 0 14px;">
-            <form class="exam-search" method="get" action="/admin">
-              <div class="field">
-                <label for="exam_q">搜索试卷</label>
-                <input id="exam_q" class="input" name="exam_q" value="{{ exam_q or '' }}" placeholder="id / exam_key / 标题" autocomplete="off" />
-              </div>
-            </form>
-          </div>
-
           <div class="table-scroll">
             <table class="exam-table" aria-label="试卷列表">
-              <colgroup>
-                <col style="width: 60px;" />
-                <col style="width: 180px;" />
-                <col style="width: 180px;" />
-                <col style="width: 80px;" />
-                <col style="width: 160px;" />
-                <col style="width: 220px;" />
-              </colgroup>
               <thead>
 		                <tr>
 		                  <th class="col-id">ID</th>
@@ -999,19 +1000,10 @@
 		                  <td class="col-count">{{ e.count }}</td>
 		                  <td class="col-updated"><span class="shift-updated">{{ e.updated_at.strftime("%Y-%m-%d %H:%M:%S") if e.updated_at else "" }}</span></td>
 		                  <td class="col-actions">
-	                    <div class="exam-actions">
+                    <div class="exam-actions">
                       <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" style="display:inline; margin:0;" data-exam-delete-form>
                         <button class="btn btn-danger" type="submit">删除</button>
                       </form>
-                      <button
-                        type="button"
-                        class="public-invite-toggle"
-                        data-exam-key="{{ e.exam_key }}"
-                        aria-pressed="{{ 'true' if e.public_invite_enabled else 'false' }}"
-                        aria-label="公开邀约开关">
-                        <span class="knob" aria-hidden="true"></span>
-                      </button>
-                      <a class="btn btn-primary btn-icon" href="/admin?assign_exam_key={{ e.exam_key }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
                     </div>
                   </td>
                 </tr>
@@ -1041,12 +1033,11 @@
         <section id="tab-assign" class="panel" role="tabpanel" aria-label="答题邀请">
           <div class="panel-head">
             <div>
-              <h2 class="title">答题邀请</h2>
             </div>
           </div>
  
           <form class="assign-form" method="post" action="/admin/assignments">
-            <div class="assign-grid-2">
+            <div class="assign-grid-inline">
               <div class="field field-mid">
                 <label for="exam_key">试卷</label>
                 <select id="exam_key" name="exam_key" required>
@@ -1064,46 +1055,45 @@
                   {% endfor %}
                 </select>
               </div>
-            </div>
 
-            <div class="assign-divider" aria-hidden="true"></div>
+              <div class="field field-time">
+                <label for="time_limit_seconds">答题时长</label>
+                <input id="time_limit_seconds" class="input" name="time_limit_seconds" value="02:00:00" placeholder="02:00:00" />
+              </div>
 
               <input type="hidden" name="pass_threshold" value="60" />
-              <div class="assign-grid-2 assign-grid-params">
-                <div class="field field-narrow">
-                  <label for="invite_start_date">答题开始日期（可选）</label>
-                  <div class="date-proxy">
-                    <input id="invite_start_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
-                    <input id="invite_start_date" class="input date-native" type="date" name="invite_start_date" value="" tabindex="-1" aria-hidden="true" />
-                    <button class="date-btn" type="button" data-for="invite_start_date" aria-label="选择答题开始日期">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div class="field field-narrow">
-                  <label for="invite_end_date">答题结束日期（可选）</label>
-                  <div class="date-proxy">
-                    <input id="invite_end_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
-                    <input id="invite_end_date" class="input date-native" type="date" name="invite_end_date" value="" tabindex="-1" aria-hidden="true" />
-                    <button class="date-btn" type="button" data-for="invite_end_date" aria-label="选择答题结束日期">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div class="field field-narrow">
-                  <label for="time_limit_seconds">限时（时:分:秒）</label>
-                  <input id="time_limit_seconds" class="input" name="time_limit_seconds" value="02:00:00" placeholder="02:00:00" />
+
+              <div class="field field-start">
+                <label for="invite_start_date">开始日期</label>
+                <div class="date-proxy">
+                  <input id="invite_start_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
+                  <input id="invite_start_date" class="input date-native" type="date" name="invite_start_date" value="" tabindex="-1" aria-hidden="true" />
+                  <button class="date-btn" type="button" data-for="invite_start_date" aria-label="选择答题开始日期">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
+                    </svg>
+                  </button>
                 </div>
               </div>
 
-            <div class="assign-actions">
-              <button class="btn btn-primary" type="submit">生成邀请链接/二维码</button>
+              <div class="field field-end">
+                <label for="invite_end_date">结束日期</label>
+                <div class="date-proxy">
+                  <input id="invite_end_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
+                  <input id="invite_end_date" class="input date-native" type="date" name="invite_end_date" value="" tabindex="-1" aria-hidden="true" />
+                  <button class="date-btn" type="button" data-for="invite_end_date" aria-label="选择答题结束日期">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="assign-actions">
+                <button class="btn btn-primary" type="submit">创建答题邀约</button>
+              </div>
             </div>
           </form>
 
@@ -1114,13 +1104,11 @@
                 <input type="hidden" name="exam_page" value="{{ exam_page or '' }}" />
 
                 <div class="field field-q">
-                  <label for="attempt_q">候选人答题情况</label>
                   <input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷/Token" autocomplete="off" aria-label="查询（姓名/电话/试卷/Token）" />
                 </div>
 
                 <div class="range-group" aria-label="开始时间范围">
                   <div class="field field-sm">
-                    <label for="attempt_start_from">开始时间(起)</label>
                     <div class="date-proxy">
                       <input id="attempt_start_from_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
                       <input id="attempt_start_from" class="input date-native" type="date" name="attempt_start_from" value="{{ attempt_start_from or '' }}" tabindex="-1" aria-hidden="true" />
@@ -1134,7 +1122,6 @@
                   </div>
                   <div class="range-sep" aria-hidden="true">—</div>
                   <div class="field field-sm">
-                    <label for="attempt_start_to">开始时间(止)</label>
                     <div class="date-proxy">
                       <input id="attempt_start_to_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
                       <input id="attempt_start_to" class="input date-native" type="date" name="attempt_start_to" value="{{ attempt_start_to or '' }}" tabindex="-1" aria-hidden="true" />
@@ -1149,11 +1136,9 @@
                 </div>
 
                 <div class="attempt-actions" aria-label="筛选操作">
-                  <button class="btn btn-primary" type="submit">查询</button>
                   {% set attempt_reset_qs = "" %}
                   {% if exam_q %}{% set attempt_reset_qs = attempt_reset_qs ~ "exam_q=" ~ (exam_q|urlencode) %}{% endif %}
                   {% if exam_page %}{% set attempt_reset_qs = attempt_reset_qs ~ ("&" if attempt_reset_qs else "") ~ "exam_page=" ~ exam_page %}{% endif %}
-                  <a class="btn btn-primary" href="/admin{% if attempt_reset_qs %}?{{ attempt_reset_qs }}{% endif %}#tab-assign" aria-label="重置筛选">重置</a>
                 </div>
               </form>
             </div>
@@ -1182,26 +1167,18 @@
                   >
                     <td>{{ c.attempt_id }}</td>
                     <td class="ellipsis">
-                      {% if c.candidate_id and (c.name or '').strip() != '已删除' %}
+                      {% if c.candidate_clickable %}
                         <a class="row-a" href="{{ url_for('admin_candidate_profile', candidate_id=c.candidate_id) }}">{{ c.name }}</a>
                       {% else %}
-                        {% if (c.name or '').strip() == '已删除' %}
-                          <span class="deleted-mark">{{ c.name }}</span>
-                        {% else %}
-                          {{ c.name }}
-                        {% endif %}
+                        {{ c.name }}
                       {% endif %}
                     </td>
                     <td class="ellipsis">{{ c.phone }}</td>
                     <td class="ellipsis">
-                      {% if c.exam_key and (c.exam_key or '').strip() != '已删除' %}
+                      {% if c.exam_key and c.exam_exists %}
                         <a class="row-a" href="{{ url_for('admin_exam_detail', exam_key=c.exam_key) }}"><code>{{ c.exam_key }}</code></a>
                       {% else %}
-                        {% if (c.exam_key or '').strip() == '已删除' %}
-                          <code class="deleted-mark">{{ c.exam_key }}</code>
-                        {% else %}
-                          <code>{{ c.exam_key }}</code>
-                        {% endif %}
+                        <code>{{ c.exam_key }}</code>
                       {% endif %}
                     </td>
                     <td class="ellipsis">
@@ -1529,12 +1506,13 @@
           </div>
         </section>
       </div>
-    </main>
-
+{% endblock %}
+{% block scripts %}
     <script src="{{ url_for('static', filename='vendor/plotly/plotly.min.js') }}"></script>
     <script>
       document.body.classList.add("js");
 
+      const RETURN_STATE_KEY = "admin.exams.return_state";
       const tabButtons = Array.from(document.querySelectorAll("[data-tab]"));
       const panels = new Map([
         ["exams", document.getElementById("tab-exams")],
@@ -1543,12 +1521,80 @@
         ["status", document.getElementById("tab-status")],
       ]);
       const navLinks = Array.from(document.querySelectorAll("[data-nav]"));
+      const lazyInitState = {
+        logDensityChart: false,
+        systemStatus: false,
+        logsAutoRefresh: false,
+        attemptAutoRefresh: false,
+      };
+      let examReturnStateRestored = false;
       const resizeLogDensityChart = () => {
         const el = document.getElementById("log_density_plotly");
         if (!el || !window.Plotly || typeof window.Plotly.Plots?.resize !== "function") return;
         try {
           window.Plotly.Plots.resize(el);
         } catch (_) {}
+      };
+
+      const storeExamReturnState = () => {
+        try {
+          const u = new URL(window.location.href);
+          const payload = {
+            hash: location.hash || "#tab-exams",
+            scrollY: Math.max(0, Math.round(window.scrollY || window.pageYOffset || 0)),
+            exam_q: String(u.searchParams.get("exam_q") || "").trim(),
+            exam_page: String(u.searchParams.get("exam_page") || "").trim(),
+          };
+          sessionStorage.setItem(RETURN_STATE_KEY, JSON.stringify(payload));
+        } catch (_) {}
+      };
+
+      const restoreExamReturnState = () => {
+        if (examReturnStateRestored) return;
+        if (tabKeyFromHash() !== "exams") return;
+
+        let state = null;
+        try {
+          const raw = sessionStorage.getItem(RETURN_STATE_KEY);
+          state = raw ? JSON.parse(raw) : null;
+        } catch (_) {
+          state = null;
+        }
+        if (!state || typeof state !== "object") return;
+        examReturnStateRestored = true;
+        try {
+          sessionStorage.removeItem(RETURN_STATE_KEY);
+        } catch (_) {}
+
+        const u = new URL(window.location.href);
+        const currentExamQ = String(u.searchParams.get("exam_q") || "").trim();
+        const currentExamPage = String(u.searchParams.get("exam_page") || "").trim();
+        const savedExamQ = String(state.exam_q || "").trim();
+        const savedExamPage = String(state.exam_page || "").trim();
+        if ((savedExamQ && !currentExamQ) || (savedExamPage && !currentExamPage)) return;
+        if ((savedExamQ && currentExamQ !== savedExamQ) || (savedExamPage && currentExamPage !== savedExamPage)) return;
+
+        const targetHash = String(state.hash || "#tab-exams").trim() || "#tab-exams";
+        if (location.hash !== targetHash) location.hash = targetHash;
+
+        const y = Number(state.scrollY);
+        if (!Number.isFinite(y) || y < 0) return;
+        window.setTimeout(() => {
+          try {
+            window.scrollTo({ top: y, behavior: "auto" });
+          } catch (_) {
+            window.scrollTo(0, y);
+          }
+        }, 0);
+      };
+
+      const ensureTabLazyInits = (tabKey) => {
+        if (tabKey === "assign" && typeof initAttemptAutoRefresh === "function") initAttemptAutoRefresh();
+        if (tabKey === "logs") {
+          if (typeof initLogDensityChart === "function") initLogDensityChart();
+          if (typeof initLogsAutoRefresh === "function") initLogsAutoRefresh();
+        }
+        if (tabKey === "status" && typeof initSystemStatus === "function") initSystemStatus();
       };
 
       function setActive(tabKey) {
@@ -1565,6 +1611,7 @@
         for (const a of navLinks) {
           a.classList.toggle("active", a.dataset.nav === tabKey);
         }
+        ensureTabLazyInits(tabKey);
         if (tabKey === "logs") {
           // Plotly may be initialized while the panel is hidden; force a relayout after reveal.
           window.setTimeout(resizeLogDensityChart, 0);
@@ -1591,12 +1638,40 @@
 
       window.addEventListener("hashchange", () => setActive(tabKeyFromHash()));
       setActive(tabKeyFromHash());
+      restoreExamReturnState();
       window.addEventListener("resize", () => {
         window.requestAnimationFrame(resizeLogDensityChart);
       });
+      window.addEventListener("pageshow", () => {
+        if (tabKeyFromHash() === "exams") restoreExamReturnState();
+      });
+
+      (() => {
+        const uploadForm = document.getElementById("examUploadForm");
+        const uploadInput = document.getElementById("file");
+        const uploadTrigger = document.getElementById("examUploadTrigger");
+        if (!uploadForm || !uploadInput || !uploadTrigger) return;
+
+        const openPicker = () => {
+          try {
+            uploadInput.value = "";
+          } catch (_) {}
+          uploadInput.click();
+        };
+
+        uploadTrigger.addEventListener("click", openPicker);
+        uploadInput.addEventListener("change", () => {
+          if (!uploadInput.files || uploadInput.files.length < 1) return;
+          uploadTrigger.disabled = true;
+          uploadTrigger.textContent = "解析中";
+          uploadForm.submit();
+        });
+      })();
 
       // Logs density chart (Plotly).
-      (() => {
+      function initLogDensityChart() {
+        if (lazyInitState.logDensityChart) return;
+        lazyInitState.logDensityChart = true;
         try {
           const payloadEl = document.getElementById("log_density_data");
           let payload = {};
@@ -1740,9 +1815,9 @@
         } catch (_) {
           // Keep the rest of the page scripts running even if charts fail.
         }
-      })();
+      };
 
-      // Auto-hide flash messages after 5s.
+      // Auto-hide flash messages after 6s.
       (() => {
         const flashes = Array.from(document.querySelectorAll(".flash"));
         for (const el of flashes) {
@@ -1750,8 +1825,8 @@
             el.classList.add("fade-out");
             window.setTimeout(() => {
               try { el.remove(); } catch (_) {}
-            }, 240);
-          }, 5000);
+            }, 180);
+          }, 6000);
         }
       })();
 
@@ -1886,12 +1961,14 @@
           } catch (_) {}
         };
         const openAiModal = () => {
-          aiGenModal.hidden = false;
+          if (window.AdminShell && window.AdminShell.openModal) window.AdminShell.openModal(aiGenModal, { opener: aiGenToggle, focusTarget: aiPromptEl });
+          else aiGenModal.hidden = false;
           syncAiExpanded();
           if (aiPromptEl) aiPromptEl.focus();
         };
         const closeAiModal = () => {
-          aiGenModal.hidden = true;
+          if (window.AdminShell && window.AdminShell.closeModal) window.AdminShell.closeModal(aiGenModal);
+          else aiGenModal.hidden = true;
           syncAiExpanded();
         };
 
@@ -1940,11 +2017,15 @@
             try {
               aiCheckBtn.disabled = true;
               const resp = await fetch("/admin/exams/ai/check", { method: "POST", body: fd });
-              const j = await resp.json();
+              const j = await resp.json().catch(() => ({}));
               if (!resp.ok || !j || !j.ok) {
                 aiCheckPassed = false;
                 syncGenerateEnabled();
-                renderAiCheckResult(false, "检查失败，请重试");
+                const miss = Array.isArray(j && j.missing) ? j.missing.filter(Boolean) : [];
+                const missText = miss.map((x) => String(x).replace(/[。；;\s]+$/g, "")).join("；");
+                const err = (j && (j.error || j.message)) ? String(j.error || j.message) : "";
+                const tip = missText ? (`提示词不完整：${missText}`) : (err || "检查失败，请重试");
+                renderAiCheckResult(false, tip);
                 return;
               }
               if (j.complete) {
@@ -1988,6 +2069,16 @@
         loadAiDraft();
         syncGenerateEnabled();
         syncAiExpanded();
+
+        const aiServerNoticeEl = document.getElementById("ai_server_notice");
+        if (aiServerNoticeEl) {
+          const txt = String(aiServerNoticeEl.dataset.text || "").trim();
+          const lvl = String(aiServerNoticeEl.dataset.level || "error").trim().toLowerCase();
+          if (txt) {
+            openAiModal();
+            renderAiCheckResult(lvl === "ok", txt);
+          }
+        }
       }
 
       // Custom delete-confirm modal for exam deletion.
@@ -1997,12 +2088,14 @@
       let pendingDeleteForm = null;
       const closeDeleteExamModal = () => {
         if (!deleteExamModal) return;
-        deleteExamModal.hidden = true;
+        if (window.AdminShell && window.AdminShell.closeModal) window.AdminShell.closeModal(deleteExamModal);
+        else deleteExamModal.hidden = true;
       };
       const openDeleteExamModal = (formEl) => {
         if (!deleteExamModal) return;
         pendingDeleteForm = formEl;
-        deleteExamModal.hidden = false;
+        if (window.AdminShell && window.AdminShell.openModal) window.AdminShell.openModal(deleteExamModal, { opener: formEl });
+        else deleteExamModal.hidden = false;
       };
       document.addEventListener("submit", (ev) => {
         const form = ev.target && ev.target.matches ? (ev.target.matches("form[data-exam-delete-form]") ? ev.target : null) : null;
@@ -2065,7 +2158,9 @@
       const toast = (_msg) => {};
 
       // System status tab (today + range).
-      (() => {
+      function initSystemStatus() {
+        if (lazyInitState.systemStatus) return;
+        lazyInitState.systemStatus = true;
         const PER_PAGE = 20;
         const elAlert = document.getElementById("status_head");
         const elAlertText = document.getElementById("status_head_text");
@@ -2382,12 +2477,14 @@
           if (!document.hidden) onEnter();
         });
         onEnter();
-      })();
+      };
 
       // Auto-refresh logs tab on a fixed interval.
       // This fixes the common case: keep the dashboard open while operations happen elsewhere (public invite flow),
       // and see new logs without manually refreshing the whole page.
-      (() => {
+      function initLogsAutoRefresh() {
+        if (lazyInitState.logsAutoRefresh) return;
+        lazyInitState.logsAutoRefresh = true;
         const POLL_SECONDS = 2;
         const tbody = document.getElementById("logs_table_body");
         if (!tbody) return;
@@ -2486,7 +2583,7 @@
             window.clearInterval(timer);
           } catch (_) {}
         });
-      })();
+      };
 
       // Clickable rows (except clicking buttons/links in the action column).
       for (const tr of document.querySelectorAll("tr[data-href], tr[data-msg]")) {
@@ -2494,8 +2591,12 @@
           const el = ev.target;
           if (el && (el.closest("a") || el.closest("button") || el.closest("form"))) return;
           const href = tr.getAttribute("data-href");
-          if (href) window.location.href = href;
-          else {
+          if (href) {
+            const isExamListRow = !!tr.closest("#tab-exams");
+            const isExamDetailHref = /^\/admin\/exams\/[^/]+$/.test(String(href || ""));
+            if (isExamListRow && isExamDetailHref) storeExamReturnState();
+            window.location.href = href;
+          } else {
             const msg = tr.getAttribute("data-msg");
             if (msg) toast(msg);
           }
@@ -2670,7 +2771,9 @@
       // Auto-refresh attempt list status/score (no full page reload).
       // Goal: after the candidate submits, admin status flips to "正在判卷" without manual refresh.
       // Default: refresh every 5 seconds (3..120). You can override with ?attempt_refresh=8.
-      (() => {
+      function initAttemptAutoRefresh() {
+        if (lazyInitState.attemptAutoRefresh) return;
+        lazyInitState.attemptAutoRefresh = true;
         const table = document.querySelector("#tab-assign table.attempt-table");
         if (!table) return;
 
@@ -2767,10 +2870,8 @@
         });
 
         sync();
-      })();
+      };
 
     </script>
-  </body>
-</html>
-
+{% endblock %}
 

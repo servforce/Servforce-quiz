@@ -1,10 +1,8 @@
-﻿<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>答题试卷</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+{% extends "admin_base.html" %}
+{% set admin_active = "exams" %}
+{% set admin_page_title = "Candidate View" %}
+{% set admin_page_subtitle = "Preview of the candidate answering interface" %}
+{% block head_extra %}
     <script>
       window.MathJax = {
         tex: {
@@ -16,7 +14,7 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
-      body { font-size: 19px; }
+      body { font-size: var(--admin-font-size-base); }
       .md { white-space: normal; }
       .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
       .exam-tabs {
@@ -33,7 +31,7 @@
         padding: 12px 16px;
         border-radius: 12px;
         font-weight: 700;
-        font-size: 22px;
+        font-size: var(--admin-font-size-control);
         color: var(--text);
         text-decoration: none;
         border: 1px solid transparent;
@@ -58,14 +56,39 @@
       .exam-head .center { justify-self: center; }
       .exam-head .right { justify-self: end; }
       .head-actions { display: inline-flex; align-items: center; gap: 10px; }
-      .head-actions .btn-eq { min-width: 64px; text-align: center; }
+      .head-actions .btn-eq {
+        min-width: 120px;
+        height: 46px;
+        padding: 0 18px;
+        text-align: center;
+        justify-content: center;
+        border-radius: 16px;
+        font-weight: 900;
+      }
+      .head-actions .invite-create-btn {
+        background: #16a34a;
+        border-color: #16a34a;
+        color: #fff;
+      }
+      .head-actions .invite-create-btn:hover {
+        background: #15803d;
+        border-color: #15803d;
+      }
+      .head-actions .back-btn {
+        background: #fff;
+        border-color: rgba(15, 23, 42, 0.14);
+        color: rgba(15, 23, 42, 0.86);
+      }
+      .head-actions .back-btn:hover {
+        background: rgba(248, 250, 252, 0.96);
+      }
 
       .section.compact { padding-bottom: 8px; }
       .section.compact .section-head { margin-bottom: 0; }
 
       .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; justify-content: center; }
-      .exam-meta-title h2 { margin: 0; font-size: 35px; font-weight: 950; letter-spacing: -0.3px; line-height: 1.12; }
-      .exam-meta-desc { max-width: 920px; margin: 6px auto 0; color: var(--muted); font-size: 18px; line-height: 1.6; text-align: center; }
+      .exam-meta-title h2 { margin: 0; font-size: var(--admin-font-size-title-lg); font-weight: 950; letter-spacing: -0.02em; line-height: 1.12; }
+      .exam-meta-desc { max-width: 920px; margin: 6px auto 0; color: var(--muted); font-size: var(--admin-font-size-small); line-height: 1.6; text-align: center; }
       .exam-meta-stats { margin-top: 10px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
       .pill {
         display: inline-flex;
@@ -73,12 +96,21 @@
         gap: 6px;
         padding: 6px 10px;
         border-radius: 999px;
-        border: 1px solid rgba(15, 23, 42, 0.10);
+        border: 0;
         background: rgba(255, 255, 255, 0.86);
         font-weight: 800;
-        font-size: 17px;
+        font-size: var(--admin-font-size-pill);
         color: rgba(15, 23, 42, 0.86);
         white-space: nowrap;
+      }
+      .exam-tag { border: 0; }
+      .exam-tag.type {
+        border: 0;
+        background: rgba(37, 99, 235, 0.12);
+      }
+      .exam-tag.points {
+        border: 0;
+        background: rgba(15, 23, 42, 0.05);
       }
       /* Floating public invite card (like candidate exam countdown). */
       .floating-invite-card {
@@ -104,9 +136,9 @@
         justify-content: space-between;
         gap: 10px;
       }
-      .floating-invite-title .t { font-weight: 950; font-size: 17px; color: rgba(15, 23, 42, 0.86); }
+      .floating-invite-title .t { font-weight: 950; font-size: var(--admin-font-size-control); color: rgba(15, 23, 42, 0.86); }
       .floating-invite-title .tag {
-        font-size: 13px;
+        font-size: var(--admin-font-size-control);
         font-weight: 950;
         padding: 4px 8px;
         border-radius: 999px;
@@ -134,7 +166,7 @@
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(248, 250, 252, 0.92);
         color: rgba(15, 23, 42, 0.86);
-        font-size: 13px;
+        font-size: var(--admin-font-size-control);
         line-height: 22px;
         outline: none;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -146,7 +178,7 @@
         height: 34px;
         padding: 0 12px;
         border-radius: 12px;
-        font-size: 13px;
+        font-size: var(--admin-font-size-control);
         font-weight: 950;
         white-space: nowrap;
         width: fit-content;
@@ -154,6 +186,20 @@
         justify-self: center;
       }
       .floating-invite-hint { display: none; }
+      .exam-q::before { display: none; }
+      .exam-opt__box { align-items: center; }
+      .exam-opt__key {
+        min-width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+      .exam-opt > input:disabled + .exam-opt__box { opacity: 1; }
+      .exam-opt__box,
+      .exam-opt__box:hover,
+      .exam-opt > input:checked + .exam-opt__box { box-shadow: none; }
       @media (max-width: 860px) {
         .floating-invite-card {
           right: 12px;
@@ -163,39 +209,8 @@
         }
       }
     </style>
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="container workspace-frame topbar-inner">
-        <div class="brand" aria-label="Servforce Quiz 管理后台">
-          <span class="brand-badge" aria-hidden="true"></span>
-          <span>Servforce Quiz</span>
-        </div>
-        <nav class="nav" aria-label="主导航">
-          <a class="nav-link active" href="/admin#tab-exams"><span class="nav-ico exams" aria-hidden="true"></span>试卷管理</a>
-          <a class="nav-link" href="/admin/candidates"><span class="nav-ico candidates" aria-hidden="true"></span>候选人管理</a>
-          <a class="nav-link" href="/admin#tab-assign"><span class="nav-ico assign" aria-hidden="true"></span>答题邀请</a>
-          <a class="nav-link" href="/admin#tab-logs"><span class="nav-ico logs" aria-hidden="true"></span>系统日志</a>
-          {% set _ss = system_status_summary if system_status_summary else {} %}
-          {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
-          {% set _badge = '' %}
-          {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_max = _r_llm if _r_llm > _r_sms else _r_sms %}
-          {% set _pct = (_r_max * 100) | round(0) | int %}
-          {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
-          {% if _lvl != 'ok' %}{% set _badge = _pct ~ '%' %}{% endif %}
-          <a class="nav-link" href="/admin#tab-status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
-            <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
-          </a>
-        </nav>
-        <form method="post" action="/admin/logout" style="margin:0;">
-          <button class="btn btn-danger" type="submit">退出</button>
-        </form>
-      </div>
-    </header>
-
-    <main class="container workspace-frame page">
+{% endblock %}
+{% block content %}
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}
@@ -217,8 +232,8 @@
               </div>
               <div class="right">
                 <div class="head-actions">
-                  <a class="btn btn-primary btn-eq" href="/admin?assign_exam_key={{ exam_key }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
-                  <a class="btn btn-primary btn-eq" href="/admin#tab-exams">返回</a>
+                  <a class="btn btn-primary btn-eq invite-create-btn" href="/admin/assignments?assign_exam_key={{ exam_key }}" title="创建邀约" aria-label="创建邀约">创建邀约</a>
+                  <a class="btn btn-eq back-btn" href="/admin/exams">返回</a>
                 </div>
               </div>
             </div>
@@ -280,8 +295,8 @@
           </div>
         </section>
       </div>
-    </main>
-
+{% endblock %}
+{% block outside_shell %}
     {% if public_invite_enabled and public_invite_url and public_invite_qr_url %}
       <div class="floating-invite-card" role="region" aria-label="公开邀约浮窗">
         <div class="floating-invite-title">
@@ -297,7 +312,8 @@
         </div>
       </div>
     {% endif %}
-
+{% endblock %}
+{% block scripts %}
     <script>
       const copyText = async (text) => {
         const t = String(text || "");
@@ -336,7 +352,5 @@
         }
       });
     </script>
-    <script src="{{ url_for('static', filename='system_status.js') }}"></script>
-  </body>
-</html>
+{% endblock %}
 

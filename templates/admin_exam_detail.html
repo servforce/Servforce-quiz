@@ -1,10 +1,8 @@
-﻿<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>试卷详情</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+{% extends "admin_base.html" %}
+{% set admin_active = "exams" %}
+{% set admin_page_title = "Exam Detail" %}
+{% set admin_page_subtitle = "Preview, metrics, and public invite controls" %}
+{% block head_extra %}
     <script>
       window.MathJax = {
         tex: {
@@ -16,7 +14,7 @@
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
-      body { font-size: 19px; }
+      body { font-size: var(--admin-font-size-base); }
       pre { white-space: pre-wrap; margin: 8px 0 0; }
       .md { white-space: normal; }
       .md img { max-width: 100%; height: auto; border-radius: 10px; display:block; margin: 10px 0; }
@@ -34,7 +32,7 @@
         padding: 12px 16px;
         border-radius: 12px;
         font-weight: 700;
-        font-size: 22px;
+        font-size: var(--admin-font-size-control);
         color: var(--text);
         text-decoration: none;
         border: 1px solid transparent;
@@ -59,14 +57,53 @@
       .exam-head .center { justify-self: center; }
       .exam-head .right { justify-self: end; }
       .head-actions { display: inline-flex; align-items: center; gap: 10px; }
-      .head-actions .btn-eq { min-width: 64px; text-align: center; }
+      .head-actions .btn-eq {
+        min-width: 120px;
+        height: 46px;
+        padding: 0 18px;
+        text-align: center;
+        justify-content: center;
+        border-radius: 16px;
+        font-weight: 900;
+      }
+      .head-actions .public-invite-btn {
+        background: linear-gradient(180deg, #fde047, #eab308) !important;
+        border-color: rgba(234, 179, 8, 0.30) !important;
+        color: #422006 !important;
+      }
+      .head-actions .public-invite-btn:hover {
+        background: linear-gradient(180deg, #facc15, #d97706) !important;
+        border-color: rgba(202, 138, 4, 0.36) !important;
+      }
+      .head-actions .public-invite-btn[aria-pressed="true"] {
+        background: linear-gradient(180deg, #eab308, #ca8a04) !important;
+        border-color: rgba(161, 98, 7, 0.42) !important;
+        color: #422006 !important;
+      }
+      .head-actions .invite-create-btn {
+        background: #16a34a;
+        border-color: #16a34a;
+        color: #fff;
+      }
+      .head-actions .invite-create-btn:hover {
+        background: #15803d;
+        border-color: #15803d;
+      }
+      .head-actions .back-btn {
+        background: #fff;
+        border-color: rgba(15, 23, 42, 0.14);
+        color: rgba(15, 23, 42, 0.86);
+      }
+      .head-actions .back-btn:hover {
+        background: rgba(248, 250, 252, 0.96);
+      }
 
       .section.compact { padding-bottom: 8px; }
       .section.compact .section-head { margin-bottom: 0; }
 
       .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-      .exam-meta-title h2 { margin: 0; font-size: 35px; font-weight: 950; letter-spacing: -0.3px; line-height: 1.12; }
-      .exam-meta-desc { margin: 6px 0 0; color: var(--muted); font-size: 18px; line-height: 1.6; }
+      .exam-meta-title h2 { margin: 0; font-size: var(--admin-font-size-title-lg); font-weight: 950; letter-spacing: -0.02em; line-height: 1.12; }
+      .exam-meta-desc { margin: 6px 0 0; color: var(--muted); font-size: var(--admin-font-size-small); line-height: 1.6; }
       .exam-meta { text-align: center; }
       .exam-meta-title { justify-content: center; }
       .exam-meta-desc { max-width: 920px; margin: 6px auto 0; }
@@ -77,12 +114,21 @@
         gap: 6px;
         padding: 6px 10px;
         border-radius: 999px;
-        border: 1px solid rgba(15, 23, 42, 0.10);
+        border: 0;
         background: rgba(255, 255, 255, 0.86);
         font-weight: 800;
-        font-size: 17px;
+        font-size: var(--admin-font-size-pill);
         color: rgba(15, 23, 42, 0.86);
         white-space: nowrap;
+      }
+      .exam-tag { border: 0; }
+      .exam-tag.type {
+        border: 0;
+        background: rgba(37, 99, 235, 0.12);
+      }
+      .exam-tag.points {
+        border: 0;
+        background: rgba(15, 23, 42, 0.05);
       }
       /* Floating public invite card (like candidate exam countdown). */
       .floating-invite-card {
@@ -108,9 +154,9 @@
         justify-content: space-between;
         gap: 10px;
       }
-      .floating-invite-title .t { font-weight: 950; font-size: 17px; color: rgba(15, 23, 42, 0.86); }
+      .floating-invite-title .t { font-weight: 950; font-size: var(--admin-font-size-control); color: rgba(15, 23, 42, 0.86); }
       .floating-invite-title .tag {
-        font-size: 13px;
+        font-size: var(--admin-font-size-control);
         font-weight: 950;
         padding: 4px 8px;
         border-radius: 999px;
@@ -138,7 +184,7 @@
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(248, 250, 252, 0.92);
         color: rgba(15, 23, 42, 0.86);
-        font-size: 13px;
+        font-size: var(--admin-font-size-control);
         line-height: 22px;
         outline: none;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -150,7 +196,7 @@
         height: 34px;
         padding: 0 12px;
         border-radius: 12px;
-        font-size: 13px;
+        font-size: var(--admin-font-size-control);
         font-weight: 950;
         white-space: nowrap;
         width: fit-content;
@@ -158,6 +204,42 @@
         justify-self: center;
       }
       .floating-invite-hint { display: none; }
+      .exam-q {
+        border: 0;
+        box-shadow: none;
+      }
+      .exam-q:hover { border-color: transparent; }
+      .exam-q::before { display: none; }
+      .exam-opt__box { align-items: center; }
+      .exam-opt__key {
+        min-width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+      .exam-tag {
+        border: 0;
+        box-shadow: none;
+      }
+      .exam-opt__box,
+      .exam-opt__box:hover,
+      .exam-opt > input:checked + .exam-opt__box {
+        border: 0;
+        box-shadow: none;
+      }
+      .exam-opt__box.correct {
+        border: 0;
+      }
+      .exam-opt__mark {
+        border: 0;
+        box-shadow: none;
+      }
+      .exam-rubric {
+        border: 0;
+      }
+      .exam-opt__mark { align-self: center; }
       @media (max-width: 860px) {
         .floating-invite-card {
           right: 12px;
@@ -167,39 +249,8 @@
         }
       }
     </style>
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="container workspace-frame topbar-inner">
-        <div class="brand" aria-label="Servforce Quiz 管理后台">
-          <span class="brand-badge" aria-hidden="true"></span>
-          <span>Servforce Quiz</span>
-        </div>
-        <nav class="nav" aria-label="主导航">
-          <a class="nav-link active" href="/admin#tab-exams"><span class="nav-ico exams" aria-hidden="true"></span>试卷管理</a>
-          <a class="nav-link" href="/admin/candidates"><span class="nav-ico candidates" aria-hidden="true"></span>候选人管理</a>
-          <a class="nav-link" href="/admin#tab-assign"><span class="nav-ico assign" aria-hidden="true"></span>答题邀请</a>
-          <a class="nav-link" href="/admin#tab-logs"><span class="nav-ico logs" aria-hidden="true"></span>系统日志</a>
-          {% set _ss = system_status_summary if system_status_summary else {} %}
-          {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
-          {% set _badge = '' %}
-          {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
-          {% set _r_max = _r_llm if _r_llm > _r_sms else _r_sms %}
-          {% set _pct = (_r_max * 100) | round(0) | int %}
-          {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
-          {% if _lvl != 'ok' %}{% set _badge = _pct ~ '%' %}{% endif %}
-          <a class="nav-link" href="/admin#tab-status"><span class="nav-ico status" aria-hidden="true"></span>系统状态
-            <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
-          </a>
-        </nav>
-        <form method="post" action="/admin/logout" style="margin:0;">
-          <button class="btn btn-danger" type="submit">退出</button>
-        </form>
-      </div>
-    </header>
-
-    <main class="container workspace-frame page">
+{% endblock %}
+{% block content %}
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
       <div class="surface" role="region" aria-label="试卷详情">
         <section class="section compact">
@@ -215,8 +266,15 @@
               </div>
               <div class="right">
                 <div class="head-actions">
-                  <a class="btn btn-primary btn-eq" href="/admin?assign_exam_key={{ exam_key }}#tab-assign" title="创建答题邀请" aria-label="创建答题邀请">+</a>
-                  <a class="btn btn-primary btn-eq" href="/admin#tab-exams">返回</a>
+                  <button
+                    type="button"
+                    class="btn btn-eq btn-warning public-invite-btn"
+                    data-exam-key="{{ exam_key }}"
+                    data-enabled="{{ 'true' if public_invite_enabled else 'false' }}"
+                    aria-pressed="{{ 'true' if public_invite_enabled else 'false' }}"
+                  >公开邀约</button>
+                  <a class="btn btn-primary btn-eq invite-create-btn" href="/admin/assignments?assign_exam_key={{ exam_key }}" title="创建邀约" aria-label="创建邀约">创建邀约</a>
+                  <a class="btn btn-eq back-btn" data-admin-back="exam-list" href="/admin/exams">返回</a>
                 </div>
               </div>
             </div>
@@ -242,7 +300,7 @@
             </div>
           </div>
 
-          <h3 class="title" style="font-size:18px; margin-bottom: 10px;">题目</h3>
+          <h3 class="title" style="font-size:var(--admin-font-size-title); margin-bottom: 10px;">题目</h3>
           {% set type_label_map = {'single':'单选','multiple':'多选','short':'简答','unknown':'其他'} %}
           <div class="exam-question-list">
             {% for q in spec.questions %}
@@ -282,8 +340,8 @@
           </div>
         </section>
       </div>
-    </main>
-
+{% endblock %}
+{% block outside_shell %}
     {% if public_invite_enabled and public_invite_url and public_invite_qr_url %}
       <div class="floating-invite-card" role="region" aria-label="公开邀约浮窗">
         <div class="floating-invite-title">
@@ -299,46 +357,117 @@
         </div>
       </div>
     {% endif %}
-
+{% endblock %}
+{% block scripts %}
     <script>
-      const copyText = async (text) => {
-        const t = String(text || "");
-        if (!t) return false;
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(t);
-            return true;
+      (() => {
+        const copyText = async (text) => {
+          const t = String(text || "");
+          if (!t) return false;
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(t);
+              return true;
+            }
+          } catch (_) {}
+          try {
+            const ta = document.createElement("textarea");
+            ta.value = t;
+            ta.setAttribute("readonly", "readonly");
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            ta.style.top = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            ta.setSelectionRange(0, ta.value.length);
+            const ok = document.execCommand && document.execCommand("copy");
+            ta.remove();
+            return !!ok;
+          } catch (_) {
+            return false;
           }
-        } catch (_) {}
-        try {
-          const ta = document.createElement("textarea");
-          ta.value = t;
-          ta.setAttribute("readonly", "readonly");
-          ta.style.position = "fixed";
-          ta.style.left = "-9999px";
-          ta.style.top = "0";
-          document.body.appendChild(ta);
-          ta.select();
-          ta.setSelectionRange(0, ta.value.length);
-          const ok = document.execCommand && document.execCommand("copy");
-          ta.remove();
-          return !!ok;
-        } catch (_) {
-          return false;
-        }
-      };
+        };
 
-      document.addEventListener("click", async (ev) => {
-        const btn = ev.target && ev.target.closest ? ev.target.closest("button.public-invite-copy") : null;
-        if (!btn) return;
-        const url = btn.dataset.url || "";
-        const ok = await copyText(url);
-        if (!ok) {
-          try { window.prompt("复制下面的公开邀约链接：", url); } catch (_) {}
-        }
-      });
+        const togglePublicInvite = async (examKey, enabled) => {
+          const ek = String(examKey || "").trim();
+          if (!ek) return { ok: false };
+          const resp = await fetch(`/admin/exams/${encodeURIComponent(ek)}/public-invite`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({ enabled: !!enabled }),
+          });
+          let data = null;
+          try { data = await resp.json(); } catch (_) { data = null; }
+          if (!resp.ok) {
+            const msg = (data && (data.error || data.message)) ? String(data.error || data.message) : `HTTP ${resp.status}`;
+            throw new Error(msg);
+          }
+          return data || { ok: true };
+        };
+
+        const handleBackToExamList = (anchor) => {
+          const fallback = anchor && anchor.href ? anchor.href : "/admin/exams";
+          let canGoBack = false;
+          try {
+            const ref = String(document.referrer || "").trim();
+            if (ref && window.history.length > 1) {
+              const refUrl = new URL(ref, window.location.origin);
+              canGoBack = refUrl.origin === window.location.origin && refUrl.pathname.startsWith("/admin");
+            }
+          } catch (_) {
+            canGoBack = false;
+          }
+
+          if (canGoBack) {
+            window.history.back();
+            return;
+          }
+          window.location.href = fallback;
+        };
+
+        document.addEventListener("click", async (ev) => {
+          const backBtn = ev.target && ev.target.closest ? ev.target.closest("[data-admin-back='exam-list']") : null;
+          if (backBtn) {
+            ev.preventDefault();
+            handleBackToExamList(backBtn);
+            return;
+          }
+
+          const toggleBtn = ev.target && ev.target.closest ? ev.target.closest("button.public-invite-btn") : null;
+          if (toggleBtn) {
+            const examKey = toggleBtn.dataset.examKey || "";
+            const cur = String(toggleBtn.dataset.enabled || "false") === "true";
+            const next = !cur;
+            toggleBtn.disabled = true;
+            try {
+              const res = await togglePublicInvite(examKey, next);
+              if (next) {
+                const url = String((res && res.public_url) || "").trim();
+                if (url) {
+                  const ok = await copyText(url);
+                  if (!ok) {
+                    try { window.prompt("复制下面的公开邀约链接：", url); } catch (_) {}
+                  }
+                }
+              }
+              window.location.reload();
+            } catch (e) {
+              toggleBtn.disabled = false;
+              const msg = (e && e.message) ? e.message : String(e || "操作失败");
+              try { window.alert(msg); } catch (_) {}
+            }
+            return;
+          }
+
+          const btn = ev.target && ev.target.closest ? ev.target.closest("button.public-invite-copy") : null;
+          if (!btn) return;
+          const url = btn.dataset.url || "";
+          const ok = await copyText(url);
+          if (!ok) {
+            try { window.prompt("复制下面的公开邀约链接：", url); } catch (_) {}
+          }
+        });
+      })();
     </script>
-    <script src="{{ url_for('static', filename='system_status.js') }}"></script>
-  </body>
-</html>
+{% endblock %}
 

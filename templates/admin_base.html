@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      document.documentElement.classList.add("js");
+    </script>
+    <title>{% block title %}{{ admin_page_title or "管理后台" }}{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    {% block head_extra %}{% endblock %}
+  </head>
+  {% set _active = admin_active|default('exams', true) %}
+  {% set _page_title = admin_page_title|default('管理后台', true) %}
+  {% set _page_subtitle = admin_page_subtitle|default('', true) %}
+  {% set _user_name = admin_user_name|default('管理员', true) %}
+  {% set _user_role = admin_user_role|default('Admin Workspace', true) %}
+  {% set _user_avatar = admin_user_avatar|default('AD', true) %}
+  {% set _ss = system_status_summary if system_status_summary else {} %}
+  {% set _lvl = _ss.overall_level if _ss and _ss.overall_level else 'ok' %}
+  {% set _r_llm = ((_ss.get('llm') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
+  {% set _r_sms = ((_ss.get('sms') or {}).get('ratio') or 0.0) if _ss else 0.0 %}
+  {% set _pct_llm = (_r_llm * 100) | round(0) | int %}
+  {% set _pct_sms = (_r_sms * 100) | round(0) | int %}
+  {% if _pct_llm > 100 %}{% set _pct_llm = 100 %}{% endif %}
+  {% if _pct_sms > 100 %}{% set _pct_sms = 100 %}{% endif %}
+  {% set _badge = '' %}
+  {% set _pct_max = _pct_llm if _pct_llm > _pct_sms else _pct_sms %}
+  {% if _lvl != 'ok' %}{% set _badge = _pct_max ~ '%' %}{% endif %}
+  <body class="admin-app {% block body_class %}{% endblock %}" data-admin-active="{{ _active }}">
+    <div class="admin-shell">
+      <aside class="admin-sidebar" aria-label="后台导航">
+        <div class="admin-sidebar__brand"></div>
+
+        <nav class="admin-nav" aria-label="主导航">
+          <a class="admin-nav__link" href="/admin/exams" data-admin-nav="exams" data-admin-page-title="试卷管理" title="试卷管理">
+            <span class="nav-ico exams" aria-hidden="true"></span>
+            <span class="admin-nav__label">试卷管理</span>
+          </a>
+          <a class="admin-nav__link" href="/admin/candidates" data-admin-nav="candidates" data-admin-page-title="候选人管理" title="候选人管理">
+            <span class="nav-ico candidates" aria-hidden="true"></span>
+            <span class="admin-nav__label">候选人管理</span>
+          </a>
+          <a class="admin-nav__link" href="/admin/assignments" data-admin-nav="assign" data-admin-page-title="答题邀请" title="答题邀请">
+            <span class="nav-ico assign" aria-hidden="true"></span>
+            <span class="admin-nav__label">答题邀请</span>
+          </a>
+          <a class="admin-nav__link" href="/admin/logs" data-admin-nav="logs" data-admin-page-title="系统日志" title="系统日志">
+            <span class="nav-ico logs" aria-hidden="true"></span>
+            <span class="admin-nav__label">系统日志</span>
+          </a>
+          <a class="admin-nav__link" href="/admin/status" data-admin-nav="status" data-admin-page-title="系统状态" title="系统状态">
+            <span class="nav-ico status" aria-hidden="true"></span>
+            <span class="admin-nav__label">
+              系统状态
+              <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
+            </span>
+          </a>
+        </nav>
+      </aside>
+
+      <div class="admin-shell__overlay" data-sidebar-overlay hidden></div>
+
+      <div class="admin-main">
+        <header class="admin-topbar">
+          <div class="admin-topbar__left">
+            <a class="brand brand--sidebar brand--topbar" href="/admin/exams" aria-label="Servforce Quiz 管理后台">
+              <span class="brand-badge" aria-hidden="true"></span>
+              <span class="brand-text">
+                <strong>Servforce Quiz</strong>
+              </span>
+            </a>
+          </div>
+
+          <div class="admin-topbar__right admin-toolbar" aria-label="系统资源状态与用户信息">
+            <div class="status-chip status-chip--summary">
+              <span class="status-chip__dot level-{{ _lvl }}"></span>
+              <span data-system-status-text>{{ '运行正常' if _lvl == 'ok' else '资源告警' }}</span>
+            </div>
+            <div class="status-chip">
+              <span class="status-chip__label">LLM</span>
+              <strong data-system-status-resource="llm">{{ _pct_llm }}%</strong>
+            </div>
+            <div class="status-chip">
+              <span class="status-chip__label">SMS</span>
+              <strong data-system-status-resource="sms">{{ _pct_sms }}%</strong>
+            </div>
+            <form method="post" action="/admin/logout" style="margin:0;">
+              <button class="btn btn-danger" type="submit">退出</button>
+            </form>
+          </div>
+        </header>
+
+        <main class="admin-content {% block content_class %}{% endblock %}">
+          {% block flashes %}
+            {% for m in get_flashed_messages() %}
+              {% if m and (m|string)|trim %}
+                <div class="flash">{{ m }}</div>
+              {% endif %}
+            {% endfor %}
+          {% endblock %}
+          {% block content %}{% endblock %}
+        </main>
+      </div>
+    </div>
+
+    {% block outside_shell %}{% endblock %}
+    <script src="{{ url_for('static', filename='admin_shell.js') }}"></script>
+    <script src="{{ url_for('static', filename='system_status.js') }}"></script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

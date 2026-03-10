@@ -1,0 +1,85 @@
+{% extends "admin_base.html" %}
+{% set admin_active = "status" %}
+{% set admin_page_title = "系统状态" %}
+{% set admin_page_subtitle = "查看当日指标与阈值配置" %}
+{% block head_extra %}
+    <style>
+      .admin-surface { font-size: var(--admin-font-size-base); min-height: clamp(760px, calc(100vh - 120px), 920px); }
+      .status-wrap { max-width: none; width: 100%; margin: 0; padding: 0 2px 18px; }
+      .log-box { margin-bottom: 14px; border-radius: 16px; background: rgba(248, 250, 252, 0.90); padding: 16px; }
+      .status-head { padding: 16px 18px; border-radius: 18px; border: 1px solid rgba(15, 23, 42, 0.10); background: rgba(255, 255, 255, 0.78); margin: 0 0 12px; font-weight: 950; text-align: center; font-size: var(--admin-font-size-title-lg); }
+      .status-head.level-ok { border-color: rgba(22, 163, 74, 0.35); background: rgba(22, 163, 74, 0.10); color: #166534; }
+      .status-head.level-warn { border-color: rgba(249, 115, 22, 0.40); background: rgba(249, 115, 22, 0.10); }
+      .status-head.level-danger { border-color: rgba(220, 38, 38, 0.40); background: rgba(220, 38, 38, 0.10); }
+      .status-head.level-critical { border-color: rgba(220, 38, 38, 0.55); background: rgba(220, 38, 38, 0.14); }
+      .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .kpi { padding: 14px; border-radius: 16px; border: 1px solid rgba(15, 23, 42, 0.10); background: rgba(255, 255, 255, 0.55); }
+      .k-title { font-weight: 950; color: rgba(15, 23, 42, 0.75); margin-bottom: 6px; }
+      .k-main { font-size: var(--admin-font-size-kpi); font-weight: 1100; letter-spacing: -0.02em; }
+      .k-sub { margin-top: 4px; color: rgba(15, 23, 42, 0.62); font-size: var(--admin-font-size-small); font-weight: 950; }
+      .log-box-head { display:grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; margin-bottom: 10px; }
+      .status-form { display:flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+      .density-filter { display:flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 10px; margin: 0; width: auto; background: rgba(255, 255, 255, 0.78); border: 1px solid rgba(15, 23, 42, 0.10); border-radius: 14px; padding: 8px 10px; }
+      .range-group { display:flex; align-items: flex-end; gap: 10px; width: auto; }
+      .field.field-sm { width: 176px; margin: 0; }
+      .date-proxy { position: relative; width: 100%; }
+      .date-display { padding-right: 42px; cursor: pointer; }
+      .date-native { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+      .date-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: 1px solid rgba(15, 23, 42, 0.12); background: rgba(255, 255, 255, 0.65); width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(15, 23, 42, 0.75); }
+      .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
+      table.status-table { width: 100%; min-width: 980px; border-collapse: collapse; }
+      table.status-table th { text-align:left; font-size: var(--admin-font-size-table-head); color: rgba(15, 23, 42, 0.92); font-weight: 950; padding: 10px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.10); }
+      table.status-table td { padding: 14px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); font-weight: 700; font-size: var(--admin-font-size-table-body); color: rgba(15, 23, 42, 0.65); }
+      #status_pager[hidden] { display: none !important; }
+      @media (max-width: 980px) { .status-grid { grid-template-columns: 1fr; } .log-box-head { grid-template-columns: 1fr; } .density-filter { flex-wrap: wrap; } }
+    </style>
+{% endblock %}
+{% block content %}
+      <div class="surface admin-surface" role="region" aria-label="系统状态">
+        <div class="status-wrap">
+          <div id="status_head" class="status-head level-ok" aria-live="polite"><div id="status_head_text">加载中...</div></div>
+          <div class="log-box">
+            <div class="log-box-title">今日用量</div>
+            <div class="status-grid">
+              <div class="kpi"><div class="k-title">大模型 Token</div><div class="k-main"><span id="kpi_llm_used">--</span></div><div class="k-sub">阈值：<span id="kpi_llm_limit">--</span>，占用：<span id="kpi_llm_ratio">--</span></div></div>
+              <div class="kpi"><div class="k-title">短信认证消耗</div><div class="k-main"><span id="kpi_sms_used">--</span></div><div class="k-sub">阈值：<span id="kpi_sms_limit">--</span>，占用：<span id="kpi_sms_ratio">--</span></div></div>
+            </div>
+          </div>
+          <div class="log-box">
+            <div class="log-box-head">
+              <div class="log-box-title">阈值设置（按天）</div>
+              <form id="status_cfg_form" class="status-form" autocomplete="off">
+                <div class="field field-sm"><label for="llm_tokens_limit">大模型 Token 阈值</label><input id="llm_tokens_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 200000" /></div>
+                <div class="field field-sm"><label for="sms_calls_limit">短信认证阈值</label><input id="sms_calls_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 1000" /></div>
+                <button id="status_cfg_save" class="btn btn-primary" type="submit">保存</button>
+                <span id="status_cfg_msg" class="muted" style="font-weight:900;"></span>
+              </form>
+            </div>
+          </div>
+          <div class="log-box">
+            <div class="log-box-head">
+              <div class="log-box-title">系统统计（按天）</div>
+              <form id="status_range_form" class="density-filter" aria-label="选择系统统计时间范围">
+                <div class="range-group">
+                  <div class="field field-sm"><div class="date-proxy"><input id="status_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="status_start" class="input date-native" type="date" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="status_start">📅</button></div></div>
+                  <div class="range-sep" aria-hidden="true">-</div>
+                  <div class="field field-sm"><div class="date-proxy"><input id="status_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="status_end" class="input date-native" type="date" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="status_end">📅</button></div></div>
+                  <div class="actions"><button class="btn" type="submit">查询</button><button class="btn" type="button" id="status_range_reset">重置</button></div>
+                </div>
+              </form>
+            </div>
+            <div class="table-scroll">
+              <table class="status-table" aria-label="系统状态统计表（按天）">
+                <colgroup><col style="width: 120px;" /><col style="width: 110px;" /><col style="width: 110px;" /><col style="width: 110px;" /><col style="width: 150px;" /><col style="width: 110px;" /></colgroup>
+                <thead><tr><th>日期</th><th>新试卷</th><th>新邀约</th><th>新候选人</th><th>大模型 Token</th><th>短信次数</th></tr></thead>
+                <tbody id="status_table_body"><tr><td colspan="6" class="muted" style="padding:16px;">暂无数据</td></tr></tbody>
+              </table>
+            </div>
+            <div id="status_pager" class="tri-pager inline" hidden><span id="status_page_info" class="page-info"></span><button id="status_page_prev" class="tri-btn" type="button" aria-label="上一页" title="上一页">▲</button><button id="status_page_next" class="tri-btn" type="button" aria-label="下一页" title="下一页">▼</button></div>
+          </div>
+        </div>
+      </div>
+{% endblock %}
+{% block scripts %}
+    <script src="{{ url_for('static', filename='admin_status.js') }}"></script>
+{% endblock %}

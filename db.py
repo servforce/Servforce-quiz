@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 from datetime import datetime
 from contextlib import contextmanager
@@ -9,8 +10,14 @@ from urllib.parse import urlsplit
 
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 
 from config import DATABASE_URL, logger
+
+_POOL_LOCK = threading.Lock()
+_PG_POOL: psycopg2.pool.ThreadedConnectionPool | None = None
+_PG_POOL_MINCONN = 1
+_PG_POOL_MAXCONN = 12
 
 # 把一个数据库连接字符串 DATABASE_URL 解析成 psycopg2.connect() 需要的参数字典
 def _parse_pg_dsn(database_url: str) -> dict[str, Any]:
@@ -32,19 +39,41 @@ def _parse_pg_dsn(database_url: str) -> dict[str, Any]:
     }
 
 # 链接数据库管理器，自动管理 PostgreSQL 连接的打开、提交、回滚、关闭
+def _get_pg_pool() -> psycopg2.pool.ThreadedConnectionPool:
+    global _PG_POOL
+    with _POOL_LOCK:
+        if _PG_POOL is None:
+            dsn = _parse_pg_dsn(DATABASE_URL)
+            _PG_POOL = psycopg2.pool.ThreadedConnectionPool(
+                _PG_POOL_MINCONN,
+                _PG_POOL_MAXCONN,
+                **dsn,
+            )
+        return _PG_POOL
+
+
 @contextmanager
 def conn_scope() -> Iterator[psycopg2.extensions.connection]:
-    dsn = _parse_pg_dsn(DATABASE_URL)   # 解析url地址链接
-    # print(dsn.get('password'))
-    conn = psycopg2.connect(**dsn)      # 连接对应数据库
+    pool = _get_pg_pool()
+    conn = pool.getconn()
     try:
-        yield conn      # 把连接对象给with使用
-        conn.commit()   # 正常执行完，没有异常自动提交事务
+        conn.autocommit = False
+        yield conn
+        conn.commit()
     except Exception:
-        conn.rollback()     # 如果存在错误，就回滚到上次的操作
-        raise       # 抛出异常
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
     finally:
-        conn.close()        # 操作完成后，关闭数据库连接
+        try:
+            pool.putconn(conn)
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def _candidate_query_where_clause(query: str | None) -> tuple[str, list[Any]]:
@@ -476,13 +505,24 @@ def list_candidates(
 
 
 # 创建候选人身份信息
-def count_candidates(*, query: str | None = None) -> int:
+def count_candidates(
+    *,
+    query: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
+) -> int:
     sql = "SELECT COUNT(*) FROM candidate WHERE deleted_at IS NULL"
     params: list[Any] = []
     where_sql, where_params = _candidate_query_where_clause(query)
     if where_sql:
         sql += " AND " + where_sql.strip().removeprefix("WHERE").removeprefix("where").strip()
         params.extend(where_params)
+    if created_from is not None:
+        sql += " AND created_at >= %s"
+        params.append(created_from)
+    if created_to is not None:
+        sql += " AND created_at <= %s"
+        params.append(created_to)
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, tuple(params))
@@ -622,14 +662,15 @@ def update_candidate_resume_parsed(
 
 def mark_exam_deleted(exam_key: str, *, marker: str = "已删除") -> int:
     """
-    When an exam is deleted, preserve history but mark the exam reference in exam_paper.
-    Returns number of affected rows.
+    Count impacted history rows when an exam is deleted.
+    We keep original exam_key in exam_paper to preserve attempt display data.
     """
-    sql = "UPDATE exam_paper SET exam_key=%s WHERE exam_key=%s"
+    sql = "SELECT COUNT(*) FROM exam_paper WHERE exam_key=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(marker), str(exam_key or "")))
-            return int(cur.rowcount or 0)
+            cur.execute(sql, (str(exam_key or ""),))
+            row = cur.fetchone()
+            return int(row[0] or 0) if row else 0
 
 
 def rename_exam_key(old_exam_key: str, new_exam_key: str) -> int:
@@ -661,6 +702,7 @@ def delete_candidate(candidate_id: int) -> None:
     # Preserve exam history: if exam_paper exists, perform a "soft delete" by anonymizing
     # the candidate record while keeping its id for FK references.
     sql_check = "SELECT 1 FROM exam_paper WHERE candidate_id=%s LIMIT 1"
+    sql_get_name = "SELECT name FROM candidate WHERE id=%s LIMIT 1"
     sql_hard = "DELETE FROM candidate WHERE id=%s"
     sql_soft = """
  UPDATE candidate
@@ -680,9 +722,14 @@ def delete_candidate(candidate_id: int) -> None:
         with conn.cursor() as cur:
             cur.execute(sql_check, (int(candidate_id),))
             if cur.fetchone() is not None:
+                cur.execute(sql_get_name, (int(candidate_id),))
+                row = cur.fetchone()
+                keep_name = str((row[0] if row else "") or "").strip()
+                if not keep_name:
+                    keep_name = f"候选人#{int(candidate_id)}"
                 # Use a unique phone placeholder to free the original phone for future registrations.
                 placeholder_phone = f"DELETED_{int(candidate_id)}_{int(time.time())}"
-                cur.execute(sql_soft, ("已删除", placeholder_phone, int(candidate_id)))
+                cur.execute(sql_soft, (keep_name, placeholder_phone, int(candidate_id)))
                 return
             cur.execute(sql_hard, (int(candidate_id),))
 
@@ -861,6 +908,7 @@ def list_exam_papers(
      ep.id AS attempt_id,
      ep.candidate_id,
      c.name,
+     c.deleted_at AS candidate_deleted_at,
      ep.phone,
      ep.exam_key,
      ep.token,
@@ -900,6 +948,43 @@ def list_exam_papers(
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, tuple(params))
             return [dict(r) for r in cur.fetchall()]
+
+
+def get_candidate_name_from_logs(candidate_id: int) -> str:
+    """
+    Best-effort recovery of original candidate name from historical logs.
+    Prefer the latest non-empty meta.name for this candidate.
+    """
+    cid = int(candidate_id or 0)
+    if cid <= 0:
+        return ""
+    sql = """
+SELECT COALESCE(sl.meta->>'name','') AS name
+FROM system_log sl
+WHERE sl.candidate_id=%s
+  AND sl.meta IS NOT NULL
+  AND COALESCE(sl.meta->>'name','') <> ''
+ORDER BY sl.id DESC
+LIMIT 50
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (cid,))
+            rows = cur.fetchall()
+    for row in rows:
+        try:
+            nm = str(row[0] or "").strip()
+        except Exception:
+            nm = ""
+        if not nm:
+            continue
+        low = nm.lower()
+        if nm in {"已删除", "候选人"}:
+            continue
+        if low.startswith("deleted_") or low.startswith("deletion_"):
+            continue
+        return nm
+    return ""
 
 
 def create_system_log(
@@ -1401,6 +1486,118 @@ def touch_system_alert(*, day: str, kind: str, level: str, used: int, limit: int
             "ratio": r,
         },
     )
+
+
+def cleanup_duplicate_system_alert_logs(*, day: str | None = None, kind: str | None = None) -> int:
+    """
+    Delete duplicated system.alert rows and keep only the earliest row in each group.
+
+    Group key:
+      - meta.day
+      - meta.kind
+      - meta.limit
+      - meta.level
+
+    This matches the current alert policy:
+      - one alert when threshold is exceeded
+      - threshold value changes can produce a new alert row
+    """
+    d = str(day or "").strip()[:10]
+    k = str(kind or "").strip()
+    params: list[Any] = []
+    filters: list[str] = [
+        "sl.event_type = 'system.alert'",
+        "COALESCE(sl.meta->>'day','') <> ''",
+        "COALESCE(sl.meta->>'kind','') <> ''",
+    ]
+    if d:
+        filters.append("COALESCE(sl.meta->>'day','') = %s")
+        params.append(d)
+    if k:
+        filters.append("COALESCE(sl.meta->>'kind','') = %s")
+        params.append(k)
+    where_sql = " AND ".join(filters)
+    sql = f"""
+WITH ranked AS (
+  SELECT
+    sl.id,
+    ROW_NUMBER() OVER (
+      PARTITION BY
+        COALESCE(sl.meta->>'day',''),
+        COALESCE(sl.meta->>'kind',''),
+        COALESCE(sl.meta->>'limit',''),
+        COALESCE(sl.meta->>'level','')
+      ORDER BY sl.at ASC, sl.id ASC
+    ) AS rn
+  FROM system_log sl
+  WHERE {where_sql}
+)
+DELETE FROM system_log sl
+USING ranked r
+WHERE sl.id = r.id
+  AND r.rn > 1
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            return int(cur.rowcount or 0)
+
+
+def list_system_alert_limits(*, day: str, kind: str) -> list[int]:
+    d = str(day or "").strip()[:10]
+    k = str(kind or "").strip()
+    if not d or not k:
+        return []
+    sql = """
+SELECT DISTINCT COALESCE(NULLIF(sl.meta->>'limit',''),'0')::int AS lim
+FROM system_log sl
+WHERE sl.event_type = 'system.alert'
+  AND COALESCE(sl.meta->>'day','') = %s
+  AND COALESCE(sl.meta->>'kind','') = %s
+  AND COALESCE(NULLIF(sl.meta->>'limit',''),'0')::int > 0
+ORDER BY lim ASC
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (d, k))
+            out: list[int] = []
+            for row in cur.fetchall():
+                try:
+                    out.append(int(row[0]))
+                except Exception:
+                    continue
+            return out
+
+
+def list_system_alert_levels(*, day: str, kind: str, limit: int) -> set[str]:
+    d = str(day or "").strip()[:10]
+    k = str(kind or "").strip()
+    try:
+        l = int(limit or 0)
+    except Exception:
+        l = 0
+    if not d or not k or l <= 0:
+        return set()
+    sql = """
+SELECT DISTINCT COALESCE(sl.meta->>'level','') AS lv
+FROM system_log sl
+WHERE sl.event_type = 'system.alert'
+  AND COALESCE(sl.meta->>'day','') = %s
+  AND COALESCE(sl.meta->>'kind','') = %s
+  AND COALESCE(NULLIF(sl.meta->>'limit',''),'0')::int = %s
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (d, k, l))
+            out: set[str] = set()
+            for row in cur.fetchall():
+                try:
+                    lv = str(row[0] or "").strip().lower()
+                except Exception:
+                    lv = ""
+                if lv:
+                    out.add(lv)
+            return out
 
 
 def estimate_sms_calls_for_day(*, day: str, tz_offset_seconds: int) -> int:

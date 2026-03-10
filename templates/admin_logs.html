@@ -1,0 +1,85 @@
+{% extends "admin_base.html" %}
+{% set admin_active = "logs" %}
+{% set admin_page_title = "系统日志" %}
+{% set admin_page_subtitle = "查看日志密度与操作明细" %}
+{% block head_extra %}
+    <style>
+      .admin-surface { font-size: var(--admin-font-size-base); min-height: clamp(760px, calc(100vh - 120px), 920px); }
+      .log-box { margin-bottom: 14px; border-radius: 16px; background: rgba(248, 250, 252, 0.90); padding: 16px; }
+      .log-box-head { display:grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; margin-bottom: 10px; }
+      .legend-grid { display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+      .legend-item { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius: 12px; background: rgba(255,255,255,0.82); }
+      .legend-dot { width: 10px; height: 10px; border-radius: 999px; }
+      .legend-cnt { margin-left:auto; font-weight: 900; }
+      .density-filter { display:flex; flex-wrap: nowrap; align-items: flex-end; gap: 10px; margin: 0; }
+      .range-group { display:flex; align-items: flex-end; gap: 10px; }
+      .field { margin: 0; }
+      .field-sm { width: 190px; }
+      .date-proxy { position: relative; width: 100%; }
+      .date-display { padding-right: 42px; cursor: pointer; }
+      .date-native { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+      .date-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: 1px solid rgba(15, 23, 42, 0.12); background: rgba(255, 255, 255, 0.65); width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(15, 23, 42, 0.75); }
+      .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
+      .density-plotly { min-height: 400px; }
+      .table-scroll { flex: 1 1 auto; min-height: 0; }
+      .tri-pager { margin-top: auto; justify-content: flex-end; padding-top: 12px; }
+      @media (max-width: 980px) { .legend-grid { grid-template-columns: 1fr; } .density-filter { flex-wrap: wrap; } }
+    </style>
+{% endblock %}
+{% block content %}
+      <div class="surface admin-surface" role="region" aria-label="系统日志">
+        <div class="log-box">
+          <div class="log-box-title">任务类型图例</div>
+          <div class="legend-grid">
+            <div class="legend-item"><span class="legend-dot" style="background: #16a34a;"></span><span>候选者操作</span><span class="legend-cnt">{{ log_counts.candidate if log_counts else 0 }}</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background: #7c3aed;"></span><span>试卷操作</span><span class="legend-cnt">{{ log_counts.exam if log_counts else 0 }}</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background: #f59e0b;"></span><span>判卷操作</span><span class="legend-cnt">{{ log_counts.grading if log_counts else 0 }}</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background: #2563eb;"></span><span>答题邀约</span><span class="legend-cnt">{{ log_counts.assignment if log_counts else 0 }}</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background: #0f172a;"></span><span>系统</span><span class="legend-cnt">{{ log_counts.system if log_counts else 0 }}</span></div>
+          </div>
+        </div>
+        <div class="log-box">
+          <div class="log-box-head">
+            <div class="log-box-title">任务密度图</div>
+            <form class="density-filter" method="get" action="{{ url_for('admin_logs') }}">
+              <div class="range-group">
+                <div class="field field-sm"><div class="date-proxy"><input id="chart_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="chart_start" class="input date-native" type="date" name="chart_start" value="{{ chart_range_start or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="chart_start">📅</button></div></div>
+                <div class="range-sep" aria-hidden="true">-</div>
+                <div class="field field-sm"><div class="date-proxy"><input id="chart_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="chart_end" class="input date-native" type="date" name="chart_end" value="{{ chart_range_end or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="chart_end">📅</button></div></div>
+              </div>
+              <div class="actions"><button class="btn btn-primary" type="submit">查询</button><a class="btn" href="{{ url_for('admin_logs') }}">重置</a></div>
+            </form>
+          </div>
+          <div class="density-wrap">
+            <div id="log_density_plotly" class="density-plotly" aria-label="任务密度图（Plotly）"></div>
+            <div id="log_density_empty" class="density-empty" style="display:none;">该时间范围暂无操作记录。</div>
+            <script id="log_density_data" type="application/json">{{ {"days": (chart_days or []), "counts": (chart_counts or [])}|tojson }}</script>
+          </div>
+        </div>
+        <div class="log-box">
+          <div class="log-box-title">任务详情列表</div>
+          <div class="table-scroll">
+            <table class="log-table" aria-label="日志表">
+              <thead><tr><th style="width:56px;">ID</th><th style="width:170px;">时间</th><th style="width:160px;">类型</th><th>详情</th></tr></thead>
+              <tbody id="logs_table_body">
+                {% for it in (logs or []) %}
+                <tr><td>{{ it.id }}</td><td class="nowrap">{{ it.at.strftime("%Y-%m-%d %H:%M:%S") if it.at else "" }}</td><td><span class="type-pill cat-{{ it.type_key or 'system' }}">{{ it.type_label or "" }}</span></td><td class="ellipsis">{{ it.detail_text or "" }}</td></tr>
+                {% endfor %}
+                {% if not logs %}<tr><td colspan="4" class="muted" style="padding:16px;">暂无系统日志</td></tr>{% endif %}
+              </tbody>
+            </table>
+          </div>
+          {% set total_log_pages_display = total_log_pages if total_log_pages and total_log_pages > 0 else 1 %}
+          {% set log_qs_extra = "" %}{% if chart_range_start %}{% set log_qs_extra = log_qs_extra ~ "&chart_start=" ~ (chart_range_start|urlencode) %}{% endif %}{% if chart_range_end %}{% set log_qs_extra = log_qs_extra ~ "&chart_end=" ~ (chart_range_end|urlencode) %}{% endif %}
+          <div class="tri-pager" aria-label="日志分页">
+            <span class="page-info">第 {{ log_page or 1 }} / {{ total_log_pages_display }} 页（共 {{ total_logs }} 条）</span>
+            {% if log_page and log_page > 1 %}<a class="tri-btn" href="{{ url_for('admin_logs') }}?log_page={{ log_page - 1 }}{{ log_qs_extra }}" aria-label="上一页" title="上一页">▲</a>{% else %}<span class="tri-btn disabled" aria-hidden="true">▲</span>{% endif %}
+            {% if log_page and (log_page < total_log_pages_display) %}<a class="tri-btn" href="{{ url_for('admin_logs') }}?log_page={{ log_page + 1 }}{{ log_qs_extra }}" aria-label="下一页" title="下一页">▼</a>{% else %}<span class="tri-btn disabled" aria-hidden="true">▼</span>{% endif %}
+          </div>
+        </div>
+      </div>
+{% endblock %}
+{% block scripts %}
+    <script src="{{ url_for('static', filename='vendor/plotly/plotly.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='admin_logs.js') }}"></script>
+{% endblock %}
