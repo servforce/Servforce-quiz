@@ -6,6 +6,7 @@ import re
 import shutil
 import base64
 import hashlib
+import hmac
 import secrets
 import threading
 import time as time_module
@@ -74,7 +75,7 @@ from services.assignment_service import (
     load_assignment,
     save_assignment,
 )
-from services.aliyun_dypns import check_sms_verify_code, send_sms_verify_code
+from services.aliyun_sms import send_sms_verify_code
 from services.audit_context import audit_context, get_audit_context
 from services.grading_service import generate_candidate_remark, grade_attempt
 from services.exam_generation_service import check_exam_prompt_completeness, generate_exam_from_prompt
@@ -105,6 +106,44 @@ _NAME_RE = re.compile(r"^[\u4e00-\u9fffA-Za-z·\s]{2,20}$")
 _PHONE_RE = re.compile(r"^1[3-9]\d{9}$")
 _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
 _ALLOWED_RESUME_EXTS = {".pdf", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+
+
+def _sms_code_length() -> int:
+    raw = str(os.getenv("ALIYUN_SMS_CODE_LENGTH") or "").strip()
+    try:
+        n = int(raw or 6)
+    except Exception:
+        n = 6
+    return min(8, max(4, n))
+
+
+def _sms_code_ttl_seconds() -> int:
+    raw = str(os.getenv("ALIYUN_SMS_CODE_TTL_SECONDS") or "").strip()
+    try:
+        n = int(raw or 300)
+    except Exception:
+        n = 300
+    return min(3600, max(60, n))
+
+
+def _generate_sms_code(length: int) -> str:
+    n = min(8, max(4, int(length or 6)))
+    v = secrets.randbelow(10**n)
+    return str(v).zfill(n)
+
+
+def _hash_sms_code(code: str, salt: str) -> str:
+    return hmac.new(str(salt or "").encode("utf-8"), str(code or "").encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _parse_iso_datetime(s: str) -> datetime | None:
+    text = str(s or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
 
 
 # 校验中文姓名（2-20字符，允许·与空格）。
@@ -4263,6 +4302,7 @@ def create_app() -> Flask:
 
         cooldown_seconds = 60
         max_send = 3
+        ttl_seconds = _sms_code_ttl_seconds()
         now = datetime.now(timezone.utc)
 
         with assignment_locked(token):
@@ -4329,18 +4369,19 @@ def create_app() -> Flask:
             last_phone = str(sms.get("phone") or "")
             last_sent_at = str(sms.get("last_sent_at") or "").strip()
             if last_phone == phone and last_sent_at:
-                try:
-                    last_dt = datetime.fromisoformat(last_sent_at.replace("Z", "+00:00"))
-                except Exception:
-                    last_dt = None
+                last_dt = _parse_iso_datetime(last_sent_at)
                 if last_dt is not None:
                     elapsed = (now - last_dt).total_seconds()
                     left = int(cooldown_seconds - elapsed)
                     if left > 0:
                         return jsonify({"ok": False, "cooldown": left, "error": f"请{left}秒后再试。"}), 429
 
+            code = _generate_sms_code(_sms_code_length())
+            code_salt = secrets.token_hex(16)
+            code_hash = _hash_sms_code(code, code_salt)
+
             try:
-                resp = send_sms_verify_code(phone)
+                resp = send_sms_verify_code(phone, code=code, ttl_seconds=ttl_seconds)
             except Exception:
                 logger.exception("Send SMS verify code failed")
                 return jsonify({"ok": False, "error": "短信服务暂不可用，请稍后重试。"}), 502
@@ -4356,6 +4397,9 @@ def create_app() -> Flask:
 
             sms["phone"] = phone
             sms["last_sent_at"] = now.isoformat()
+            sms["expires_at"] = (now + timedelta(seconds=ttl_seconds)).isoformat()
+            sms["code_salt"] = code_salt
+            sms["code_hash"] = code_hash
             sms["send_count"] = int(sms.get("send_count") or 0) + 1
             if biz_id:
                 sms["biz_id"] = biz_id
@@ -4447,6 +4491,9 @@ def create_app() -> Flask:
                 sms = assignment.get("sms_verify") or {}
                 if str(sms.get("phone") or "") != phone:
                     sms["phone"] = phone
+                    sms.pop("expires_at", None)
+                    sms.pop("code_salt", None)
+                    sms.pop("code_hash", None)
                     assignment["sms_verify"] = sms
 
                 if not sms.get("verified"):
@@ -4456,24 +4503,23 @@ def create_app() -> Flask:
                         flash("请输入短信验证码")
                         return redirect(url_for("public_verify_page", token=token))
 
-                    try:
-                        resp = check_sms_verify_code(phone, sms_code)
-                    except Exception:
-                        logger.exception("Check SMS verify code failed")
+                    if not str(sms.get("expires_at") or "").strip() or not str(sms.get("code_hash") or "").strip() or not str(sms.get("code_salt") or "").strip():
                         if wants_json:
-                            return jsonify({"ok": False, "error": "短信服务暂不可用，请稍后重试。"}), 502
-                        flash("短信服务暂不可用，请稍后重试。")
+                            return jsonify({"ok": False, "error": "请先发送短信验证码。"}), 400
+                        flash("请先发送短信验证码")
                         return redirect(url_for("public_verify_page", token=token))
 
-                    verify_result = ""
-                    model = resp.get("Model")
-                    if isinstance(model, dict):
-                        verify_result = str(model.get("VerifyResult") or "").strip().upper()
-                    sms_ok = (
-                        bool(resp.get("Success"))
-                        and str(resp.get("Code") or "").upper() == "OK"
-                        and verify_result == "PASS"
-                    )
+                    exp = _parse_iso_datetime(str(sms.get("expires_at") or ""))
+                    if exp is None or exp <= datetime.now(timezone.utc):
+                        if wants_json:
+                            return jsonify({"ok": False, "error": "验证码已过期，请重新发送。", "clear_sms": True}), 400
+                        flash("验证码已过期，请重新发送。")
+                        return redirect(url_for("public_verify_page", token=token))
+
+                    salt = str(sms.get("code_salt") or "").strip()
+                    expected = str(sms.get("code_hash") or "").strip()
+                    actual = _hash_sms_code(sms_code, salt)
+                    sms_ok = bool(expected and salt and hmac.compare_digest(expected, actual))
                     if not sms_ok:
                         if int((sms.get("send_count") or 0)) >= 3:
                             nowx = datetime.now(timezone.utc)
@@ -4499,6 +4545,9 @@ def create_app() -> Flask:
 
                     sms["verified"] = True
                     sms["verified_at"] = datetime.now(timezone.utc).isoformat()
+                    sms.pop("expires_at", None)
+                    sms.pop("code_salt", None)
+                    sms.pop("code_hash", None)
                     assignment["sms_verify"] = sms
 
                 if candidate_id <= 0:

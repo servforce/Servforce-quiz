@@ -17,6 +17,30 @@ from config import logger
 from services.system_log import log_event
 
 
+def _mask_value(key: str, value: Any) -> Any:
+    text = str(value or "")
+    key_lower = str(key or "").lower()
+    if key_lower == "accesskeyid":
+        if len(text) <= 6:
+            return "***"
+        return f"{text[:3]}***{text[-3:]}"
+    if key_lower == "signature":
+        return "***"
+    if key_lower == "phonenumber":
+        if len(text) >= 7:
+            return f"{text[:3]}****{text[-4:]}"
+        if len(text) >= 3:
+            return f"{text[:2]}***"
+        return "***"
+    if key_lower == "verifycode":
+        return "***"
+    return value
+
+
+def _sanitize_mapping(data: dict[str, Any]) -> dict[str, Any]:
+    return {str(k): _mask_value(str(k), v) for k, v in (data or {}).items()}
+
+
 def _pct_encode(s: str) -> str:
     # Aliyun RPC percent-encoding rules.
     return quote(str(s or ""), safe="~")
@@ -55,11 +79,13 @@ def _rpc_call(action: str, *, extra: dict[str, Any]) -> dict[str, Any]:
     params.update(extra or {})
 
     params["Signature"] = _sign(params, access_key_secret)
+    safe_params = _sanitize_mapping(params)
 
     body = "&".join(f"{_pct_encode(k)}={_pct_encode(v)}" for k, v in sorted(params.items()))
     data = body.encode("utf-8")
     url = f"https://{endpoint}/"
     req = Request(url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+    logger.info("Aliyun DYPNS request action=%s url=%s params=%s", action, url, json.dumps(safe_params, ensure_ascii=False, sort_keys=True))
 
     start = time.time()
     raw = ""
@@ -83,6 +109,12 @@ def _rpc_call(action: str, *, extra: dict[str, Any]) -> dict[str, Any]:
 
     if isinstance(obj, dict):
         obj.setdefault("_http_status", status)
+    logger.info(
+        "Aliyun DYPNS response action=%s status=%s body=%s",
+        action,
+        status,
+        json.dumps(obj if isinstance(obj, dict) else {"raw": obj}, ensure_ascii=False, sort_keys=True),
+    )
     if status and status >= 400:
         logger.warning("Aliyun DYPNS %s failed (HTTP %s) in %.2fs: %s", action, status, dt, str(obj)[:240])
     else:
