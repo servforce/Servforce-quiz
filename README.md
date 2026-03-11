@@ -7,7 +7,7 @@
 - 姓名 + 手机号校验，支持阿里云短信验证码二次验证
 - 在线答题、限时考试、最短交卷时长限制
 - 客观题自动判分，简答题可接入豆包大模型判分
-- 简历上传、OCR/文本提取、简历结构化解析
+- 简历上传、PDF/DOCX/图片文本提取、简历结构化解析
 - 管理后台查看结果、答卷快照、系统日志和资源消耗
 
 ## 1. 适合谁先看
@@ -33,7 +33,6 @@ markdown_quiz/
   templates/              Jinja2 页面模板
   static/                 前端静态资源
   storage/                运行时文件数据
-  scripts/                辅助脚本
   tests/                  单元测试
   docs/                   补充设计文档
 ```
@@ -78,7 +77,6 @@ markdown_quiz/
 
 - Python 3.11+，建议使用虚拟环境
 - PostgreSQL 16+，或者直接使用项目自带的 `docker-compose.yml`
-- Windows 环境下如果要做 OCR，需要额外安装 Tesseract
 
 ### 4.2 安装依赖
 
@@ -160,31 +158,21 @@ python app.py
 - `LLM_RETRY_BACKOFF`
 - `LLM_TIMEOUT_STRUCTURED`
 
-验证 LLM 是否通：
-
-```bash
-python scripts/llm_smoke_test.py
-```
-
 如果不配置 LLM：
 
 - 客观题仍可正常判分
 - 简答题相关的大模型判分能力不可用
 - 简历结构化解析能力会受限
 
-### 5.3 OCR 与简历处理
+### 5.3 简历文本提取
 
-- `TESSERACT_CMD`：Tesseract 可执行文件路径
-- `RESUME_OCR_LANG`：默认 `chi_sim+eng`
-- `RESUME_OCR_ZOOM`
 - `RESUME_PDF_MAX_PAGES`
-- `RESUME_PDF_OCR`
-- `RESUME_PDF_MIN_TEXT_CHARS`
 
 支持的简历文件类型：
 
 - `pdf`
 - `docx`
+- `png/jpg/jpeg/webp/bmp/tif/tiff`
 
 ### 5.4 短信验证
 
@@ -290,20 +278,12 @@ pytest
 - `DOUBAO_MODEL`
 - `DOUBAO_BASE_URL`
 
-建议先执行：
-
-```bash
-python scripts/llm_smoke_test.py
-```
-
 ### 9.3 简历上传后识别效果差
 
 优先检查：
 
-- 是否安装了 Tesseract
-- `TESSERACT_CMD` 是否正确
-- PDF 是否是扫描件
-- `RESUME_PDF_OCR` 是否开启
+- PDF/DOCX 文件内容是否可正常提取文本
+- `DOUBAO_API_KEY`、`DOUBAO_MODEL` 是否配置正确
 
 ### 9.4 短信发送失败
 
@@ -319,7 +299,7 @@ python scripts/llm_smoke_test.py
 - `db.py`：看表结构和数据流转
 - `services/assignment_service.py`：看分发记录和 token 生成
 - `services/grading_service.py`：看判分逻辑
-- `services/resume_service.py`：看简历解析和 OCR
+- `services/resume_service.py`：看简历解析和文本提取
 - `services/llm_client.py`：看豆包接口调用
 - `qml/parser.py`：看试卷格式约束
 

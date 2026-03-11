@@ -396,7 +396,7 @@
             </form>
             <form id="resumeUploadForm" method="post" action="/admin/candidates/resume/upload" enctype="multipart/form-data">
               <div class="resume-upload-cell">
-                <input id="resumeFile" class="input" type="file" name="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+                <input id="resumeFile" class="input" type="file" name="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
                 <button id="resumePickBtn" class="btn btn-primary" type="button">上传简历</button>
               </div>
             </form>
@@ -529,7 +529,7 @@
           <h3>创建候选人</h3>
           <button id="quickCreateCloseBtn" class="btn" type="button">关闭</button>
         </div>
-        <form class="quick-create-form" method="post" action="/admin/candidates/quick-create" enctype="multipart/form-data">
+        <form id="quickCreateForm" class="quick-create-form" method="post" action="/admin/candidates/quick-create" enctype="multipart/form-data">
           <div class="field">
             <label for="quick_create_name">姓名</label>
             <input id="quick_create_name" class="input" name="name" />
@@ -540,11 +540,11 @@
           </div>
           <div class="field">
             <label for="quick_create_file">简历</label>
-            <input id="quick_create_file" type="file" name="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+            <input id="quick_create_file" type="file" name="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*" />
           </div>
           <div class="quick-create-actions">
             <button id="quickCreateCancelBtn" class="btn" type="button">取消</button>
-            <button class="btn btn-primary" type="submit">创建候选人</button>
+            <button id="quickCreateSubmitBtn" class="btn btn-primary" type="submit">创建候选人</button>
           </div>
         </form>
       </div>
@@ -584,8 +584,8 @@
           const f = resumeFile.files && resumeFile.files.length > 0 ? resumeFile.files[0] : null;
           if (!f || !resumeUploadForm) return;
           const ext = (f.name || "").toLowerCase();
-          if (!(ext.endsWith(".pdf") || ext.endsWith(".docx"))) {
-            alert("仅支持 PDF/Word（DOCX）简历文件");
+          if (!(ext.endsWith(".pdf") || ext.endsWith(".docx") || ext.endsWith(".png") || ext.endsWith(".jpg") || ext.endsWith(".jpeg") || ext.endsWith(".webp") || ext.endsWith(".bmp") || ext.endsWith(".tif") || ext.endsWith(".tiff"))) {
+            alert("仅支持 PDF、DOCX 或图片简历文件");
             try { resumeFile.value = ""; } catch (e) {}
             return;
           }
@@ -670,6 +670,9 @@
         const quickCreateCloseBtn = document.getElementById("quickCreateCloseBtn");
         const quickCreateCancelBtn = document.getElementById("quickCreateCancelBtn");
         const quickCreateName = document.getElementById("quick_create_name");
+        const quickCreateForm = document.getElementById("quickCreateForm");
+        const quickCreateFile = document.getElementById("quick_create_file");
+        const quickCreateSubmitBtn = document.getElementById("quickCreateSubmitBtn");
         const openQuickCreate = () => {
           if (!quickCreateModal) return;
           quickCreateModal.hidden = false;
@@ -687,6 +690,19 @@
         if (quickCreateModal) {
           quickCreateModal.addEventListener("click", (e) => {
             if (e.target === quickCreateModal) closeQuickCreate();
+          });
+        }
+        if (quickCreateForm) {
+          quickCreateForm.addEventListener("submit", () => {
+            const f = quickCreateFile && quickCreateFile.files && quickCreateFile.files.length > 0
+              ? quickCreateFile.files[0]
+              : null;
+            if (!f) return;
+            if (quickCreateSubmitBtn) {
+              quickCreateSubmitBtn.disabled = true;
+              quickCreateSubmitBtn.textContent = "解析中...";
+            }
+            lockParsingUI();
           });
         }
 	    </script>

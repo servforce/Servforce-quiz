@@ -153,8 +153,8 @@
           <input type="hidden" name="token" value="{{ token }}" />
           <div class="row">
             <div class="label">简历文件</div>
-            <input class="input" type="file" name="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required />
-            <div class="muted">仅支持 PDF/Word（DOCX）格式。</div>
+            <input class="input" type="file" name="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*" required />
+            <div class="muted">支持 PDF、Word（DOCX）和图片格式。</div>
           </div>
           <div class="actions">
             <button id="submitBtn" class="btn btn-primary" type="submit">上传并继续答题</button>

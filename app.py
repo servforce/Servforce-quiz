@@ -104,7 +104,7 @@ from web.auth import admin_required
 _NAME_RE = re.compile(r"^[\u4e00-\u9fffA-Za-z·\s]{2,20}$")
 _PHONE_RE = re.compile(r"^1[3-9]\d{9}$")
 _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
-_ALLOWED_RESUME_EXTS = {".pdf", ".docx"}
+_ALLOWED_RESUME_EXTS = {".pdf", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 
 
 # 校验中文姓名（2-20字符，允许·与空格）。
@@ -3218,6 +3218,8 @@ def create_app() -> Flask:
                 ext = ".pdf"
             elif "word" in mime or "docx" in mime:
                 ext = ".docx"
+            elif mime.startswith("image/"):
+                ext = ".png"
             elif "markdown" in mime or mime.endswith("/md"):
                 ext = ".md"
             elif "text" in mime:
@@ -4718,8 +4720,8 @@ def create_app() -> Flask:
         ext = os.path.splitext(filename)[1].lower()
         if ext not in _ALLOWED_RESUME_EXTS:
             if wants_json:
-                return jsonify({"ok": False, "error": "仅支持上传 PDF/Word（DOCX）简历。"}), 400
-            flash("仅支持上传 PDF/Word（DOCX）简历")
+                return jsonify({"ok": False, "error": "仅支持上传 PDF/Word（DOCX）或图片简历。"}), 400
+            flash("仅支持上传 PDF/Word（DOCX）或图片简历")
             return redirect(url_for("public_resume_upload_page", token=token))
 
         try:

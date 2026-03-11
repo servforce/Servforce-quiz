@@ -10,7 +10,6 @@ markdown_quiz/
   templates/              # Jinja2 模板（前端页面）
   static/                 # 静态资源（全局 UI 样式在 static/ui.css）
   storage/                # 运行时数据（试卷/assignment/二维码等）
-  scripts/                # 辅助脚本（例如 LLM 连通性测试）
   docs/                   # 学习与文档
 ```
 
@@ -19,4 +18,3 @@ markdown_quiz/
 - 分发记录：`storage/assignments/<token>.json`
 - 二维码：`storage/qr/<token>.png`
 - 候选人列表：PostgreSQL 表 `candidate`
-

@@ -516,7 +516,7 @@
               </span>
               {% endif %}
               <form method="post" action="{{ url_for('admin_candidate_resume_reparse', candidate_id=c.id) }}" enctype="multipart/form-data" id="candidateReparseForm">
-                <input id="candidateReparseFile" type="file" name="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+                <input id="candidateReparseFile" type="file" name="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
                 <button class="btn btn-warning reparse-btn" type="button" id="candidateReparseBtn">&#19978;&#20256;&#31616;&#21382;&#24182;&#35299;&#26512;</button>
               </form>
               <a class="btn back-btn" href="/admin/candidates" id="backBtn">返回</a>

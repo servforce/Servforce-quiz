@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -7,13 +8,20 @@ from io import BytesIO
 from typing import Any
 
 from config import logger
-from services.llm_client import call_llm_structured, call_llm_structured_ex
+from services.llm_client import call_llm_structured, call_llm_structured_ex, call_llm_vision_text
 
 
 _PHONE_RE = re.compile(r"^1[3-9]\d{9}$")
 _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789")
 _NOISE_TOKEN_LINE_HEX_RE = re.compile(r"^[0-9a-fA-F]{24,}$")
 _NOISE_TOKEN_LINE_SAFE_RE = re.compile(r"^[A-Za-z0-9_-]{28,}$")
+_IMAGE_RESUME_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+_DIRECT_IMAGE_MIME_BY_EXT = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+}
 
 
 def _normalize_phone(value: str) -> str:
@@ -77,146 +85,70 @@ def _clean_text_for_llm(text: str) -> str:
     return out
 
 
-def _extract_pdf_text_ocr(data: bytes, *, max_pages: int, lang: str) -> str:
+def _extract_image_text_llm(data: bytes, filename: str) -> str:
     """
-    OCR fallback for scanned/image-only PDFs.
-
-    Uses:
-    - PyMuPDF (fitz) to render PDF pages into images
-    - pytesseract to OCR rendered images
-
-    Notes:
-    - Requires system Tesseract installation (binary).
-    - Controlled by env RESUME_PDF_OCR=1 (or truthy) in extract_resume_text().
+    Use the vision-capable LLM to transcribe an image resume into plain text.
     """
-    try:
-        import fitz  # type: ignore
-    except Exception as e:
-        raise RuntimeError("Missing dependency: pymupdf (fitz). Please install requirements.txt") from e
-
-    try:
-        import pytesseract  # type: ignore
-    except Exception as e:
-        raise RuntimeError("Missing dependency: pytesseract. Please install requirements.txt") from e
-
     try:
         from PIL import Image  # type: ignore
     except Exception as e:
         raise RuntimeError("Missing dependency: pillow. Please install requirements.txt") from e
 
-    tesseract_cmd = str(os.getenv("TESSERACT_CMD", "") or "").strip()
-    if tesseract_cmd:
-        try:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
-        except Exception:
-            pass
-
-    try:
-        _ = pytesseract.get_tesseract_version()
-    except Exception as e:
-        raise RuntimeError(
-            "Tesseract OCR is not available. Install Tesseract and ensure it is on PATH, "
-            "or set env TESSERACT_CMD to the tesseract executable path."
-        ) from e
-
-    parts: list[str] = []
-    doc = fitz.open(stream=data, filetype="pdf")
-    try:
-        max_pages = max(1, min(20, int(max_pages or 6)))
-        zoom = float(os.getenv("RESUME_OCR_ZOOM", "2.0") or "2.0")
-        mat = fitz.Matrix(zoom, zoom)
-        for i in range(min(max_pages, doc.page_count)):
-            page = doc.load_page(i)
-            pix = page.get_pixmap(matrix=mat, alpha=False)
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            txt = pytesseract.image_to_string(img, lang=lang) or ""
-            parts.append(txt.strip())
-    finally:
-        try:
-            doc.close()
-        except Exception:
-            pass
-
-    out = "\n".join([p for p in parts if p]).strip()
-    out = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", out)
-    return out
-
-
-def _extract_image_text_ocr(data: bytes, *, lang: str) -> str:
-    """
-    OCR for image resumes (jpg/png/webp/etc).
-
-    Notes:
-    - Requires system Tesseract installation (binary).
-    - Uses env TESSERACT_CMD / RESUME_OCR_LANG / RESUME_OCR_ZOOM (same as PDF OCR).
-    """
-    try:
-        import pytesseract  # type: ignore
-    except Exception as e:
-        raise RuntimeError("Missing dependency: pytesseract. Please install requirements.txt") from e
-
-    try:
-        from PIL import Image  # type: ignore
-    except Exception as e:
-        raise RuntimeError("Missing dependency: pillow. Please install requirements.txt") from e
-
-    tesseract_cmd = str(os.getenv("TESSERACT_CMD", "") or "").strip()
-    if tesseract_cmd:
-        try:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
-        except Exception:
-            pass
-
-    try:
-        _ = pytesseract.get_tesseract_version()
-    except Exception as e:
-        raise RuntimeError(
-            "Tesseract OCR is not available. Install Tesseract and ensure it is on PATH, "
-            "or set env TESSERACT_CMD to the tesseract executable path."
-        ) from e
-
+    ext = os.path.splitext(str(filename or "").lower())[1]
     try:
         img = Image.open(BytesIO(data))
     except Exception as e:
         raise RuntimeError(f"Image decode failed: {type(e).__name__}({e})") from e
 
     try:
-        if img.mode not in {"RGB", "L"}:
-            img = img.convert("RGB")
-        zoom = float(os.getenv("RESUME_OCR_ZOOM", "2.0") or "2.0")
-        if zoom and abs(zoom - 1.0) > 0.05:
-            w, h = img.size
-            nw = max(1, int(w * zoom))
-            nh = max(1, int(h * zoom))
-            img = img.resize((nw, nh))
-        txt = pytesseract.image_to_string(img, lang=lang) or ""
+        if ext in _DIRECT_IMAGE_MIME_BY_EXT:
+            mime = _DIRECT_IMAGE_MIME_BY_EXT[ext]
+            payload = data
+        else:
+            if img.mode not in {"RGB", "L"}:
+                img = img.convert("RGB")
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+            mime = "image/png"
+            payload = buf.getvalue()
+        image_url = f"data:{mime};base64," + base64.b64encode(payload).decode("ascii")
     finally:
         try:
             img.close()
         except Exception:
             pass
 
-    out = (txt or "").strip()
-    out = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", out)
-    return out
+    system = (
+        "你是一个简历图片转写助手。"
+        "请忠实读取图片中的简历内容，输出为纯文本。"
+        "不要解释，不要总结，不要补充图片里没有的信息。"
+    )
+    prompt = (
+        "请逐行转写这张简历图片里的全部可读文字。"
+        "尽量保留原有段落和换行；表格内容按阅读顺序展开即可。"
+        "如果某些字看不清，可以留空或使用最保守的识别结果。"
+    )
+    text = call_llm_vision_text(image_url=image_url, prompt=prompt, system=system)
+    text = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", str(text or "")).strip()
+    if not text:
+        logger.warning("Resume image vision extraction returned empty text for %s", filename)
+        raise RuntimeError("LLM vision returned empty text")
+    return text
 
 
 def extract_resume_text(data: bytes, filename: str) -> str:
     """
     Best-effort resume text extraction.
     Supported:
-    - .txt/.md
     - .pdf (pypdf)
     - .docx (python-docx)
-    - image files (.png/.jpg/.jpeg/.webp/.bmp/.tif/.tiff) via OCR
+    - common image formats via vision LLM
     """
     name = (filename or "").strip().lower()
-    if name.endswith((".txt", ".md")):
-        return (data or b"").decode("utf-8", errors="replace")
+    ext = os.path.splitext(name)[1]
 
-    if name.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff")):
-        lang = str(os.getenv("RESUME_OCR_LANG", "chi_sim+eng") or "chi_sim+eng").strip()
-        return _extract_image_text_ocr(data, lang=lang)
+    if ext in _IMAGE_RESUME_EXTS:
+        return _extract_image_text_llm(data, filename)
 
     if name.endswith(".pdf"):
         try:
@@ -239,22 +171,6 @@ def extract_resume_text(data: bytes, filename: str) -> str:
         text = "\n".join(parts)
         # pypdf sometimes inserts spaces/newlines between Chinese characters.
         text = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", text)
-
-        # OCR fallback for scanned PDFs (no text layer).
-        # Default: enabled (to reduce operational friction).
-        # You can disable via env RESUME_PDF_OCR=0/false/no/off.
-        ocr_flag = str(os.getenv("RESUME_PDF_OCR", "") or "").strip().lower()
-        want_ocr = ocr_flag not in {"0", "false", "no", "n", "off"}
-        min_chars = int(os.getenv("RESUME_PDF_MIN_TEXT_CHARS", "160") or "160")
-        too_short = len((text or "").strip()) < max(40, min_chars)
-        if want_ocr and too_short:
-            lang = str(os.getenv("RESUME_OCR_LANG", "chi_sim+eng") or "chi_sim+eng").strip()
-            try:
-                ocr_text = _extract_pdf_text_ocr(data, max_pages=max_pages, lang=lang)
-                if ocr_text.strip():
-                    return ocr_text
-            except Exception as e:
-                logger.warning("Resume OCR failed: %s", e)
 
         return text
 
