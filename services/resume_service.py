@@ -1282,7 +1282,7 @@ def parse_resume_details_llm(text: str) -> dict[str, Any]:
         raise RuntimeError(
             "LLM call failed: "
             + hint
-            + ". Check DOUBAO_API_KEY/DOUBAO_BASE_URL/DOUBAO_MODEL and confirm the API key has permission for this endpoint."
+            + ". Check OPENAI_API_KEY/OPENAI_BASE_URL/OPENAI_MODEL and confirm the API key has permission for this endpoint."
         )
     try:
         s = raw

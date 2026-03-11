@@ -8,7 +8,7 @@
 - 通过 QML 风格 Markdown 上传试卷，并生成可公开访问的试卷邀请链接
 - 候选人姓名 + 手机号校验，支持阿里云短信验证码验证
 - 在线答题、限时考试、最短交卷时长限制、自动收卷
-- 客观题自动判分，简答题可接入豆包/火山方舟兼容接口做 LLM 判分
+- 客观题自动判分，简答题可接入 OpenAI 兼容接口做 LLM 判分
 - 候选人简历上传、文本提取、基础识别、LLM 结构化解析
 - 后台查看考试结果、归档快照、业务日志和系统资源消耗
 - 后台 AI 辅助生成试卷
@@ -177,11 +177,11 @@ python app.py
 
 ### LLM 与 AI 判分
 
-项目当前封装的是豆包 / Volcengine Ark 兼容接口：
+项目当前封装的是 OpenAI-compatible Responses 接口：
 
-- `DOUBAO_API_KEY` 或 `ARK_API_KEY`
-- `DOUBAO_MODEL`
-- `DOUBAO_BASE_URL`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_BASE_URL`
 - `LLM_RESPONSE_FORMAT_JSON`
 - `LLM_RETRY_MAX`
 - `LLM_RETRY_BACKOFF`
@@ -295,9 +295,9 @@ pytest
 
 通常是 LLM 配置问题，优先检查：
 
-- `DOUBAO_API_KEY`
-- `DOUBAO_MODEL`
-- `DOUBAO_BASE_URL`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_BASE_URL`
 
 ### 3. 简历上传后解析效果不稳定
 
@@ -322,6 +322,6 @@ pytest
 - `services/assignment_service.py`: assignment 存取和加锁
 - `services/grading_service.py`: 判卷逻辑
 - `services/resume_service.py`: 简历提取与解析
-- `services/llm_client.py`: 豆包接口调用
+- `services/llm_client.py`: OpenAI 兼容接口调用
 - `services/exam_generation_service.py`: AI 出题
 - `qml/parser.py`: QML 试卷格式约束

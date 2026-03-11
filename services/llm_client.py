@@ -1,7 +1,7 @@
 """
 LLM client helpers used by grading and evaluation.
 
-Doubao (Volcengine Ark) is used exclusively via the OpenAI-compatible Responses API.
+All vendors are accessed via an OpenAI-compatible Responses API.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from config import DOUBAO_API_KEY, DOUBAO_BASE_URL, DOUBAO_MODEL, logger
+from config import OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL, logger
 from services.audit_context import get_audit_context, incr_audit_meta_int
 from services.system_metrics import incr_llm_tokens_and_alert, record_llm_usage
 
@@ -82,7 +82,7 @@ def _env_timeout(name: str, default: int) -> int:
     return max(5, min(600, n))
 
 
-def _doubao_responses(
+def _responses_api_request(
     *,
     input_messages: list[dict[str, Any]],
     model: str,
@@ -91,10 +91,10 @@ def _doubao_responses(
     timeout_seconds: int = 60,
     response_format_json: bool = False,
 ) -> dict[str, Any]:
-    if not DOUBAO_API_KEY:
-        raise RuntimeError("DOUBAO_API_KEY/ARK_API_KEY is empty")
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is empty")
 
-    url = f"{DOUBAO_BASE_URL.rstrip('/')}/responses"
+    url = f"{OPENAI_BASE_URL.rstrip('/')}/responses"
     payload: dict[str, Any] = {
         "model": model,
         "input": input_messages,
@@ -110,7 +110,7 @@ def _doubao_responses(
         url,
         data=body,
         headers={
-            "Authorization": f"Bearer {DOUBAO_API_KEY}",
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
             "Content-Type": "application/json",
         },
         method="POST",
@@ -145,7 +145,7 @@ def _doubao_responses(
             except Exception:
                 body_txt = ""
             if attempt >= max_retries or not retryable:
-                raise RuntimeError(f"Doubao HTTP {code}: {(body_txt or str(e))[:400]}") from e
+                raise RuntimeError(f"LLM HTTP {code}: {(body_txt or str(e))[:400]}") from e
             logger.warning(
                 "LLM HTTP %s (attempt %s/%s): %s",
                 code,
@@ -182,7 +182,7 @@ def _doubao_responses(
     try:
         return json.loads(raw)
     except Exception as e:
-        raise RuntimeError(f"Doubao /responses returned non-JSON: {raw[:400]}") from e
+        raise RuntimeError(f"LLM /responses returned non-JSON: {raw[:400]}") from e
 
 
 def _extract_output_text(obj: dict[str, Any]) -> str:
@@ -249,8 +249,8 @@ def call_llm_json(prompt: str, model: str | None = None) -> str:
             "   - contradiction: true/false（关键事实说反/矛盾时为 true，且应 score=0）\n"
             "示例：{\"score\":3,\"reason\":\"...\",\"relevance\":2,\"contradiction\":false}\n"
         )
-        use_model = (model or "").strip() or DOUBAO_MODEL
-        obj = _doubao_responses(
+        use_model = (model or "").strip() or OPENAI_MODEL
+        obj = _responses_api_request(
             input_messages=[
                 {
                     "role": "user",
@@ -264,11 +264,11 @@ def call_llm_json(prompt: str, model: str | None = None) -> str:
             response_format_json=_supports_response_format_json(),
         )
         dt = time.time() - start
-        logger.debug("LLM(doubao,json) ok in %.2fs", dt)
+        logger.debug("LLM(json) ok in %.2fs", dt)
         _accumulate_llm_usage(obj)
         return _extract_output_text(obj)
     except Exception as e:
-        logger.error("LLM call failed (doubao,json): %s", e)
+        logger.error("LLM call failed (json): %s", e)
         return ""
 
 
@@ -279,8 +279,8 @@ def call_llm_text(prompt: str, model: str | None = None) -> str:
     try:
         start = time.time()
         system = "你是一名资深面试官与能力评估专家。"
-        use_model = (model or "").strip() or DOUBAO_MODEL
-        obj = _doubao_responses(
+        use_model = (model or "").strip() or OPENAI_MODEL
+        obj = _responses_api_request(
             input_messages=[
                 {
                     "role": "user",
@@ -294,11 +294,11 @@ def call_llm_text(prompt: str, model: str | None = None) -> str:
             response_format_json=False,
         )
         dt = time.time() - start
-        logger.debug("LLM(doubao,text) ok in %.2fs", dt)
+        logger.debug("LLM(text) ok in %.2fs", dt)
         _accumulate_llm_usage(obj)
         return _extract_output_text(obj)
     except Exception as e:
-        logger.error("LLM call failed (doubao,text): %s", e)
+        logger.error("LLM call failed (text): %s", e)
         return ""
 
 
@@ -319,8 +319,8 @@ def call_llm_structured_ex(
     """
     try:
         start = time.time()
-        use_model = (model or "").strip() or DOUBAO_MODEL
-        obj = _doubao_responses(
+        use_model = (model or "").strip() or OPENAI_MODEL
+        obj = _responses_api_request(
             input_messages=[
                 {
                     "role": "user",
@@ -334,11 +334,11 @@ def call_llm_structured_ex(
             response_format_json=_supports_response_format_json(),
         )
         dt = time.time() - start
-        logger.debug("LLM(doubao,structured) ok in %.2fs", dt)
+        logger.debug("LLM(structured) ok in %.2fs", dt)
         _accumulate_llm_usage(obj)
         return _extract_output_text(obj), ""
     except Exception as e:
-        logger.error("LLM call failed (doubao,structured): %s", e)
+        logger.error("LLM call failed (structured): %s", e)
         return "", f"{type(e).__name__}: {e}"
 
 
@@ -356,12 +356,12 @@ def call_llm_vision_text(
     """
     try:
         start = time.time()
-        use_model = (model or "").strip() or DOUBAO_MODEL
+        use_model = (model or "").strip() or OPENAI_MODEL
         parts: list[dict[str, Any]] = [
             {"type": "input_image", "image_url": str(image_url or "")},
             {"type": "input_text", "text": ((str(system or "") + "\n") if system else "") + str(prompt or "")},
         ]
-        obj = _doubao_responses(
+        obj = _responses_api_request(
             input_messages=[{"role": "user", "content": parts}],
             model=use_model,
             temperature=0.0,
@@ -370,9 +370,9 @@ def call_llm_vision_text(
             response_format_json=False,
         )
         dt = time.time() - start
-        logger.debug("LLM(doubao,vision) ok in %.2fs", dt)
+        logger.debug("LLM(vision) ok in %.2fs", dt)
         _accumulate_llm_usage(obj)
         return _extract_output_text(obj)
     except Exception as e:
-        logger.error("LLM call failed (doubao,vision): %s", e)
+        logger.error("LLM call failed (vision): %s", e)
         return ""

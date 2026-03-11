@@ -74,8 +74,7 @@ DATABASE_URL = _get_database_url()
 # 没有设置环境变量，就选择根目录文件下的命令
 STORAGE_DIR = Path(os.getenv("STORAGE_DIR", str(BASE_DIR / "storage"))).resolve()
 
-# LLM (Doubao only)
-# Use Volcengine Ark OpenAI-compatible endpoint.
-DOUBAO_API_KEY = os.getenv("DOUBAO_API_KEY", os.getenv("ARK_API_KEY", ""))
-DOUBAO_BASE_URL = os.getenv("DOUBAO_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3").rstrip("/")
-DOUBAO_MODEL = os.getenv("DOUBAO_MODEL", os.getenv("LLM_MODEL", "doubao-seed-1-6-251015"))
+# LLM (OpenAI-compatible Responses API)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3").rstrip("/")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "")
