@@ -1,4 +1,8 @@
 Flask==3.0.0
+fastapi==0.116.1
+uvicorn==0.35.0
+httpx==0.28.1
+a2wsgi==1.10.10
 python-dotenv==1.0.1
 SQLAlchemy==2.0.25
 psycopg2-binary==2.9.9

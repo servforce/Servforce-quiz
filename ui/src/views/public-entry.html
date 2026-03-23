@@ -1,0 +1,16 @@
+<section x-data="publicEntryPage()" x-init="init()">
+  <h3 class="section-title">候选人端入口</h3>
+  <p class="section-subtitle">
+    候选人端也会迁到这个工作区；当前先保留统一主题、基础路由和运行时配置读取能力。
+  </p>
+  <div class="flow-list">
+    <template x-for="flow in flows" :key="flow.key">
+      <article class="flow-card">
+        <h4 class="flow-card__title" x-text="flow.label"></h4>
+        <p class="flow-card__hint">
+          新 UI 路由占位：<span x-text="flow.href"></span>
+        </p>
+      </article>
+    </template>
+  </div>
+</section>

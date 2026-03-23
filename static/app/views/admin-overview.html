@@ -1,0 +1,19 @@
+<section x-data="adminOverviewPage()" x-init="init()">
+  <h3 class="section-title">新控制台概览</h3>
+  <p class="section-subtitle">
+    这一层只承载新架构壳层、系统 API、任务系统与蓝绿主题 UI。历史 Flask 页面通过 legacy bridge 保留，
+    后续会逐步把试卷、候选人、邀约、日志、状态迁到这个工作区。
+  </p>
+  <div class="info-grid">
+    <template x-for="card in cards" :key="card.label">
+      <article class="info-card">
+        <p class="info-card__label" x-text="card.label"></p>
+        <p class="info-card__value" x-text="card.value"></p>
+      </article>
+    </template>
+  </div>
+  <div class="action-row">
+    <a class="btn-primary" href="/legacy/admin">进入旧后台</a>
+    <a class="btn-secondary" href="/api/system/processes" target="_blank">查看进程状态 JSON</a>
+  </div>
+</section>

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MD Quiz Console</title>
+    <link rel="stylesheet" href="/static/assets/css/material-symbols.css" />
+    <link rel="stylesheet" href="/static/app/assets/app.css" />
+    <script defer src="/static/assets/js/alpine.min.js"></script>
+    <script type="module" src="/static/app/assets/app.js"></script>
+  </head>
+  <body x-data="appShell()" x-init="init()" class="app-bg text-slate-950">
+    <div class="app-shell">
+      <aside class="app-sidebar">
+        <div class="brand-block">
+          <div class="brand-mark">?</div>
+          <div>
+            <h1 class="brand-title">MD Quiz</h1>
+            <p class="brand-subtitle">FastAPI + UI Workspace</p>
+          </div>
+        </div>
+        <nav class="nav-stack">
+          <template x-for="item in navigation" :key="item.href">
+            <a
+              class="nav-link"
+              :class="{ 'nav-link--active': isActive(item) }"
+              :href="item.href"
+              x-text="item.label"
+            ></a>
+          </template>
+        </nav>
+        <div class="sidebar-footer">
+          <a class="text-sm text-blue-700 hover:text-blue-800" :href="legacyUrl">进入旧后台</a>
+        </div>
+      </aside>
+      <div class="app-main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">重构进行中</p>
+            <h2 class="page-title" x-text="pageTitle"></h2>
+          </div>
+          <div class="status-chip">
+            <span class="status-dot"></span>
+            <span x-text="healthText"></span>
+          </div>
+        </header>
+        <main class="content-wrap">
+          <section id="view-root" class="view-surface"></section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

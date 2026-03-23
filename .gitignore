@@ -6,3 +6,5 @@ storage/
 venv/
 .venv/
 .env
+ui/node_modules/
+tmp/

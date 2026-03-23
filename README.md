@@ -1,361 +1,150 @@
 # Markdown Quiz
 
-基于 Flask + PostgreSQL 的在线笔试系统，面向候选人筛选、笔试邀约、在线答题、自动判卷和后台管理。
+`md-quiz` 正在从旧的 `Flask + Jinja` 单体后台，重构到新的 `FastAPI + API / Worker / Scheduler + ui/` 工作区。
 
-当前项目已经实现的核心能力：
+当前仓库里两套实现并存：
 
-- 管理员后台登录、试卷管理、候选人管理、分发管理、日志与系统状态
-- 通过 QML 风格 Markdown 上传试卷，并生成可公开访问的试卷邀请链接
-- 候选人姓名 + 手机号校验，支持阿里云短信验证码验证
-- 在线答题、限时考试、最短交卷时长限制、自动收卷
-- 客观题自动判分，简答题可接入 OpenAI 兼容接口做 LLM 判分
-- 候选人简历上传、文本提取、基础识别、LLM 结构化解析
-- 后台查看考试结果、归档快照、业务日志和系统资源消耗
-- 后台 AI 辅助生成试卷
+- **新系统**：`backend/md_quiz/` + `ui/` + `scripts/dev/run-*.sh`
+- **旧系统**：`app.py` + `web/` + `templates/` + `static/`
 
-## 项目概览
+这次重构的目标不是继续在旧模板上修补，而是把后端边界、前端工作区、任务系统、脚本和文档全部拉直到新形态；同时通过 `legacy bridge` 暂时保留旧后台，避免功能瞬间中断。
 
-主要入口和目录：
+## 新架构概览
+
+### 进程形态
+
+- `API`：FastAPI 应用，负责 `/api/*`、会话、静态资源挂载、新 UI 壳层
+- `Worker`：后台任务执行器，轮询 job store 并处理任务
+- `Scheduler`：定时任务投递器，负责自动投递指标同步等周期任务
+
+### 目录
 
 ```text
-markdown_quiz/
-  app.py                  兼容入口（直接运行时启动 Flask）
-  core/settings.py        环境变量与日志配置装载
-  web/app_factory.py      Flask 应用工厂
-  web/routes/             管理端 / 候选人端 / 公共路由
-  web/runtime_setup.py    启动初始化、数据库校验、后台线程
-  web/support/            按领域拆分的共享业务与工具函数
-  web/runtime_support.py  兼容聚合导出
-  config.py               兼容配置导出
-  db.py                   PostgreSQL 初始化、查询与写入
-  qml/                    QML Markdown 解析器
-  services/               业务服务层
-  templates/              Jinja2 模板
-  static/                 静态资源
-  storage/                默认运行期文件目录（由 STORAGE_DIR 控制，通常不入库）
-  scripts/dev/            本地启动与测试脚本
-  tests/                  pytest 测试
-  docs/                   补充设计文档
+backend/
+  md_quiz/
+    api/               FastAPI 路由层
+    services/          业务编排
+    storage/           轻量存储层（第一阶段先落 JSON store）
+    models/            Pydantic 模型
+    app.py             FastAPI 装配
+    main.py            API 入口
+    worker.py          Worker 入口
+    scheduler.py       Scheduler 入口
+ui/
+  src/                 前端源码
+  templates/           前端入口模板
+  scripts/build-ui.cjs UI 构建脚本
+static/
+  app/                 ui/ 的构建产物
+web/
+  ...                  旧 Flask 单体实现（通过 legacy bridge 暂时保留）
 ```
 
-运行期数据已经统一收敛到 PostgreSQL，主要包括：
+### Legacy Bridge
 
-- `candidate`: 候选人基础信息和简历
-- `exam_paper`: 候选人与试卷之间的单次考试记录
-- `assignment_record`: assignment 全量状态
-- `exam_definition`: 试卷源 Markdown、完整试卷、公开试卷、公开邀约配置
-- `exam_asset`: 试卷引用图片
-- `exam_archive`: 已完成考试的归档快照
-- `runtime_kv` / `runtime_daily_metric`: 系统状态配置与每日指标
-- `system_log`: 操作日志、判卷日志、系统告警和资源统计
+新 API 默认会把旧 Flask 应用挂到 `/legacy`：
 
-当前不再依赖运行期 JSON 文件作为业务权威源。
+- 新 UI：`http://127.0.0.1:8000/`
+- 旧后台：`http://127.0.0.1:8000/legacy/admin`
 
-## 当前业务流程
+这样做的原因很简单：
 
-### 管理员侧
+- 新骨架可以独立启动
+- 旧功能还能继续访问
+- 后续可以按领域逐页迁走，而不是一次性大爆炸迁移
 
-1. 打开 `/admin/login` 登录后台
-2. 在 `/admin/exams` 上传或编辑 QML Markdown 试卷
-3. 可在后台使用 AI 生成试卷草稿，再继续编辑
-4. 在 `/admin/candidates` 手工创建候选人，或上传简历自动生成候选人
-5. 在 `/admin/assignments` 创建单次考试邀约，生成候选人专属链接和二维码
-6. 也可以对某套试卷启用“公开邀约”，得到公开报名入口和二维码
-7. 在后台查看考试进度、作答详情、判卷结果、日志和系统状态
+## 主题与前端约束
 
-### 候选人侧
-
-候选人有两种进入方式：
-
-- 专属邀约：访问 `/t/<token>`
-- 公开邀约：访问 `/p/<public_token>`，系统会先创建候选人和 assignment，再跳转到专属流程
-
-实际答题流程：
-
-1. 输入姓名和手机号
-2. 如系统启用短信验证，则输入短信验证码
-3. 某些流程下需要先上传简历
-4. 验证通过后进入答题页 `/a/<token>`
-5. 到时自动收卷，或手动提交
-6. 后台异步判卷并归档结果
-
-## 功能清单
-
-### 后台页面
-
-- `/admin`: 仪表盘
-- `/admin/exams`: 试卷管理
-- `/admin/candidates`: 候选人管理
-- `/admin/assignments`: 分发与考试记录
-- `/admin/logs`: 业务日志
-- `/admin/status`: 系统状态与资源消耗
-
-### 已实现能力
-
-- 试卷上传、预览、编辑、删除
-- 试卷公开邀约开关与二维码生成
-- AI 辅助生成试卷
-- 候选人快速创建、编辑、删除
-- 简历上传、下载、重解析
-- 单次考试分发、最短交卷时长限制、邀请有效期控制
-- 客观题自动判卷与简答题 LLM 判卷
-- 候选人作答归档与后台回看
-- 系统告警、日志分类统计、每日资源用量展示
+- 当前前端基础配色 **保留**：蓝色 + 绿色，不照搬参考项目 `raelyn` 的深色主题
+- 新 UI 源码位于 `ui/`
+- 构建产物输出到 `static/app/`
+- 运行时不依赖 Node，只读取已构建好的静态文件
 
 ## 本地启动
 
-### 1. 环境要求
-
-- Python 3.10+
-- PostgreSQL 16+，或使用仓库内置 `docker-compose.yml`
-
-### 2. 创建虚拟环境并安装依赖
+### 1. Python 环境
 
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt pytest
 ```
 
-### 3. 启动 PostgreSQL
-
-如果本机没有现成数据库，可以直接启动：
+### 2. 启动新系统
 
 ```bash
-docker compose up -d
+scripts/dev/devctl.sh start
 ```
 
-当前 `docker-compose.yml` 默认配置为：
-
-- 数据库名：`markdown_quiz`
-- 用户名：`postgres`
-- 密码：`admin`
-- 本机端口：`5433`
-
-### 4. 配置环境变量
-
-先复制模板：
+常用命令：
 
 ```bash
-cp .env.example .env
+scripts/dev/devctl.sh start
+scripts/dev/devctl.sh stop
+scripts/dev/devctl.sh restart
+scripts/dev/devctl.sh status
+scripts/dev/devctl.sh logs
+scripts/dev/devctl.sh build-ui
 ```
 
-最少需要确认这些配置：
-
-```env
-DATABASE_URL=postgresql+psycopg2://postgres:admin@127.0.0.1:5433/markdown_quiz
-APP_SECRET_KEY=change-me
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=password
-```
-
-说明：
-
-- Docker 本地开发推荐固定使用 `postgresql+psycopg2://postgres:admin@127.0.0.1:5433/markdown_quiz`
-- 如果不使用仓库里的 `docker-compose.yml`，请显式设置你自己的 `DATABASE_URL`，不要依赖默认值猜测环境
-- `DATABASE_URL` 不填时，会回退到 `postgresql://postgres:admin@127.0.0.1:5433/markdown_quiz`
-- `APP_SECRET_KEY` 建议修改，避免使用默认开发值
-- `ADMIN_USERNAME` 默认是 `admin`
-- `ADMIN_PASSWORD` 默认是 `password`
-
-### 5. 启动应用
+也可以分别启动：
 
 ```bash
-scripts/dev/webctl.sh start
+scripts/dev/run-api.sh
+scripts/dev/run-worker.sh
+scripts/dev/run-scheduler.sh
 ```
 
-常用控制命令：
+默认地址：
+
+- 新 UI：`http://127.0.0.1:8000/`
+- 系统健康检查：`http://127.0.0.1:8000/api/system/health`
+- 旧后台桥接：`http://127.0.0.1:8000/legacy/admin`
+
+### 3. 构建 UI
 
 ```bash
-scripts/dev/webctl.sh start
-scripts/dev/webctl.sh status
-scripts/dev/webctl.sh restart
-scripts/dev/webctl.sh stop
-scripts/dev/webctl.sh logs
-scripts/dev/webctl.sh run
+scripts/dev/build-ui.sh
 ```
 
-默认访问地址：
+构建完成后会生成：
 
-- 后台登录页：`http://127.0.0.1:5000/admin/login`
-- 后台首页：`http://127.0.0.1:5000/admin`
+- `static/app/index.html`
+- `static/app/assets/app.css`
+- `static/app/assets/app.js`
+- `static/app/views/*.html`
 
-脚本会打印当前监听主机、端口、访问 URL、PID 和日志文件路径；后台日志默认写到 `tmp/logs/web.log`。
+## 当前阶段说明
 
-应用启动时会自动执行数据库初始化和必要的表结构升级。
+这轮已经完成的是：
 
-### 6. 运行测试
+- 新 FastAPI API 入口
+- Worker / Scheduler 入口
+- 运行时配置与任务系统的轻量存储边界
+- `ui/` 工作区与构建脚本
+- 统一开发脚本
+- 新文档骨架与最小测试
 
-```bash
-scripts/dev/test.sh tests/test_min_submit_seconds.py
-scripts/dev/test.sh -q
-```
+这轮**还没有**完全迁完的是：
 
-## 环境变量
+- 试卷、候选人、邀约、答题、判卷、归档的真实业务 API
+- 旧后台页面到新 UI 的整页迁移
+- 旧 `web/` / `templates/` / `static/` 的彻底删除
 
-### 基础配置
-
-- `DATABASE_URL`: PostgreSQL 连接串
-- `APP_SECRET_KEY`: Flask 会话和签名密钥
-- `ADMIN_USERNAME`: 后台用户名，默认 `admin`
-- `ADMIN_PASSWORD`: 后台密码，默认 `password`
-- `APP_HOST`: Web 监听地址，默认 `0.0.0.0`
-- `APP_DEBUG`: 是否开启 Flask debug，默认直接运行时开启
-- `APP_USE_RELOADER`: 是否开启 Flask reloader，默认跟随 `APP_DEBUG`
-- `PORT`: Web 端口，默认 `5000`
-- `STORAGE_DIR`: 文件存储目录，默认项目下的 `storage`
-- `LOG_LEVEL`: 日志级别
-
-### LLM 与 AI 判分
-
-项目当前封装的是 OpenAI-compatible Responses 接口：
-
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `OPENAI_BASE_URL`
-- `LLM_RESPONSE_FORMAT_JSON`
-- `LLM_RETRY_MAX`
-- `LLM_RETRY_BACKOFF`
-- `LLM_TIMEOUT_STRUCTURED`
-
-如果不配置 LLM：
-
-- 客观题仍可正常判分
-- 简答题 LLM 判分不可用
-- 简历结构化解析能力会下降
-- 后台 AI 生成试卷不可用
-
-### assignment token
-
-- `ASSIGNMENT_TOKEN_SECRET`: assignment token 的签名密钥，建议显式设置
-
-### 简历解析
-
-- `RESUME_DETAILS_TEXT_MAX_CHARS`
-- `RESUME_DETAILS_FOCUS_MAX_CHARS`
-- `RESUME_EXPERIENCE_RAW_MAX_CHARS`
-- `RESUME_DETAILS_PROMPT_MAX_CHARS`
-
-当前支持的简历文件类型：
-
-- `pdf`
-- `docx`
-- `png`
-- `jpg`
-- `jpeg`
-
-### 短信验证
-
-项目当前接入的是阿里云短信能力，常用变量包括：
-
-- `ALIYUN_ACCESS_KEY_ID`
-- `ALIYUN_ACCESS_KEY_SECRET`
-- `ALIYUN_SMS_ENDPOINT`
-- `ALIYUN_SMS_REGION_ID`
-- `ALIYUN_SMS_SIGN_NAME`
-- `ALIYUN_SMS_TEMPLATE_CODE`
-- `ALIYUN_SMS_TEMPLATE_PARAM`
-- `ALIYUN_SMS_CODE_TTL_SECONDS`
-- `ALIYUN_SMS_CODE_LENGTH`
-
-未配置短信能力时，短信验证码流程不可用。
-
-## 试卷格式
-
-试卷使用 QML 风格 Markdown，解析器位于 `qml/parser.py`。
-
-支持的题型：
-
-- `single`: 单选题
-- `multiple`: 多选题
-- `short`: 简答题
-
-最小示例：
-
-```md
----
-title: Python 基础测试
----
-
-## Q1 [single] (5)
-Python 中定义函数使用哪个关键字？
-- A) func
-- B*) def
-- C) function
-
-## Q2 [short] {max=10}
-请简述列表和元组的区别。
-[rubric]
-回答出可变性、使用场景或性能差异即可得分。
-[/rubric]
-```
-
-可参考：
-
-- `qml.md`
-- `examples/exam-demo.md`
+也就是说，仓库已经进入“新系统可运行，旧系统可桥接，后续按领域迁移”的状态。
 
 ## 测试
 
-运行全部测试：
-
 ```bash
-pytest
+scripts/dev/test.sh tests/test_fastapi_app.py -q
+scripts/dev/test.sh -q
 ```
 
-当前测试主要覆盖：
+## 参考文档
 
-- QML / Markdown 解析
-- 简历文本提取与分段
-- LLM 判分相关逻辑
-- 最短交卷时长
-- 候选人查询条件
-- 静态资源解析
-
-## 常见问题
-
-### 1. 启动时报数据库连接错误
-
-优先检查：
-
-- PostgreSQL 是否真的启动
-- `DATABASE_URL` 是否指向正确主机和端口
-- 用户名、密码、数据库名是否正确
-
-### 2. 后台能打开，但简答题判分失败
-
-通常是 LLM 配置问题，优先检查：
-
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `OPENAI_BASE_URL`
-
-### 3. 简历上传后解析效果不稳定
-
-优先检查：
-
-- 简历文件本身是否可正常提取文本
-- 图片/PDF 是否是扫描件，文字是否清晰
-- LLM 配置是否完整
-
-### 4. 短信发送失败
-
-优先检查：
-
-- 阿里云 AK/SK 是否有效
-- 短信签名和模板是否审核通过
-- `ALIYUN_SMS_TEMPLATE_PARAM` 格式是否与模板变量一致
-
-## 建议先读的文件
-
-- `app.py`: 兼容入口与本地启动入口
-- `web/app_factory.py`: Flask 应用装配
-- `web/runtime_setup.py`: 启动期目录准备、数据库初始化、后台线程启动
-- `web/routes/admin.py` / `web/routes/public.py`: 管理端与候选人端路由装配
-- `web/support/`: 按 `validation` / `system_status` / `exams` / `runtime_jobs` 拆开的共享逻辑
-- `db.py`: 表结构与数据库访问
-- `services/assignment_service.py`: assignment 的数据库存取和加锁
-- `services/grading_service.py`: 判卷逻辑
-- `services/resume_service.py`: 简历提取与解析
-- `services/llm_client.py`: OpenAI 兼容接口调用
-- `services/exam_generation_service.py`: AI 出题
-- `qml/parser.py`: QML 试卷格式约束
+- [文档导航](docs/README.md)
+- [架构总览](docs/architecture/overview.md)
+- [运行拓扑](docs/architecture/runtime-topology.md)
+- [配置项说明](docs/reference/configuration.md)
+- [REST API 约定](docs/reference/api.md)
+- [UI 主题覆盖](docs/ui/theme.md)
+- [前端工作区说明](docs/ui/frontend-workspace.md)
