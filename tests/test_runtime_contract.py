@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+import core.settings as settings_module
+import web.runtime_setup as runtime_setup
+
+
+def test_readme_and_env_example_share_recommended_database_contract():
+    readme = Path("README.md").read_text(encoding="utf-8")
+    env_example = Path(".env.example").read_text(encoding="utf-8")
+
+    expected = "postgresql+psycopg2://postgres:admin@127.0.0.1:5433/markdown_quiz"
+
+    assert expected in readme
+    assert expected in env_example
+    assert "cp .env.example .env" in readme
+
+
+def test_load_settings_default_database_matches_documented_local_contract(monkeypatch):
+    monkeypatch.setattr(settings_module, "load_dotenv", lambda *args, **kwargs: None)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    settings = settings_module.load_settings()
+
+    assert settings.database_url == "postgresql://postgres:admin@127.0.0.1:5433/markdown_quiz"
+
+
+def test_bootstrap_runtime_wraps_database_errors(monkeypatch):
+    monkeypatch.setattr(runtime_setup, "ensure_dirs", lambda: None)
+
+    def _boom():
+        raise RuntimeError("cannot connect to postgres")
+
+    monkeypatch.setattr(runtime_setup, "init_db", _boom)
+
+    app = type("DummyApp", (), {"debug": False})()
+
+    with pytest.raises(runtime_setup.RuntimeBootstrapError, match="cannot connect to postgres"):
+        runtime_setup.bootstrap_runtime(app)

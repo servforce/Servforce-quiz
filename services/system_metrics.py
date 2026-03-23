@@ -4,34 +4,24 @@ import threading
 from datetime import datetime
 from typing import Any
 
-from config import STORAGE_DIR, logger
+from config import logger
 from db import create_system_log
 from db import estimate_sms_calls_for_day
+from db import get_runtime_daily_metric_int
+from db import get_runtime_daily_metric_json
+from db import get_runtime_kv
+from db import incr_runtime_daily_metric_int
 from db import list_system_alert_levels, list_system_alert_limits
-from storage.json_store import read_json, write_json
+from db import set_runtime_daily_metric_json, set_runtime_kv
 
 _LOCK = threading.Lock()
-
-
-def _metrics_path():
-    return STORAGE_DIR / "system_metrics_daily.json"
-
-
-def _cfg_path():
-    return STORAGE_DIR / "system_status.json"
-
 
 def _today_local_day() -> str:
     return datetime.now().astimezone().date().isoformat()
 
 
 def _load_cfg() -> dict[str, int]:
-    try:
-        obj = read_json(_cfg_path())
-    except Exception:
-        obj = {}
-    if not isinstance(obj, dict):
-        obj = {}
+    obj = get_runtime_kv("system_status_config") or {}
     try:
         llm = int(obj.get("llm_tokens_limit") or 0)
     except Exception:
@@ -43,68 +33,12 @@ def _load_cfg() -> dict[str, int]:
     return {"llm_tokens_limit": max(0, llm), "sms_calls_limit": max(0, sms)}
 
 
-def _load_metrics() -> dict[str, dict[str, int]]:
-    try:
-        obj = read_json(_metrics_path())
-    except Exception:
-        obj = {}
-    if not isinstance(obj, dict):
-        return {}
-    out: dict[str, dict[str, int]] = {}
-    for k, v in obj.items():
-        day = str(k or "").strip()[:10]
-        if not day:
-            continue
-        if not isinstance(v, dict):
-            continue
-        dd: dict[str, int] = {}
-        for kk, vv in v.items():
-            try:
-                dd[str(kk)] = max(0, int(vv or 0))
-            except Exception:
-                continue
-        out[day] = dd
-    return out
-
-
-def _save_metrics(data: dict[str, dict[str, int]]) -> None:
-    try:
-        write_json(_metrics_path(), data)
-    except Exception:
-        pass
-
-
-def _load_metrics_raw() -> dict[str, Any]:
-    try:
-        obj = read_json(_metrics_path())
-    except Exception:
-        obj = {}
-    if not isinstance(obj, dict):
-        return {}
-    return dict(obj)
-
-
-def _save_metrics_raw(obj: dict[str, Any]) -> None:
-    try:
-        write_json(_metrics_path(), obj)
-    except Exception:
-        pass
-
-
 def _get_alert_state(*, day: str, kind: str) -> dict[str, Any]:
     d = str(day or "").strip()[:10]
     k = str(kind or "").strip()
     if not d or not k:
         return {}
-    obj = _load_metrics_raw()
-    row = obj.get(d)
-    if not isinstance(row, dict):
-        return {}
-    alerts = row.get("_alert_state")
-    if not isinstance(alerts, dict):
-        return {}
-    st = alerts.get(k)
-    return dict(st) if isinstance(st, dict) else {}
+    return dict(get_runtime_daily_metric_json(day=d, key=f"alert_state:{k}") or {})
 
 
 def _set_alert_state(*, day: str, kind: str, state: dict[str, Any]) -> None:
@@ -112,18 +46,7 @@ def _set_alert_state(*, day: str, kind: str, state: dict[str, Any]) -> None:
     k = str(kind or "").strip()
     if not d or not k:
         return
-    st = dict(state or {})
-    obj = _load_metrics_raw()
-    row = obj.get(d)
-    if not isinstance(row, dict):
-        row = {}
-    alerts = row.get("_alert_state")
-    if not isinstance(alerts, dict):
-        alerts = {}
-    alerts[k] = st
-    row["_alert_state"] = alerts
-    obj[d] = row
-    _save_metrics_raw(obj)
+    set_runtime_daily_metric_json(day=d, key=f"alert_state:{k}", value=dict(state or {}))
 
 
 def get_daily_metric(*, day: str, key: str) -> int:
@@ -132,11 +55,7 @@ def get_daily_metric(*, day: str, key: str) -> int:
     if not d or not k:
         return 0
     with _LOCK:
-        m = _load_metrics()
-        try:
-            return int((m.get(d) or {}).get(k) or 0)
-        except Exception:
-            return 0
+        return int(get_runtime_daily_metric_int(day=d, key=k) or 0)
 
 
 def incr_daily_metric(*, day: str, key: str, delta: int) -> int:
@@ -149,16 +68,7 @@ def incr_daily_metric(*, day: str, key: str, delta: int) -> int:
     if not d or not k or dd == 0:
         return 0
     with _LOCK:
-        m = _load_metrics()
-        row = dict(m.get(d) or {})
-        try:
-            cur = int(row.get(k) or 0)
-        except Exception:
-            cur = 0
-        row[k] = max(0, cur + dd)
-        m[d] = row
-        _save_metrics(m)
-        return int(row[k] or 0)
+        return int(incr_runtime_daily_metric_int(day=d, key=k, delta=dd) or 0)
 
 
 def set_daily_last(*, day: str, key: str, value: dict[str, Any]) -> None:
@@ -166,15 +76,8 @@ def set_daily_last(*, day: str, key: str, value: dict[str, Any]) -> None:
     k = str(key or "").strip()
     if not d or not k:
         return
-    v = dict(value or {})
     with _LOCK:
-        obj = _load_metrics_raw()
-        row = obj.get(d)
-        if not isinstance(row, dict):
-            row = {}
-        row[k] = v
-        obj[d] = row
-        _save_metrics_raw(obj)
+        set_runtime_daily_metric_json(day=d, key=k, value=dict(value or {}))
 
 
 def _level_from_ratio(ratio: float) -> str:
@@ -402,12 +305,7 @@ def ensure_sms_calls_metric(*, day: str, tz_offset_seconds: int) -> int:
     if not d:
         return 0
     with _LOCK:
-        m = _load_metrics()
-        row = dict(m.get(d) or {})
-        try:
-            cur = int(row.get("sms_calls") or 0)
-        except Exception:
-            cur = 0
+        cur = int(get_runtime_daily_metric_int(day=d, key="sms_calls") or 0)
         if cur > 0:
             return cur
     # Query outside the lock to avoid holding it during DB I/O.
@@ -418,17 +316,10 @@ def ensure_sms_calls_metric(*, day: str, tz_offset_seconds: int) -> int:
     if est <= 0:
         return 0
     with _LOCK:
-        m2 = _load_metrics()
-        row2 = dict(m2.get(d) or {})
-        try:
-            cur2 = int(row2.get("sms_calls") or 0)
-        except Exception:
-            cur2 = 0
+        cur2 = int(get_runtime_daily_metric_int(day=d, key="sms_calls") or 0)
         if cur2 <= 0:
-            row2["sms_calls"] = int(est)
-            m2[d] = row2
-            _save_metrics(m2)
-            return int(est)
+            set_runtime_daily_metric_json(day=d, key="sms_calls_seed", value={"estimated": int(est)})
+            return int(incr_runtime_daily_metric_int(day=d, key="sms_calls", delta=int(est)) or 0)
         return cur2
 
 

@@ -19,33 +19,38 @@
 
 ```text
 markdown_quiz/
-  app.py                  Flask 应用入口，主要路由都在这里
-  config.py               环境变量与全局配置
+  app.py                  兼容入口（直接运行时启动 Flask）
+  core/settings.py        环境变量与日志配置装载
+  web/app_factory.py      Flask 应用工厂
+  web/routes/             管理端 / 候选人端 / 公共路由
+  web/runtime_setup.py    启动初始化、数据库校验、后台线程
+  web/support/            按领域拆分的共享业务与工具函数
+  web/runtime_support.py  兼容聚合导出
+  config.py               兼容配置导出
   db.py                   PostgreSQL 初始化、查询与写入
+  storage/json_store.py   运行目录准备
   qml/                    QML Markdown 解析器
   services/               业务服务层
   templates/              Jinja2 模板
   static/                 静态资源
-  storage/                运行期文件存储
+  storage/                运行期文件存储目录
+  scripts/dev/            本地启动与测试脚本
   tests/                  pytest 测试
   docs/                   补充设计文档
 ```
 
-运行期数据大致分布在：
-
-- `storage/exams/<exam_key>/spec.json`: 完整试卷，包含答案和评分信息
-- `storage/exams/<exam_key>/public.json`: 面向候选人的公开试卷
-- `storage/exams/<exam_key>/assets/`: 试卷引用的图片等资源
-- `storage/assignments/<token>.json`: 单次分发/作答记录
-- `storage/archives/*.json`: 已完成考试的归档快照
-- `storage/public_invites.json`: 公开邀约索引
-- `storage/system_status.json`: 系统状态页阈值配置
-
-数据库里主要有三类数据：
+运行期数据已经统一收敛到 PostgreSQL，主要包括：
 
 - `candidate`: 候选人基础信息和简历
 - `exam_paper`: 候选人与试卷之间的单次考试记录
+- `assignment_record`: assignment 全量状态
+- `exam_definition`: 试卷源 Markdown、完整试卷、公开试卷、公开邀约配置
+- `exam_asset`: 试卷引用图片
+- `exam_archive`: 已完成考试的归档快照
+- `runtime_kv` / `runtime_daily_metric`: 系统状态配置与每日指标
 - `system_log`: 操作日志、判卷日志、系统告警和资源统计
+
+当前不再依赖运行期 JSON 文件作为业务权威源。
 
 ## 当前业务流程
 
@@ -105,10 +110,11 @@ markdown_quiz/
 - Python 3.10+
 - PostgreSQL 16+，或使用仓库内置 `docker-compose.yml`
 
-### 2. 安装依赖
+### 2. 创建虚拟环境并安装依赖
 
 ```bash
-pip install -r requirements.txt
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt pytest
 ```
 
 ### 3. 启动 PostgreSQL
@@ -131,7 +137,7 @@ docker compose up -d
 先复制模板：
 
 ```bash
-copy .env.example .env
+cp .env.example .env
 ```
 
 最少需要确认这些配置：
@@ -139,21 +145,23 @@ copy .env.example .env
 ```env
 DATABASE_URL=postgresql+psycopg2://postgres:admin@127.0.0.1:5433/markdown_quiz
 APP_SECRET_KEY=change-me
-# ADMIN_USERNAME=admin
-# ADMIN_PASSWORD=admin
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=password
 ```
 
 说明：
 
-- `DATABASE_URL` 不填时，会回退到 `postgresql://postgres:postgres@127.0.0.1:5432/markdown_quiz`
+- Docker 本地开发推荐固定使用 `postgresql+psycopg2://postgres:admin@127.0.0.1:5433/markdown_quiz`
+- 如果不使用仓库里的 `docker-compose.yml`，请显式设置你自己的 `DATABASE_URL`，不要依赖默认值猜测环境
+- `DATABASE_URL` 不填时，会回退到 `postgresql://postgres:admin@127.0.0.1:5433/markdown_quiz`
 - `APP_SECRET_KEY` 建议修改，避免使用默认开发值
 - `ADMIN_USERNAME` 默认是 `admin`
-- `ADMIN_PASSWORD` 默认是 `admin`
+- `ADMIN_PASSWORD` 默认是 `password`
 
 ### 5. 启动应用
 
 ```bash
-python app.py
+scripts/dev/run-web.sh
 ```
 
 默认访问地址：
@@ -163,6 +171,13 @@ python app.py
 
 应用启动时会自动执行数据库初始化和必要的表结构升级。
 
+### 6. 运行测试
+
+```bash
+scripts/dev/test.sh tests/test_min_submit_seconds.py
+scripts/dev/test.sh -q
+```
+
 ## 环境变量
 
 ### 基础配置
@@ -170,7 +185,7 @@ python app.py
 - `DATABASE_URL`: PostgreSQL 连接串
 - `APP_SECRET_KEY`: Flask 会话和签名密钥
 - `ADMIN_USERNAME`: 后台用户名，默认 `admin`
-- `ADMIN_PASSWORD`: 后台密码，默认 `admin`
+- `ADMIN_PASSWORD`: 后台密码，默认 `password`
 - `PORT`: Web 端口，默认 `5000`
 - `STORAGE_DIR`: 文件存储目录，默认项目下的 `storage`
 - `LOG_LEVEL`: 日志级别
@@ -317,9 +332,13 @@ pytest
 
 ## 建议先读的文件
 
-- `app.py`: 业务主入口和路由
+- `app.py`: 兼容入口与本地启动入口
+- `web/app_factory.py`: Flask 应用装配
+- `web/runtime_setup.py`: 启动期目录准备、数据库初始化、后台线程启动
+- `web/routes/admin.py` / `web/routes/public.py`: 管理端与候选人端路由装配
+- `web/support/`: 按 `validation` / `system_status` / `exams` / `runtime_jobs` 拆开的共享逻辑
 - `db.py`: 表结构与数据库访问
-- `services/assignment_service.py`: assignment 存取和加锁
+- `services/assignment_service.py`: assignment 的数据库存取和加锁
 - `services/grading_service.py`: 判卷逻辑
 - `services/resume_service.py`: 简历提取与解析
 - `services/llm_client.py`: OpenAI 兼容接口调用

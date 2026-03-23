@@ -10,8 +10,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from config import SECRET_KEY, STORAGE_DIR
-from storage.json_store import read_json, write_json
+from config import SECRET_KEY
+from db import create_assignment_record, get_assignment_record, save_assignment_record
 
 _LOCKS_GUARD = threading.Lock()
 _LOCKS: dict[str, threading.Lock] = {}
@@ -73,8 +73,7 @@ def compute_min_submit_seconds(time_limit_seconds: int, min_submit_seconds: int 
         limit = 0
     if limit <= 0:
         return 0
-    # (limit + 1) // 2
-    half_or_more = 60
+    half_or_more = (limit + 1) // 2
     if min_submit_seconds is None:
         return int(half_or_more)
     try:
@@ -98,21 +97,12 @@ def create_assignment(
     verify_max_attempts: int = 3,
     pass_threshold: int = 70,
 ) -> dict[str, Any]:
-    try:
-        import qrcode  # type: ignore
-    except Exception as e:  # pragma: no cover
-        raise RuntimeError("Missing dependency: qrcode. Please install requirements.txt") from e
-
     now = datetime.now(timezone.utc).isoformat()
     min_submit_seconds = compute_min_submit_seconds(time_limit_seconds, min_submit_seconds)
 
-    # Ensure we don't overwrite an existing assignment/QR due to token collision.
+    # Ensure we don't overwrite an existing assignment due to token collision.
     for _ in range(50):
         token = generate_assignment_token(exam_key=exam_key, candidate_id=candidate_id, phone=phone)
-        assignment_path = STORAGE_DIR / "assignments" / f"{token}.json"
-        qr_path = STORAGE_DIR / "qr" / f"{token}.png"
-        if assignment_path.exists() or qr_path.exists():
-            continue
 
         assignment = {
             "token": token,
@@ -137,22 +127,25 @@ def create_assignment(
             "grading_error": None,
             "grading": None,
         }
-        write_json(assignment_path, assignment)
+        try:
+            created = create_assignment_record(token, assignment)
+        except Exception:
+            continue
+        if not created:
+            continue
 
         url = f"{base_url.rstrip('/')}/t/{token}"
-        img = qrcode.make(url)
-        qr_path.parent.mkdir(parents=True, exist_ok=True)
-        # Pillow versions may not accept PathLike; ensure str path for compatibility.
-        img.save(str(qr_path))
-
-        return {"token": token, "url": url, "qr_path": str(qr_path)}
+        return {"token": token, "url": url}
 
     raise RuntimeError("Failed to allocate a unique assignment token after retries")
 
 
 def load_assignment(token: str) -> dict[str, Any]:
-    return read_json(STORAGE_DIR / "assignments" / f"{token}.json")
+    assignment = get_assignment_record(token)
+    if not isinstance(assignment, dict):
+        raise FileNotFoundError(str(token or ""))
+    return assignment
 
 
 def save_assignment(token: str, assignment: dict[str, Any]) -> None:
-    write_json(STORAGE_DIR / "assignments" / f"{token}.json", assignment)
+    save_assignment_record(token, assignment)

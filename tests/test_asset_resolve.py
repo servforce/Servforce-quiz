@@ -1,19 +1,22 @@
-from pathlib import Path
-
-from app import _resolve_exam_asset_file
+import web.support.exams as exams_module
 
 
-def test_resolve_exam_asset_falls_back_to_examples() -> None:
-    p = _resolve_exam_asset_file("common-test-2025", "img/q15.png")
-    assert p is not None
-    assert p.exists()
-    assert p.is_file()
-    assert str(p).replace("\\", "/").endswith("examples/img/q15.png")
+def test_resolve_exam_asset_reads_from_db(monkeypatch) -> None:
+    monkeypatch.setattr(
+        exams_module,
+        "get_exam_asset",
+        lambda exam_key, relpath: (b"png-bytes", "image/png"),
+    )
+
+    asset = exams_module._resolve_exam_asset_payload("common-test-2025", "img/q15.png")
+
+    assert asset == (b"png-bytes", "image/png")
 
 
-def test_resolve_exam_asset_blocks_traversal() -> None:
-    assert _resolve_exam_asset_file("common-test-2025", "../app.py") is None
-    assert _resolve_exam_asset_file("common-test-2025", "..\\app.py") is None
-    assert _resolve_exam_asset_file("common-test-2025", "img/../../app.py") is None
-    assert _resolve_exam_asset_file("common-test-2025", "img\\..\\..\\app.py") is None
+def test_resolve_exam_asset_returns_none_for_invalid_or_missing_asset(monkeypatch) -> None:
+    monkeypatch.setattr(exams_module, "get_exam_asset", lambda exam_key, relpath: None)
 
+    assert exams_module._resolve_exam_asset_payload("common-test-2025", "../app.py") is None
+    assert exams_module._resolve_exam_asset_payload("common-test-2025", "..\\app.py") is None
+    assert exams_module._resolve_exam_asset_payload("common-test-2025", "img/../../app.py") is None
+    assert exams_module._resolve_exam_asset_payload("common-test-2025", "img\\..\\..\\app.py") is None

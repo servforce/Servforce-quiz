@@ -112,6 +112,21 @@ def _candidate_query_where_clause(query: str | None) -> tuple[str, list[Any]]:
     return " WHERE (name ILIKE %s OR phone LIKE %s)", [q, q]
 
 
+def _json_param(value: Any) -> psycopg2.extras.Json:
+    return psycopg2.extras.Json(value, dumps=lambda x: json.dumps(x, ensure_ascii=False))
+
+
+def _json_load(raw: Any) -> Any:
+    if raw is None:
+        return None
+    if isinstance(raw, (dict, list)):
+        return raw
+    try:
+        return json.loads(str(raw))
+    except Exception:
+        return None
+
+
 def init_db() -> None:
     """
     Create/upgrade required DB objects.
@@ -399,6 +414,86 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
   ALTER TABLE exam_paper ADD COLUMN IF NOT EXISTS invite_end_date DATE NULL;
   CREATE INDEX IF NOT EXISTS idx_exam_paper_invite_start_date ON exam_paper(invite_start_date);
 
+  CREATE TABLE IF NOT EXISTS assignment_record (
+    token TEXT PRIMARY KEY,
+    exam_key TEXT NOT NULL,
+    candidate_id BIGINT NULL REFERENCES candidate(id) ON DELETE SET NULL,
+    status TEXT NOT NULL,
+    data JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE INDEX IF NOT EXISTS idx_assignment_record_exam_key ON assignment_record(exam_key);
+  CREATE INDEX IF NOT EXISTS idx_assignment_record_candidate_id ON assignment_record(candidate_id);
+  CREATE INDEX IF NOT EXISTS idx_assignment_record_status ON assignment_record(status);
+  CREATE INDEX IF NOT EXISTS idx_assignment_record_created_at ON assignment_record(created_at);
+
+  CREATE TABLE IF NOT EXISTS exam_asset (
+    id BIGSERIAL PRIMARY KEY,
+    exam_key TEXT NOT NULL,
+    relpath TEXT NOT NULL,
+    content BYTEA NOT NULL,
+    mime TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'exam_asset_exam_key_relpath_key') THEN
+      BEGIN
+        ALTER TABLE exam_asset ADD CONSTRAINT exam_asset_exam_key_relpath_key UNIQUE (exam_key, relpath);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+  END$$;
+  CREATE INDEX IF NOT EXISTS idx_exam_asset_exam_key ON exam_asset(exam_key);
+
+  CREATE TABLE IF NOT EXISTS exam_definition (
+    exam_key TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    source_md TEXT NOT NULL,
+    spec JSONB NOT NULL,
+    public_spec JSONB NOT NULL,
+    public_invite_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    public_invite_token TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_definition_public_invite_token
+    ON exam_definition(public_invite_token)
+    WHERE public_invite_token IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_exam_definition_created_at ON exam_definition(created_at);
+
+  CREATE TABLE IF NOT EXISTS exam_archive (
+    archive_name TEXT PRIMARY KEY,
+    token TEXT NOT NULL,
+    candidate_id BIGINT NULL REFERENCES candidate(id) ON DELETE SET NULL,
+    exam_key TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    archive JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_archive_token ON exam_archive(token);
+  CREATE INDEX IF NOT EXISTS idx_exam_archive_phone ON exam_archive(phone);
+  CREATE INDEX IF NOT EXISTS idx_exam_archive_exam_key ON exam_archive(exam_key);
+
+  CREATE TABLE IF NOT EXISTS runtime_kv (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS runtime_daily_metric (
+    day DATE NOT NULL,
+    key TEXT NOT NULL,
+    value_int BIGINT NULL,
+    value_json JSONB NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY(day, key)
+  );
+  CREATE INDEX IF NOT EXISTS idx_runtime_daily_metric_day ON runtime_daily_metric(day);
+
   CREATE TABLE IF NOT EXISTS system_log (
     id BIGSERIAL PRIMARY KEY,
     at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -683,6 +778,531 @@ def rename_exam_key(old_exam_key: str, new_exam_key: str) -> int:
         with conn.cursor() as cur:
             cur.execute(sql, (str(new_exam_key or ""), str(old_exam_key or "")))
             return int(cur.rowcount or 0)
+
+
+def save_assignment_record(token: str, assignment: dict[str, Any]) -> None:
+    token_str = str(token or "").strip()
+    if not token_str:
+        raise ValueError("missing token")
+    assignment_obj = dict(assignment or {})
+    exam_key = str(assignment_obj.get("exam_key") or "").strip()
+    if not exam_key:
+        raise ValueError("missing exam_key")
+    try:
+        candidate_id = int(assignment_obj.get("candidate_id") or 0)
+    except Exception:
+        candidate_id = 0
+    candidate_id_param = int(candidate_id) if candidate_id > 0 else None
+    status = str(assignment_obj.get("status") or "").strip() or "invited"
+    created_at_raw = str(assignment_obj.get("created_at") or "").strip()
+    created_at_param = None
+    if created_at_raw:
+        try:
+            created_at_param = datetime.fromisoformat(created_at_raw.replace("Z", "+00:00"))
+        except Exception:
+            created_at_param = None
+    payload = psycopg2.extras.Json(assignment_obj, dumps=lambda x: json.dumps(x, ensure_ascii=False))
+    sql = """
+INSERT INTO assignment_record(token, exam_key, candidate_id, status, data, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW())
+ON CONFLICT (token) DO UPDATE
+SET
+  exam_key = EXCLUDED.exam_key,
+  candidate_id = EXCLUDED.candidate_id,
+  status = EXCLUDED.status,
+  data = EXCLUDED.data,
+  updated_at = NOW()
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    token_str,
+                    exam_key,
+                    candidate_id_param,
+                    status,
+                    payload,
+                    created_at_param,
+                ),
+            )
+
+
+def create_assignment_record(token: str, assignment: dict[str, Any]) -> bool:
+    token_str = str(token or "").strip()
+    if not token_str:
+        raise ValueError("missing token")
+    assignment_obj = dict(assignment or {})
+    exam_key = str(assignment_obj.get("exam_key") or "").strip()
+    if not exam_key:
+        raise ValueError("missing exam_key")
+    try:
+        candidate_id = int(assignment_obj.get("candidate_id") or 0)
+    except Exception:
+        candidate_id = 0
+    candidate_id_param = int(candidate_id) if candidate_id > 0 else None
+    status = str(assignment_obj.get("status") or "").strip() or "invited"
+    created_at_raw = str(assignment_obj.get("created_at") or "").strip()
+    created_at_param = None
+    if created_at_raw:
+        try:
+            created_at_param = datetime.fromisoformat(created_at_raw.replace("Z", "+00:00"))
+        except Exception:
+            created_at_param = None
+    payload = psycopg2.extras.Json(assignment_obj, dumps=lambda x: json.dumps(x, ensure_ascii=False))
+    sql = """
+INSERT INTO assignment_record(token, exam_key, candidate_id, status, data, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW())
+ON CONFLICT (token) DO NOTHING
+RETURNING token
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    token_str,
+                    exam_key,
+                    candidate_id_param,
+                    status,
+                    payload,
+                    created_at_param,
+                ),
+            )
+            return cur.fetchone() is not None
+
+
+def get_assignment_record(token: str) -> dict[str, Any] | None:
+    sql = "SELECT data::text FROM assignment_record WHERE token=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(token or "").strip(),))
+            row = cur.fetchone()
+    if not row or not row[0]:
+        return None
+    try:
+        obj = json.loads(str(row[0]))
+    except Exception:
+        return None
+    return obj if isinstance(obj, dict) else None
+
+
+def list_assignment_tokens() -> list[str]:
+    sql = "SELECT token FROM assignment_record ORDER BY created_at DESC"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+    return [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
+
+
+def rename_assignment_exam_key(old_exam_key: str, new_exam_key: str) -> int:
+    sql = """
+UPDATE assignment_record
+SET
+  exam_key=%s,
+  data=jsonb_set(COALESCE(data, '{}'::jsonb), '{exam_key}', to_jsonb(%s::text), true),
+  updated_at=NOW()
+WHERE exam_key=%s
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(new_exam_key or ""), str(new_exam_key or ""), str(old_exam_key or "")))
+            return int(cur.rowcount or 0)
+
+
+def replace_exam_assets(exam_key: str, assets: dict[str, tuple[bytes, str]]) -> None:
+    exam_key_str = str(exam_key or "").strip()
+    if not exam_key_str:
+        raise ValueError("missing exam_key")
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM exam_asset WHERE exam_key=%s", (exam_key_str,))
+            for relpath, payload in dict(assets or {}).items():
+                rel = str(relpath or "").strip()
+                if not rel:
+                    continue
+                content, mime = payload
+                cur.execute(
+                    """
+INSERT INTO exam_asset(exam_key, relpath, content, mime, updated_at)
+VALUES (%s, %s, %s, %s, NOW())
+""",
+                    (exam_key_str, rel, psycopg2.Binary(bytes(content or b"")), str(mime or "application/octet-stream")),
+                )
+
+
+def get_exam_asset(exam_key: str, relpath: str) -> tuple[bytes, str] | None:
+    sql = "SELECT content, mime FROM exam_asset WHERE exam_key=%s AND relpath=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(exam_key or "").strip(), str(relpath or "").strip()))
+            row = cur.fetchone()
+    if not row:
+        return None
+    content = bytes(row[0] or b"")
+    mime = str(row[1] or "application/octet-stream").strip() or "application/octet-stream"
+    return content, mime
+
+
+def rename_exam_assets(old_exam_key: str, new_exam_key: str) -> int:
+    sql = "UPDATE exam_asset SET exam_key=%s, updated_at=NOW() WHERE exam_key=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(new_exam_key or ""), str(old_exam_key or "")))
+            return int(cur.rowcount or 0)
+
+
+def delete_exam_assets(exam_key: str) -> int:
+    sql = "DELETE FROM exam_asset WHERE exam_key=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(exam_key or "").strip(),))
+            return int(cur.rowcount or 0)
+
+
+def save_exam_definition(
+    *,
+    exam_key: str,
+    title: str,
+    source_md: str,
+    spec: dict[str, Any],
+    public_spec: dict[str, Any],
+) -> None:
+    sql = """
+INSERT INTO exam_definition(exam_key, title, source_md, spec, public_spec, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+ON CONFLICT (exam_key) DO UPDATE
+SET
+  title = EXCLUDED.title,
+  source_md = EXCLUDED.source_md,
+  spec = EXCLUDED.spec,
+  public_spec = EXCLUDED.public_spec,
+  updated_at = NOW()
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    str(exam_key or "").strip(),
+                    str(title or "").strip(),
+                    str(source_md or ""),
+                    _json_param(spec or {}),
+                    _json_param(public_spec or {}),
+                ),
+            )
+
+
+def get_exam_definition(exam_key: str) -> dict[str, Any] | None:
+    sql = """
+SELECT
+  exam_key,
+  title,
+  source_md,
+  spec::text,
+  public_spec::text,
+  public_invite_enabled,
+  public_invite_token,
+  created_at,
+  updated_at
+FROM exam_definition
+WHERE exam_key=%s
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(exam_key or "").strip(),))
+            row = cur.fetchone()
+    if not row:
+        return None
+    out = dict(row)
+    out["spec"] = _json_load(out.get("spec")) or {}
+    out["public_spec"] = _json_load(out.get("public_spec")) or {}
+    return out
+
+
+def list_exam_definitions() -> list[dict[str, Any]]:
+    sql = """
+SELECT
+  exam_key,
+  title,
+  spec::text,
+  public_invite_enabled,
+  public_invite_token,
+  created_at,
+  updated_at
+FROM exam_definition
+ORDER BY created_at ASC, exam_key ASC
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            rows = cur.fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows or []:
+        item = dict(row)
+        item["spec"] = _json_load(item.get("spec")) or {}
+        out.append(item)
+    return out
+
+
+def rename_exam_definition(old_exam_key: str, new_exam_key: str) -> int:
+    sql = "UPDATE exam_definition SET exam_key=%s, updated_at=NOW() WHERE exam_key=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(new_exam_key or "").strip(), str(old_exam_key or "").strip()))
+            return int(cur.rowcount or 0)
+
+
+def delete_exam_definition(exam_key: str) -> int:
+    sql = "DELETE FROM exam_definition WHERE exam_key=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(exam_key or "").strip(),))
+            return int(cur.rowcount or 0)
+
+
+def get_exam_public_invite(exam_key: str) -> dict[str, Any] | None:
+    sql = """
+SELECT public_invite_enabled, public_invite_token, created_at, title
+FROM exam_definition
+WHERE exam_key=%s
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(exam_key or "").strip(),))
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def set_exam_public_invite(exam_key: str, *, enabled: bool, token: str | None) -> int:
+    sql = """
+UPDATE exam_definition
+SET
+  public_invite_enabled=%s,
+  public_invite_token=%s,
+  updated_at=NOW()
+WHERE exam_key=%s
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    bool(enabled),
+                    (str(token or "").strip() or None),
+                    str(exam_key or "").strip(),
+                ),
+            )
+            return int(cur.rowcount or 0)
+
+
+def get_exam_key_by_public_invite_token(token: str) -> str:
+    sql = """
+SELECT exam_key
+FROM exam_definition
+WHERE public_invite_enabled = TRUE AND public_invite_token = %s
+LIMIT 1
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(token or "").strip(),))
+            row = cur.fetchone()
+    return str((row[0] if row else "") or "").strip()
+
+
+def save_exam_archive(
+    *,
+    archive_name: str,
+    token: str,
+    candidate_id: int | None,
+    exam_key: str,
+    phone: str,
+    archive: dict[str, Any],
+) -> None:
+    sql = """
+INSERT INTO exam_archive(archive_name, token, candidate_id, exam_key, phone, archive, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
+ON CONFLICT (archive_name) DO UPDATE
+SET
+  token = EXCLUDED.token,
+  candidate_id = EXCLUDED.candidate_id,
+  exam_key = EXCLUDED.exam_key,
+  phone = EXCLUDED.phone,
+  archive = EXCLUDED.archive,
+  updated_at = NOW()
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    str(archive_name or "").strip(),
+                    str(token or "").strip(),
+                    (int(candidate_id) if candidate_id else None),
+                    str(exam_key or "").strip(),
+                    str(phone or "").strip(),
+                    _json_param(archive or {}),
+                ),
+            )
+
+
+def get_exam_archive_by_name(archive_name: str) -> dict[str, Any] | None:
+    sql = """
+SELECT archive_name, token, candidate_id, exam_key, phone, archive::text, created_at, updated_at
+FROM exam_archive
+WHERE archive_name=%s
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(archive_name or "").strip(),))
+            row = cur.fetchone()
+    if not row:
+        return None
+    out = dict(row)
+    out["archive"] = _json_load(out.get("archive")) or {}
+    return out
+
+
+def get_exam_archive_by_token(token: str) -> dict[str, Any] | None:
+    sql = """
+SELECT archive_name, token, candidate_id, exam_key, phone, archive::text, created_at, updated_at
+FROM exam_archive
+WHERE token=%s
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(token or "").strip(),))
+            row = cur.fetchone()
+    if not row:
+        return None
+    out = dict(row)
+    out["archive"] = _json_load(out.get("archive")) or {}
+    return out
+
+
+def list_exam_archives_for_phone(phone: str) -> list[dict[str, Any]]:
+    sql = """
+SELECT archive_name, token, candidate_id, exam_key, phone, archive::text, created_at, updated_at
+FROM exam_archive
+WHERE phone=%s
+ORDER BY updated_at DESC, archive_name DESC
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(phone or "").strip(),))
+            rows = cur.fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows or []:
+        item = dict(row)
+        item["archive"] = _json_load(item.get("archive")) or {}
+        out.append(item)
+    return out
+
+
+def rename_exam_archives_exam_key(old_exam_key: str, new_exam_key: str) -> int:
+    sql = """
+UPDATE exam_archive
+SET
+  exam_key=%s,
+  archive=jsonb_set(COALESCE(archive, '{}'::jsonb), '{exam,exam_key}', to_jsonb(%s::text), true),
+  updated_at=NOW()
+WHERE exam_key=%s
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(new_exam_key or ""), str(new_exam_key or ""), str(old_exam_key or "")))
+            return int(cur.rowcount or 0)
+
+
+def get_runtime_kv(key: str) -> dict[str, Any] | None:
+    sql = "SELECT value::text FROM runtime_kv WHERE key=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(key or "").strip(),))
+            row = cur.fetchone()
+    value = _json_load(row[0] if row else None)
+    return value if isinstance(value, dict) else None
+
+
+def set_runtime_kv(key: str, value: dict[str, Any]) -> None:
+    sql = """
+INSERT INTO runtime_kv(key, value, updated_at)
+VALUES (%s, %s, NOW())
+ON CONFLICT (key) DO UPDATE
+SET value=EXCLUDED.value, updated_at=NOW()
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(key or "").strip(), _json_param(value or {})))
+
+
+def get_runtime_daily_metric_int(*, day: str, key: str) -> int:
+    sql = "SELECT value_int FROM runtime_daily_metric WHERE day=%s::date AND key=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(day or "").strip()[:10], str(key or "").strip()))
+            row = cur.fetchone()
+    try:
+        return int((row[0] if row else 0) or 0)
+    except Exception:
+        return 0
+
+
+def incr_runtime_daily_metric_int(*, day: str, key: str, delta: int) -> int:
+    sql = """
+INSERT INTO runtime_daily_metric(day, key, value_int, updated_at)
+VALUES (%s::date, %s, %s, NOW())
+ON CONFLICT (day, key) DO UPDATE
+SET
+  value_int = GREATEST(0, COALESCE(runtime_daily_metric.value_int, 0) + EXCLUDED.value_int),
+  updated_at = NOW()
+RETURNING value_int
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    str(day or "").strip()[:10],
+                    str(key or "").strip(),
+                    int(delta or 0),
+                ),
+            )
+            row = cur.fetchone()
+    try:
+        return int((row[0] if row else 0) or 0)
+    except Exception:
+        return 0
+
+
+def set_runtime_daily_metric_json(*, day: str, key: str, value: dict[str, Any]) -> None:
+    sql = """
+INSERT INTO runtime_daily_metric(day, key, value_json, updated_at)
+VALUES (%s::date, %s, %s, NOW())
+ON CONFLICT (day, key) DO UPDATE
+SET value_json=EXCLUDED.value_json, updated_at=NOW()
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    str(day or "").strip()[:10],
+                    str(key or "").strip(),
+                    _json_param(value or {}),
+                ),
+            )
+
+
+def get_runtime_daily_metric_json(*, day: str, key: str) -> dict[str, Any] | None:
+    sql = "SELECT value_json::text FROM runtime_daily_metric WHERE day=%s::date AND key=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(day or "").strip()[:10], str(key or "").strip()))
+            row = cur.fetchone()
+    value = _json_load(row[0] if row else None)
+    return value if isinstance(value, dict) else None
 
 # 根据id修改候选者姓名和手机号
 def update_candidate(candidate_id: int, *, name: str, phone: str, created_at=None) -> None:
