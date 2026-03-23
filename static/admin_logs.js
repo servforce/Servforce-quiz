@@ -1,26 +1,10 @@
 (() => {
   const initDateProxy = (id) => {
-    const native = document.getElementById(id);
-    const display = document.getElementById(`${id}_display`);
-    if (!native || !display) return;
-    const sync = () => { display.value = native.value ? String(native.value).replaceAll("-", "/") : ""; };
-    const open = () => {
-      try { if (native.showPicker) native.showPicker(); else native.click(); } catch (_) { try { native.focus(); } catch (_) {} }
-    };
-    sync();
-    native.addEventListener("change", sync);
-    display.addEventListener("click", open);
+    if (!window.AdminDatePicker || typeof window.AdminDatePicker.bind !== "function") return;
+    window.AdminDatePicker.bind(id);
   };
 
   ["chart_start", "chart_end"].forEach(initDateProxy);
-  document.querySelectorAll("button.date-btn[data-for]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-for");
-      const native = id ? document.getElementById(id) : null;
-      if (!native) return;
-      try { if (native.showPicker) native.showPicker(); else native.click(); } catch (_) {}
-    });
-  });
 
   const resize = () => {
     const el = document.getElementById("log_density_plotly");
@@ -37,10 +21,11 @@
     const xVals = Array.isArray(payload.days) ? payload.days.slice() : [];
     const yVals = Array.isArray(payload.counts) ? payload.counts.map((v) => Number(v || 0)) : [];
     if (!plotlyEl || !emptyEl || !xVals.length || yVals.every((v) => v <= 0) || !window.Plotly) {
-      if (plotlyEl) plotlyEl.style.display = "none";
-      if (emptyEl) emptyEl.style.display = "";
+      if (plotlyEl) plotlyEl.hidden = true;
+      if (emptyEl) emptyEl.hidden = false;
     } else {
-      emptyEl.style.display = "none";
+      plotlyEl.hidden = false;
+      emptyEl.hidden = true;
       window.Plotly.newPlot(plotlyEl, [{
         x: xVals,
         y: yVals,

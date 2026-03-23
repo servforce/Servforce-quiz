@@ -12,7 +12,7 @@
         padding: 12px 14px;
         border: 1px dashed rgba(15, 23, 42, 0.18);
         background: rgba(15, 23, 42, 0.02);
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         margin: 10px 0 14px;
       }
       .hint strong { font-size: var(--admin-font-size-control); }
@@ -61,7 +61,7 @@
         overflow: auto;
         padding: 14px;
         border: 1px solid rgba(15, 23, 42, 0.10);
-        border-radius: 16px;
+        border-radius: var(--radius-lg);
         background: #fff;
         box-shadow: 0 20px 48px rgba(15, 23, 42, 0.24);
       }
@@ -79,7 +79,7 @@
         align-items: center;
         gap: 10px;
         padding: 10px 14px;
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(255, 255, 255, 0.96);
         font-weight: 800;
@@ -126,7 +126,7 @@
       .ai-check-result {
         margin: 8px 0 10px;
         padding: 10px 12px;
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         border: 1px solid rgba(15, 23, 42, 0.14);
         background: rgba(15, 23, 42, 0.03);
         font-size: var(--admin-font-size-control);
@@ -156,7 +156,7 @@
       .confirm-card {
         width: min(440px, 94vw);
         border: 1px solid rgba(15, 23, 42, 0.12);
-        border-radius: 16px;
+        border-radius: var(--radius-lg);
         background: #fff;
         box-shadow: 0 18px 40px rgba(2, 6, 23, 0.24);
         padding: 16px;
@@ -190,7 +190,7 @@
       .ai-gen-row .field { margin: 0; }
       .ai-gen-row .field-ai-prompt { flex: 1 1 760px; max-width: 100%; }
       .ai-gen-row .ai-gen-actions { display: inline-flex; gap: 10px; align-items: flex-end; }
-      .ai-gen-row .ai-gen-actions .btn { height: 40px; font-size: var(--admin-font-size-control); border-radius: 14px; }
+      .ai-gen-row .ai-gen-actions .btn { height: 40px; font-size: var(--admin-font-size-control); border-radius: var(--radius-md); }
       .ai-prompt-head {
         display: flex;
         align-items: center;
@@ -222,7 +222,7 @@
         width: min(620px, 100%);
         padding: 8px 10px;
         border: 1px solid rgba(15, 23, 42, 0.12);
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         background: rgba(255, 255, 255, 0.92);
       }
 
@@ -244,7 +244,7 @@
       #tab-exams .exam-search .field label { display: none; }
       #tab-exams {
         flex: 1 1 auto !important;
-        min-height: clamp(760px, calc(100vh - 120px), 920px) !important;
+        min-height: 0 !important;
       }
       #tab-exams .table-scroll { flex: 1 1 auto; min-height: 0; }
       #tab-exams .tri-pager { margin-top: auto; justify-content: flex-end; padding-top: 12px; }
@@ -267,50 +267,19 @@
       a.token-copy:focus-visible {
         outline: 3px solid rgba(37, 99, 235, 0.20);
         outline-offset: 2px;
-        border-radius: 10px;
+        border-radius: var(--radius-sm);
       }
-
-      /* Date proxy (same UX as candidate list: yyyy/mm/dd + calendar button). */
-      .assign-grid-2 .date-proxy { position: relative; width: 100%; }
-      .assign-grid-2 .date-proxy .date-display { padding-right: 42px; cursor: pointer; }
-      .assign-grid-2 .date-proxy .date-native {
-        position: absolute;
-        inset: 0;
-        opacity: 0;
-        pointer-events: none;
-      }
-      .assign-grid-2 .date-proxy .date-btn {
-        position: absolute;
-        right: 8px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 32px;
-        height: 32px;
-        border-radius: 10px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(255, 255, 255, 0.95);
-        color: rgba(15, 23, 42, 0.72);
-        display: grid;
-        place-items: center;
-        cursor: pointer;
-      }
-      .assign-grid-2 .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
 
       /* Attempt list date range filter (scoped to #tab-assign only). */
       #tab-assign .assign-attempts .attempt-head { display:flex; flex-direction: column; align-items: stretch; gap: 10px; margin: 0 0 10px; padding: 0; }
       #tab-assign .assign-attempts .attempt-head .title { margin: 0; font-size: var(--admin-font-size-control); }
-      /* Keep filter row "top-aligned" and put actions on the right of the query. */
-      #tab-assign .assign-attempts .attempt-filter { display:flex; flex-wrap: nowrap; align-items: flex-end; gap: 10px; margin: 0; width: 100%; }
+      /* Keep filter row compact and aligned with the shared toolbar primitives. */
+      #tab-assign .assign-attempts .attempt-filter { margin: 0; }
       #tab-assign .assign-attempts .attempt-filter .field { margin: 0; }
-      #tab-assign .assign-attempts .attempt-filter .field.field-q label { font-size: 16px; font-weight: 800; }
-      #tab-assign .assign-attempts .attempt-filter .field.field-q { flex: 0 1 520px; max-width: 520px; min-width: 300px; }
-      #tab-assign .assign-attempts .attempt-filter .field.field-sm { flex: 0 0 230px; }
-      #tab-assign .assign-attempts .attempt-filter .input { height: 42px; padding-top: 0; padding-bottom: 0; line-height: 1.25; font-size: var(--admin-font-size-control); }
-      #tab-assign .assign-attempts .range-group { display: flex; align-items: flex-end; gap: 10px; margin-left: auto; }
-      #tab-assign .assign-attempts .range-group .field { flex: 1 1 230px; }
-      #tab-assign .assign-attempts .attempt-actions { display: inline-flex; gap: 10px; margin-left: 0; align-items: flex-end; }
+      #tab-assign .assign-attempts .attempt-filter .toolbar-field--query { min-width: 0; max-width: none; }
+      #tab-assign .assign-attempts .attempt-actions { justify-content: flex-end; }
       #tab-assign .assign-attempts .range-sep {
-        height: 42px;
+        height: 40px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -319,38 +288,8 @@
         font-weight: 900;
         user-select: none;
       }
-      #tab-assign .assign-attempts .date-proxy { position: relative; width: 100%; }
-      #tab-assign .assign-attempts .date-proxy .date-display { padding-right: 42px; cursor: pointer; }
-      #tab-assign .assign-attempts .date-proxy .date-native {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 1px;
-        height: 1px;
-        opacity: 0;
-        pointer-events: none;
-      }
-      #tab-assign .assign-attempts .date-proxy .date-btn {
-        position: absolute;
-        right: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 34px;
-        height: 34px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 10px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(255, 255, 255, 0.92);
-        cursor: pointer;
-        padding: 0;
-      }
-      #tab-assign .assign-attempts .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
-      #tab-assign .assign-attempts .attempt-filter .btn { height: 42px; min-width: 84px; padding: 0 16px; line-height: 1; font-size: var(--admin-font-size-control); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; }
       @media (max-width: 1100px) {
-        #tab-assign .assign-attempts .attempt-filter { flex-wrap: wrap; }
-        #tab-assign .assign-attempts .attempt-actions { margin-left: 0; }
+        #tab-assign .assign-attempts .attempt-actions { justify-content: flex-start; }
       }
 
       table.exam-table { width: 100%; table-layout: auto; }
@@ -409,7 +348,7 @@
       #tab-exams .btn {
         height: 40px;
         font-size: var(--admin-font-size-control);
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         line-height: 1;
         display: inline-flex;
         align-items: center;
@@ -457,23 +396,40 @@
         margin: 10px auto 0;
         background: rgba(255, 255, 255, 0.86);
         border: 1px solid rgba(15, 23, 42, 0.10);
-        border-radius: 18px;
+        border-radius: var(--radius-lg);
         padding: 16px 16px 14px;
         box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
         backdrop-filter: blur(6px);
       }
-      /* Stable two-row layout: top row for exam/candidate/duration, second row for dates + action. */
-      #tab-assign .assign-form .assign-grid-inline {
-        display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr));
-        gap: 16px 18px;
-        align-items: end;
-      }
       #tab-assign .assign-form .field { margin: 0; width: 100%; max-width: none; }
-      #tab-assign .assign-form .field.field-mid { grid-column: span 2; }
-      #tab-assign .assign-form .field.field-time { grid-column: span 2; }
-      #tab-assign .assign-form .field.field-start { grid-column: 1 / span 2; }
-      #tab-assign .assign-form .field.field-end { grid-column: 3 / span 2; }
+      #tab-assign .assign-form .time-picker { position: relative; width: 100%; }
+      #tab-assign .assign-form .time-display {
+        padding-right: 42px;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.96);
+      }
+      #tab-assign .assign-form .time-picker-btn {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-sm);
+        border: 0;
+        background: transparent;
+        color: rgba(15, 23, 42, 0.72);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        line-height: 1;
+      }
+      #tab-assign .assign-form .time-picker-btn:hover {
+        background: rgba(239, 246, 255, 0.9);
+        color: var(--brand-strong);
+      }
       #tab-assign .assign-form .field label {
         font-size: var(--admin-font-size-label);
         font-weight: 800;
@@ -500,42 +456,103 @@
       #tab-assign .assign-form .assign-divider { display: none; }
       #tab-assign .assign-form .assign-grid-params { margin-top: 0; }
       #tab-assign .assign-form .field select { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      #tab-assign .assign-form .assign-actions {
-        grid-column: 5 / span 2;
-        display: flex;
-        justify-content: flex-end;
-        align-self: end;
-      }
-      #tab-assign .assign-form .assign-actions .btn {
+      #tab-assign .assign-form .invite-grid__actions .btn {
         min-width: 180px;
         height: 44px;
         padding: 0 18px;
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         font-size: var(--admin-font-size-control);
       }
-      @media (max-width: 1400px) {
-        #tab-assign .assign-form .assign-grid-inline { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        #tab-assign .assign-form .field.field-mid,
-        #tab-assign .assign-form .field.field-time,
-        #tab-assign .assign-form .field.field-start,
-        #tab-assign .assign-form .field.field-end,
-        #tab-assign .assign-form .assign-actions { grid-column: span 2; }
+      #duration_modal_dashboard {
+        position: fixed;
+        inset: 0;
+        z-index: 3200;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: rgba(15, 23, 42, 0.34);
       }
-      @media (max-width: 1100px) {
-        #tab-assign .assign-form .assign-grid-inline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        #tab-assign .assign-form .field.field-mid,
-        #tab-assign .assign-form .field.field-time,
-        #tab-assign .assign-form .field.field-start,
-        #tab-assign .assign-form .field.field-end,
-        #tab-assign .assign-form .assign-actions { grid-column: span 1; }
+      #duration_modal_dashboard[hidden] { display: none; }
+      #duration_modal_dashboard .duration-card {
+        width: min(420px, 92vw);
+        border-radius: var(--radius-lg);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.20);
+        overflow: hidden;
+      }
+      #duration_modal_dashboard .duration-card-head {
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(37, 99, 235, 0.10);
+        background: rgba(247, 250, 255, 0.86);
+      }
+      #duration_modal_dashboard .duration-card-head h3 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.2;
+      }
+      #duration_modal_dashboard .duration-card-body {
+        display: grid;
+        gap: 14px;
+        padding: 16px;
+      }
+      #duration_modal_dashboard .duration-presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      #duration_modal_dashboard .duration-preset {
+        min-width: 76px;
+        height: 34px;
+        padding: 0 12px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(248, 250, 252, 0.9);
+        color: rgba(15, 23, 42, 0.78);
+        font-size: 14px;
+        cursor: pointer;
+      }
+      #duration_modal_dashboard .duration-preset.is-active {
+        border-color: rgba(37, 99, 235, 0.28);
+        background: rgba(37, 99, 235, 0.10);
+        color: var(--brand-strong);
+      }
+      #duration_modal_dashboard .duration-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        gap: 10px;
+        align-items: end;
+      }
+      #duration_modal_dashboard .duration-grid .field { margin: 0; }
+      #duration_modal_dashboard .duration-grid .field label {
+        display: inline-block;
+        margin-bottom: 6px;
+        font-size: var(--admin-font-size-label);
+        color: rgba(15, 23, 42, 0.72);
+      }
+      #duration_modal_dashboard .duration-grid .input,
+      #duration_modal_dashboard .duration-grid select {
+        width: 100%;
+        height: 40px;
+      }
+      #duration_modal_dashboard .duration-sep {
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(15, 23, 42, 0.45);
+        font-weight: 700;
+      }
+      #duration_modal_dashboard .duration-card-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 16px 16px;
+        border-top: 1px solid rgba(37, 99, 235, 0.10);
+        background: rgba(247, 250, 255, 0.60);
       }
       @media (max-width: 980px) {
         #tab-assign .assign-form { max-width: 100%; margin-left: 0; margin-right: 0; }
-        #tab-assign .assign-form .assign-grid-inline { grid-template-columns: 1fr; }
-        #tab-assign .assign-form .field.field-mid,
-        #tab-assign .assign-form .field.field-narrow { max-width: 100%; }
-        #tab-assign .assign-form .field.field-narrow .input,
-        #tab-assign .assign-form .field.field-narrow select { max-width: 100%; }
       }
       .assign-attempts {
         max-width: 100%;
@@ -630,9 +647,9 @@
       .status-pill.grading { border-color: rgba(124, 58, 237, 0.30); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
       .status-pill.finished { border-color: rgba(22, 163, 74, 0.30); background: rgba(22, 163, 74, 0.10); color: #166534; }
       .status-pill.expired { border-color: rgba(220, 38, 38, 0.30); background: rgba(220, 38, 38, 0.08); color: #b91c1c; }
-      .log-table { width: 100%; min-width: 980px; font-size: var(--admin-font-size-table-body); }
-      .log-table th, .log-table td { vertical-align: middle; }
-      .log-table th { white-space: nowrap; font-size: var(--admin-font-size-table-head); }
+      .log-table { width: 100%; min-width: 980px; table-layout: fixed; font-size: var(--admin-font-size-table-body); }
+      .log-table th, .log-table td { vertical-align: middle; line-height: 1.3; }
+      .log-table th { white-space: nowrap; font-size: var(--admin-font-size-table-head); font-weight: 800; text-transform: none; letter-spacing: 0; line-height: 1.2; }
       .log-table td { font-variant-numeric: tabular-nums; }
       .log-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .log-table code { white-space: nowrap; }
@@ -656,17 +673,68 @@
       .log-table .type-pill.cat-system { border-color: rgba(17, 24, 39, 0.20); background: rgba(17, 24, 39, 0.06); color: rgba(15, 23, 42, 0.86); }
       .log-box {
         border: 1px solid rgba(15, 23, 42, 0.10);
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         background: rgba(248, 250, 252, 0.55);
         padding: 12px 12px;
         margin: 12px 0;
       }
       /* Logs (tab-logs) visual scale */
-      #tab-logs .log-box-title { font-weight: 950; margin-bottom: 12px; font-size: var(--admin-font-size-title); }
-      #tab-logs .log-box-head { display:flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-      #tab-logs .log-box-head .log-box-title { margin-bottom: 0; }
+      #tab-logs .log-box,
+      #tab-status .log-box { padding: 0; overflow: hidden; }
+      #tab-logs .log-box-title { font-weight: 950; margin: 0; font-size: var(--admin-font-size-title); line-height: 1.15; }
+      #tab-logs .log-box > .log-box-title {
+        display: flex;
+        align-items: center;
+        min-height: var(--admin-panel-head-min-height);
+        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        background: rgba(255, 255, 255, 0.52);
+      }
+      #tab-logs .log-box-head {
+        display:flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: var(--admin-panel-head-min-height);
+        gap: var(--admin-panel-head-gap);
+        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        background: rgba(255, 255, 255, 0.52);
+      }
+      #tab-logs .log-box-head .log-box-title { margin: 0; }
       #tab-logs .log-box-sub { color: rgba(15, 23, 42, 0.60); font-size: var(--admin-font-size-small); font-weight: 950; white-space: nowrap; }
+      #tab-logs .tri-pager {
+        padding-top: 6px;
+        gap: 8px;
+      }
+      #tab-logs .tri-pager .page-info {
+        font-size: 13px;
+        line-height: 1.2;
+      }
+      #tab-logs .tri-pager .tri-btn {
+        width: 38px;
+        height: 32px;
+      }
       #tab-logs .legend-grid { display:flex; flex-wrap: wrap; gap: 12px; }
+      #tab-logs .legend-grid.legend-grid--footer {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0;
+        border-top: 1px solid rgba(15, 23, 42, 0.08);
+        margin-top: 12px;
+        padding: 0;
+        background: rgba(255, 255, 255, 0.52);
+      }
+      #tab-logs .legend-grid.legend-grid--footer .legend-item {
+        min-height: 0;
+        padding: 14px 16px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        font-size: 14px;
+      }
+      #tab-logs .legend-grid.legend-grid--footer .legend-item + .legend-item {
+        border-left: 1px solid rgba(15, 23, 42, 0.08);
+      }
       .legend-item {
         display: inline-flex;
         align-items: center;
@@ -679,25 +747,26 @@
         font-size: var(--admin-font-size-control);
       }
       .legend-dot { width: 14px; height: 14px; border-radius: 999px; display:inline-block; }
-      .legend-cnt { color: rgba(15, 23, 42, 0.62); font-weight: 950; }
+      .legend-cnt { color: rgba(15, 23, 42, 0.62); font-size: 15px; font-weight: 950; }
       .density-wrap { width: 100%; overflow: hidden; }
       .density-plotly {
         width: 100%;
         min-height: 420px;
         border: 1px solid rgba(15, 23, 42, 0.08);
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         background: rgba(255, 255, 255, 0.72);
       }
       .density-empty {
-        padding: 14px 8px 4px;
+        min-height: 140px;
+        padding: 16px 8px;
         color: rgba(15, 23, 42, 0.55);
         font-size: var(--admin-font-size-control);
-        font-weight: 700;
+        font-weight: 500;
       }
       .density-bars { display:flex; align-items: flex-end; gap: 10px; padding: 10px 4px 4px; min-height: 180px; }
       .density-bar {
         width: 22px;
-        border-radius: 10px 10px 6px 6px;
+        border-radius: var(--radius-sm) var(--radius-sm) var(--radius-xs) var(--radius-xs);
         background: rgba(37, 99, 235, 0.20);
         border: 1px solid rgba(37, 99, 235, 0.25);
       }
@@ -711,7 +780,7 @@
         position: fixed;
         z-index: 60;
         padding: 6px 10px;
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         background: rgba(15, 23, 42, 0.92);
         color: rgba(255, 255, 255, 0.96);
         font-size: var(--admin-font-size-control);
@@ -726,44 +795,16 @@
       .density-x span { width: 22px; font-size: var(--admin-font-size-control); color: rgba(15, 23, 42, 0.55); text-align: center; }
 
       /* Logs: density range filter */
-      #tab-logs .density-filter { display:flex; flex-wrap: nowrap; align-items: flex-start; justify-content: flex-end; gap: 10px; margin: 0; margin-left: auto; }
-      #tab-logs .density-filter .field { margin: 0; }
-      #tab-logs .density-filter .field.field-sm { flex: 0 0 190px; }
-      #tab-logs .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 1.25; font-size: var(--admin-font-size-control); }
-      #tab-logs .density-filter .range-group { display:flex; align-items: flex-end; gap: 10px; }
+      #tab-logs .density-filter { margin: 0 0 0 auto; }
       #tab-logs .density-filter .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
-      #tab-logs .density-filter .actions { display: inline-flex; gap: 10px; align-items: flex-end; margin-left: auto; }
-      #tab-logs .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: var(--admin-font-size-control); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
       @media (max-width: 980px) {
-        #tab-logs .density-filter { flex-wrap: wrap; }
-        #tab-logs .density-filter .actions { margin-left: 0; }
+        #tab-logs .density-filter { margin-left: 0; }
+        #tab-logs .legend-grid.legend-grid--footer { grid-template-columns: 1fr; }
+        #tab-logs .legend-grid.legend-grid--footer .legend-item + .legend-item {
+          border-left: 0;
+          border-top: 1px solid rgba(15, 23, 42, 0.08);
+        }
       }
-
-      #tab-logs .density-filter .date-proxy { position: relative; width: 100%; }
-      #tab-logs .density-filter .date-proxy .date-display { padding-right: 42px; cursor: pointer; }
-      #tab-logs .density-filter .date-proxy .date-native {
-        position: absolute;
-        inset: 0;
-        opacity: 0;
-        pointer-events: none;
-      }
-      #tab-logs .density-filter .date-proxy .date-btn {
-        position: absolute;
-        right: 8px;
-        top: 50%;
-        transform: translateY(-50%);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(255, 255, 255, 0.65);
-        width: 32px;
-        height: 32px;
-        border-radius: 10px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: rgba(15, 23, 42, 0.75);
-      }
-      #tab-logs .density-filter .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
 
       /* Logs: hide header + filter area (keep page clean). */
       #tab-logs .panel-head,
@@ -777,17 +818,33 @@
       /* Also remove the top "empty bands" inside status tab. */
       #tab-status.panel { padding-top: 0; }
       #tab-status .status-wrap { max-width: none; width: 100%; margin: 0; padding: 0 2px 18px; }
-      #tab-status .log-box { border-radius: 16px; background: rgba(248, 250, 252, 0.90); padding: 16px 16px; }
-      /* Reduce perceived "empty band" at the top of the daily stats box. */
-      #tab-status .log-box[aria-label="按天统计"] { padding-top: 10px; }
-      #tab-status .log-box-head { display:grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; margin-bottom: 10px; }
-      #tab-status .log-box-title { font-weight: 950; margin: 0; font-size: var(--admin-font-size-title); line-height: 1.2; }
+      #tab-status .log-box { border-radius: var(--radius-lg); background: rgba(248, 250, 252, 0.90); }
+      #tab-status .log-box > .log-box-title {
+        display: flex;
+        align-items: center;
+        min-height: var(--admin-panel-head-min-height);
+        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        background: rgba(255, 255, 255, 0.52);
+      }
+      #tab-status .log-box-head {
+        display:grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        min-height: var(--admin-panel-head-min-height);
+        gap: var(--admin-panel-head-gap);
+        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        background: rgba(255, 255, 255, 0.52);
+        margin-bottom: 0;
+      }
+      #tab-status .log-box-title { font-weight: 500; margin: 0; font-size: var(--admin-font-size-title); line-height: 1.15; }
       /* Keep titles in one line (e.g. "系统统计（按天）"). */
       #tab-status .log-box-head > div { min-width: 0; }
       #tab-status .log-box-head .log-box-title { white-space: nowrap; }
       #tab-status .status-head {
         padding: 16px 18px;
-        border-radius: 18px;
+        border-radius: var(--radius-lg);
         border: 1px solid rgba(15, 23, 42, 0.10);
         background: rgba(255, 255, 255, 0.78);
         margin: 0 0 12px;
@@ -799,89 +856,81 @@
       #tab-status .status-head.level-warn { border-color: rgba(249, 115, 22, 0.40); background: rgba(249, 115, 22, 0.10); }
       #tab-status .status-head.level-danger { border-color: rgba(220, 38, 38, 0.40); background: rgba(220, 38, 38, 0.10); }
       #tab-status .status-head.level-critical { border-color: rgba(220, 38, 38, 0.55); background: rgba(220, 38, 38, 0.14); }
-      #tab-status .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-      #tab-status .kpi { padding: 14px 14px; border-radius: 16px; border: 1px solid rgba(15, 23, 42, 0.10); background: rgba(255, 255, 255, 0.55); }
+      #tab-status .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; background: rgba(255, 255, 255, 0.48); }
+      #tab-status .kpi { padding: 16px 18px 18px; background: transparent; }
+      #tab-status .kpi + .kpi { border-left: 1px solid rgba(15, 23, 42, 0.08); }
       #tab-status .k-title { font-weight: 950; color: rgba(15, 23, 42, 0.75); margin-bottom: 6px; }
       #tab-status .k-main { font-size: var(--admin-font-size-kpi); font-weight: 1100; letter-spacing: -0.02em; }
       #tab-status .k-sub { margin-top: 4px; color: rgba(15, 23, 42, 0.62); font-size: var(--admin-font-size-small); font-weight: 950; }
-      #tab-status .status-form { display:flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
       /* Threshold settings: title on the left, controls on the right (like other header bars). */
       #tab-status .status-cfg-box .log-box-head { margin-bottom: 0; }
       #tab-status .status-cfg-box .log-box-title { margin: 0; }
-      #tab-status .status-cfg-box .status-form { justify-content: flex-end; align-items: flex-end; }
-      #tab-status .status-cfg-box .status-form .field label {
+      #tab-status .status-cfg-box .status-cfg-body {
+        padding: 16px 18px 18px;
+      }
+      #tab-status .status-cfg-box .status-cfg-body .metric-form {
+        display: block;
+      }
+      #tab-status .status-cfg-box .metric-form__grid { flex: 1 1 auto; }
+      #tab-status .status-cfg-box .status-cfg-actions {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+      #tab-status .status-cfg-box .status-cfg-actions .metric-form__message {
+        min-width: 88px;
+        min-height: 20px;
+        text-align: right;
+      }
+      #tab-status .status-cfg-box .metric-form .field label {
         font-size: var(--admin-font-size-label);
-        font-weight: 900;
+        display: inline-block;
+        margin-bottom: 6px;
+        font-weight: 500;
         color: rgba(15, 23, 42, 0.75);
       }
-      #tab-status .status-cfg-box .status-form .input { font-size: var(--admin-font-size-control); }
-      #tab-status .status-cfg-box .status-form .btn { font-size: var(--admin-font-size-control); }
+      #tab-status .status-cfg-box .metric-form .field {
+        max-width: 320px;
+      }
+      #tab-status .status-cfg-box .metric-form .input { font-size: var(--admin-font-size-control); }
+      #tab-status .status-cfg-box .metric-form .btn { font-size: var(--admin-font-size-control); }
+      #tab-status .status-cfg-box .status-cfg-actions .btn {
+        min-width: 108px;
+        width: auto;
+      }
       /* We reuse `.assign-attempts` for layout, but its global margin-top is too big for status tab. */
       #tab-status .assign-attempts { margin: 0; }
       #tab-status .assign-attempts .log-box:first-child { margin-top: 0; }
       #tab-status table.status-table { width: 100%; min-width: 980px; border-collapse: collapse; }
-      #tab-status table.status-table th { text-align:left; font-size: var(--admin-font-size-table-head); color: rgba(15, 23, 42, 0.92); font-weight: 950; padding: 10px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.10); }
-      #tab-status table.status-table td { padding: 14px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); font-weight: 700; font-size: var(--admin-font-size-table-body); color: rgba(15, 23, 42, 0.65); }
+      #tab-status table.status-table th { text-align:left; font-size: var(--admin-font-size-table-head); color: rgba(15, 23, 42, 0.92); font-weight: 500; padding: 10px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.10); text-transform: none; letter-spacing: 0; line-height: 1.2; }
+      #tab-status table.status-table td { padding: 14px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); font-weight: 500; font-size: var(--admin-font-size-table-body); color: rgba(15, 23, 42, 0.65); line-height: 1.35; }
+      #tab-status table.status-table td.muted { font-weight: 500; }
       #tab-status #status_pager[hidden] { display: none !important; }
 
       /* Status range filter: tidy, grouped controls (avoid "floating" inputs). */
       #tab-status .density-filter {
-        display:flex;
-        flex-wrap: nowrap;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 10px;
         margin: 0;
-        width: auto;
         max-width: none;
         background: rgba(255, 255, 255, 0.78);
         border: 1px solid rgba(15, 23, 42, 0.10);
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         padding: 8px 10px;
       }
-      #tab-status .density-filter .field { margin: 0; }
-      #tab-status .density-filter .field.field-sm { flex: 0 0 auto; }
-      #tab-status .density-filter .input { height: 40px; padding-top: 0; padding-bottom: 0; line-height: 1.25; font-size: var(--admin-font-size-control); }
       /* Date proxy (yyyy/mm/dd) for system status filters. */
-      #tab-status .density-filter .range-group { display:flex; align-items: flex-end; gap: 10px; width: auto; }
-      #tab-status .density-filter .field.field-sm { flex: 0 0 auto; width: 176px; }
-      #tab-status .density-filter .date-proxy { position: relative; width: 100%; }
-      #tab-status .density-filter .date-proxy .date-display { padding-right: 42px; cursor: pointer; }
-      #tab-status .density-filter .date-proxy .date-native {
-        position: absolute;
-        inset: 0;
-        opacity: 0;
-        pointer-events: none;
-      }
-      #tab-status .density-filter .date-proxy .date-btn {
-        position: absolute;
-        right: 8px;
-        top: 50%;
-        transform: translateY(-50%);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(255, 255, 255, 0.65);
-        width: 32px;
-        height: 32px;
-        border-radius: 10px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        color: rgba(15, 23, 42, 0.75);
-      }
-      #tab-status .density-filter .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
-      #tab-status .density-filter .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
-      #tab-status .density-filter .actions { display: inline-flex; gap: 10px; align-items: flex-end; flex: 0 0 auto; }
-      #tab-status .density-filter .btn { height: 40px; min-width: 74px; padding: 0 16px; line-height: 1; font-size: var(--admin-font-size-control); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+      #tab-status .density-filter .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 500; }
       #tab-status .density-filter .btn[type="submit"] { background: rgba(37, 99, 235, 0.10); border-color: rgba(37, 99, 235, 0.20); }
       @media (max-width: 1100px) {
         #tab-status .log-box-head { grid-template-columns: 1fr; align-items: stretch; }
-        #tab-status .density-filter { width: 100%; flex-wrap: wrap; justify-content: flex-start; }
-        #tab-status .density-filter .range-group { flex-wrap: wrap; }
+        #tab-status .density-filter { width: 100%; justify-content: flex-start; }
       }
 
       @media (max-width: 980px) {
         #tab-status .status-grid { grid-template-columns: 1fr; }
+        #tab-status .kpi + .kpi {
+          border-left: 0;
+          border-top: 1px solid rgba(15, 23, 42, 0.08);
+        }
       }
     </style>
 {% endblock %}
@@ -1001,7 +1050,7 @@
 		                  <td class="col-updated"><span class="shift-updated">{{ e.updated_at.strftime("%Y-%m-%d %H:%M:%S") if e.updated_at else "" }}</span></td>
 		                  <td class="col-actions">
                     <div class="exam-actions">
-                      <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" style="display:inline; margin:0;" data-exam-delete-form>
+                      <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" class="inline-form" data-exam-delete-form>
                         <button class="btn btn-danger" type="submit">删除</button>
                       </form>
                     </div>
@@ -1037,8 +1086,8 @@
           </div>
  
           <form class="assign-form" method="post" action="/admin/assignments">
-            <div class="assign-grid-inline">
-              <div class="field field-mid">
+            <div class="invite-grid">
+	              <div class="field invite-grid__exam">
                 <label for="exam_key">试卷</label>
                 <select id="exam_key" name="exam_key" required>
                   {% for e in exams_all %}
@@ -1047,7 +1096,7 @@
                 </select>
               </div>
 
-              <div class="field field-mid">
+	              <div class="field invite-grid__candidate">
                 <label for="candidate_id">候选人</label>
                 <select id="candidate_id" name="candidate_id" required>
                   {% for c in candidates %}
@@ -1056,86 +1105,112 @@
                 </select>
               </div>
 
-              <div class="field field-time">
-                <label for="time_limit_seconds">答题时长</label>
-                <input id="time_limit_seconds" class="input" name="time_limit_seconds" value="02:00:00" placeholder="02:00:00" />
+              <div class="field invite-grid__duration">
+                <label for="time_limit_seconds_display">答题时长</label>
+                <input id="time_limit_seconds" type="hidden" name="time_limit_seconds" value="02:00:00" />
+                <div class="time-picker">
+                  <input id="time_limit_seconds_display" class="input time-display" type="text" value="02:00:00" placeholder="02:00:00" readonly aria-haspopup="dialog" aria-controls="duration_modal_dashboard" />
+                  <button class="time-picker-btn" type="button" id="time_picker_open" aria-label="选择答题时长">
+                    <span class="material-symbols-rounded" aria-hidden="true">schedule</span>
+                  </button>
+                </div>
               </div>
 
               <input type="hidden" name="pass_threshold" value="60" />
 
-              <div class="field field-start">
+              <div class="field invite-grid__start">
                 <label for="invite_start_date">开始日期</label>
                 <div class="date-proxy">
                   <input id="invite_start_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
                   <input id="invite_start_date" class="input date-native" type="date" name="invite_start_date" value="" tabindex="-1" aria-hidden="true" />
                   <button class="date-btn" type="button" data-for="invite_start_date" aria-label="选择答题开始日期">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                      <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                    </svg>
+                    <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
                   </button>
                 </div>
               </div>
 
-              <div class="field field-end">
+              <div class="field invite-grid__end">
                 <label for="invite_end_date">结束日期</label>
                 <div class="date-proxy">
                   <input id="invite_end_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
                   <input id="invite_end_date" class="input date-native" type="date" name="invite_end_date" value="" tabindex="-1" aria-hidden="true" />
                   <button class="date-btn" type="button" data-for="invite_end_date" aria-label="选择答题结束日期">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                      <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                    </svg>
+                    <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
                   </button>
                 </div>
               </div>
 
-              <div class="assign-actions">
+              <div class="invite-grid__actions">
                 <button class="btn btn-primary" type="submit">创建答题邀约</button>
               </div>
             </div>
           </form>
 
+          <div id="duration_modal_dashboard" hidden>
+            <div class="duration-card" role="dialog" aria-modal="true" aria-label="选择答题时长">
+              <div class="duration-card-head">
+                <h3>选择答题时长</h3>
+              </div>
+              <div class="duration-card-body">
+                <div class="duration-presets" aria-label="常用时长">
+                  <button class="duration-preset" type="button" data-duration="00:30:00">30分钟</button>
+                  <button class="duration-preset" type="button" data-duration="01:00:00">1小时</button>
+                  <button class="duration-preset" type="button" data-duration="01:30:00">1.5小时</button>
+                  <button class="duration-preset" type="button" data-duration="02:00:00">2小时</button>
+                  <button class="duration-preset" type="button" data-duration="03:00:00">3小时</button>
+                </div>
+                <div class="duration-grid">
+                  <div class="field">
+                    <label for="duration_hours">小时</label>
+                    <select id="duration_hours"></select>
+                  </div>
+                  <div class="duration-sep" aria-hidden="true">:</div>
+                  <div class="field">
+                    <label for="duration_minutes">分钟</label>
+                    <select id="duration_minutes"></select>
+                  </div>
+                </div>
+              </div>
+              <div class="duration-card-foot">
+                <button id="duration_cancel" class="btn" type="button">取消</button>
+                <button id="duration_apply" class="btn btn-primary" type="button">确定</button>
+              </div>
+            </div>
+          </div>
+
           <div class="assign-attempts" role="region" aria-label="候选人答题情况">
             <div class="section-head attempt-head">
-              <form class="attempt-filter" method="get" action="/admin#tab-assign" aria-label="按试卷开始时间筛选">
+              <form class="attempt-filter toolbar-form" method="get" action="/admin#tab-assign" aria-label="按试卷开始时间筛选">
                 <input type="hidden" name="exam_q" value="{{ exam_q or '' }}" />
                 <input type="hidden" name="exam_page" value="{{ exam_page or '' }}" />
 
-                <div class="field field-q">
+                <div class="field toolbar-field--query">
                   <input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷/Token" autocomplete="off" aria-label="查询（姓名/电话/试卷/Token）" />
                 </div>
 
-                <div class="range-group" aria-label="开始时间范围">
-                  <div class="field field-sm">
+                <div class="range-group toolbar-range" aria-label="开始时间范围">
+                  <div class="field toolbar-field--date">
                     <div class="date-proxy">
                       <input id="attempt_start_from_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
                       <input id="attempt_start_from" class="input date-native" type="date" name="attempt_start_from" value="{{ attempt_start_from or '' }}" tabindex="-1" aria-hidden="true" />
                       <button class="date-btn" type="button" data-for="attempt_start_from" aria-label="选择开始时间(起)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                        </svg>
+                        <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
                       </button>
                     </div>
                   </div>
                   <div class="range-sep" aria-hidden="true">—</div>
-                  <div class="field field-sm">
+                  <div class="field toolbar-field--date">
                     <div class="date-proxy">
                       <input id="attempt_start_to_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
                       <input id="attempt_start_to" class="input date-native" type="date" name="attempt_start_to" value="{{ attempt_start_to or '' }}" tabindex="-1" aria-hidden="true" />
                       <button class="date-btn" type="button" data-for="attempt_start_to" aria-label="选择开始时间(止)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                        </svg>
+                        <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <div class="attempt-actions" aria-label="筛选操作">
+                <div class="attempt-actions toolbar-actions" aria-label="筛选操作">
                   {% set attempt_reset_qs = "" %}
                   {% if exam_q %}{% set attempt_reset_qs = attempt_reset_qs ~ "exam_q=" ~ (exam_q|urlencode) %}{% endif %}
                   {% if exam_page %}{% set attempt_reset_qs = attempt_reset_qs ~ ("&" if attempt_reset_qs else "") ~ "exam_page=" ~ exam_page %}{% endif %}
@@ -1143,20 +1218,30 @@
               </form>
             </div>
 
-            <div class="table-scroll">
-              <table class="attempt-table" aria-label="候选人答题情况列表">
-                <thead>
-                  <tr>
-                    <th style="width:32px;">ID</th>
-                    <th style="width:56px;">姓名</th>
-                    <th style="width:96px;">电话</th>
-                    <th style="width:110px;">试卷</th>
-                    <th style="width:92px;">Token</th>
-                    <th class="center" style="width:68px;">状态</th>
-                    <th class="center" style="width:40px;">成绩</th>
-                    <th style="width:300px;">时间</th>
-                  </tr>
-                </thead>
+              <div class="table-scroll">
+                <table class="attempt-table" aria-label="候选人答题情况列表">
+                  <colgroup>
+                    <col class="col-w-5p" />
+                    <col class="col-w-10p" />
+                    <col class="col-w-12p" />
+                    <col class="col-w-14p" />
+                    <col class="col-w-15p" />
+                    <col class="col-w-10p" />
+                    <col class="col-w-8p" />
+                    <col class="col-w-26p" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                    <th>ID</th>
+                    <th>姓名</th>
+                    <th>电话</th>
+                    <th>试卷</th>
+                    <th>TOKEN</th>
+                    <th class="center">状态</th>
+                    <th class="center">成绩</th>
+                    <th>时间</th>
+                    </tr>
+                  </thead>
                 <tbody>
                   {% for c in attempt_candidates %}
                   <tr
@@ -1231,41 +1316,10 @@
           </div>
 
           <div class="assign-attempts" role="region" aria-label="日志列表">
-            <div class="log-box" aria-label="任务类型图例">
-              <div class="log-box-title">任务类型图例</div>
-              <div class="legend-grid">
-                <div class="legend-item" title="candidate">
-                  <span class="legend-dot" style="background: #16a34a;"></span>
-                  <span>候选者操作</span>
-                  <span class="legend-cnt">{{ log_counts.candidate if log_counts else 0 }}</span>
-                </div>
-                <div class="legend-item" title="exam">
-                  <span class="legend-dot" style="background: #7c3aed;"></span>
-                  <span>试卷操作</span>
-                  <span class="legend-cnt">{{ log_counts.exam if log_counts else 0 }}</span>
-                </div>
-                <div class="legend-item" title="grading">
-                  <span class="legend-dot" style="background: #f59e0b;"></span>
-                  <span>判卷操作</span>
-                  <span class="legend-cnt">{{ log_counts.grading if log_counts else 0 }}</span>
-                </div>
-                <div class="legend-item" title="assignment">
-                  <span class="legend-dot" style="background: #2563eb;"></span>
-                  <span>答题邀约</span>
-                  <span class="legend-cnt">{{ log_counts.assignment if log_counts else 0 }}</span>
-                </div>
-                <div class="legend-item" title="system">
-                  <span class="legend-dot" style="background: #0f172a;"></span>
-                  <span>系统</span>
-                  <span class="legend-cnt">{{ log_counts.system if log_counts else 0 }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="log-box" aria-label="任务密度图">
+            <div class="log-box" aria-label="日志概览">
               <div class="log-box-head">
                 <div class="log-box-title">任务密度图</div>
-                <form class="density-filter" method="get" action="/admin#tab-logs" aria-label="选择任务密度时间范围">
+                <form class="density-filter toolbar-form toolbar-form--compact" method="get" action="/admin#tab-logs" aria-label="选择任务密度时间范围">
                   <input type="hidden" name="exam_q" value="{{ exam_q or '' }}" />
                   <input type="hidden" name="exam_page" value="{{ exam_page or '' }}" />
                   <input type="hidden" name="attempt_q" value="{{ attempt_q or '' }}" />
@@ -1276,37 +1330,31 @@
                   <input type="hidden" name="assign_candidate_id" value="{{ assign_candidate_id or '' }}" />
                   <input type="hidden" name="log_page" value="{{ log_page or '' }}" />
 
-                  <div class="range-group" aria-label="时间范围">
-                    <div class="field field-sm">
+                  <div class="range-group toolbar-range" aria-label="时间范围">
+                    <div class="field toolbar-field--date">
                       <div class="date-proxy">
                         <input id="chart_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="开始日期" />
                         <input id="chart_start" class="input date-native" type="date" name="chart_start" value="{{ chart_range_start or '' }}" tabindex="-1" aria-hidden="true" />
                         <button class="date-btn" type="button" data-for="chart_start" aria-label="选择开始(起)日期">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                          </svg>
+                          <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
                         </button>
                       </div>
                     </div>
 
                     <div class="range-sep" aria-hidden="true">—</div>
 
-                    <div class="field field-sm">
+                    <div class="field toolbar-field--date">
                       <div class="date-proxy">
                         <input id="chart_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="结束日期" />
                         <input id="chart_end" class="input date-native" type="date" name="chart_end" value="{{ chart_range_end or '' }}" tabindex="-1" aria-hidden="true" />
                         <button class="date-btn" type="button" data-for="chart_end" aria-label="选择结束(止)日期">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                          </svg>
+                          <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
                         </button>
                       </div>
                     </div>
                   </div>
 
-                  <div class="actions" aria-label="操作">
+                  <div class="toolbar-actions" aria-label="操作">
                     <button class="btn btn-primary" type="submit">查询</button>
                     {% set density_reset_qs = "" %}
                     {% if exam_q %}{% set density_reset_qs = density_reset_qs ~ "exam_q=" ~ (exam_q|urlencode) %}{% endif %}
@@ -1324,8 +1372,35 @@
               </div>
               <div class="density-wrap">
                 <div id="log_density_plotly" class="density-plotly" aria-label="任务密度图（Plotly）"></div>
-                <div id="log_density_empty" class="density-empty" style="display:none;">该时间范围暂无操作记录，可调整时间范围。</div>
+                <div id="log_density_empty" class="density-empty" hidden>该时间范围暂无操作记录，可调整时间范围。</div>
                 <script id="log_density_data" type="application/json">{{ {"days": (chart_days or []), "counts": (chart_counts or [])}|tojson }}</script>
+              </div>
+              <div class="legend-grid legend-grid--footer" aria-label="任务类型图例">
+                <div class="legend-item" title="candidate">
+                  <span class="legend-dot legend-dot--candidate"></span>
+                  <span>候选者操作</span>
+                  <span class="legend-cnt">{{ log_counts.candidate if log_counts else 0 }}</span>
+                </div>
+                <div class="legend-item" title="exam">
+                  <span class="legend-dot legend-dot--exam"></span>
+                  <span>试卷操作</span>
+                  <span class="legend-cnt">{{ log_counts.exam if log_counts else 0 }}</span>
+                </div>
+                <div class="legend-item" title="grading">
+                  <span class="legend-dot legend-dot--grading"></span>
+                  <span>判卷操作</span>
+                  <span class="legend-cnt">{{ log_counts.grading if log_counts else 0 }}</span>
+                </div>
+                <div class="legend-item" title="assignment">
+                  <span class="legend-dot legend-dot--assignment"></span>
+                  <span>答题邀约</span>
+                  <span class="legend-cnt">{{ log_counts.assignment if log_counts else 0 }}</span>
+                </div>
+                <div class="legend-item" title="system">
+                  <span class="legend-dot legend-dot--system"></span>
+                  <span>系统</span>
+                  <span class="legend-cnt">{{ log_counts.system if log_counts else 0 }}</span>
+                </div>
               </div>
             </div>
 
@@ -1335,9 +1410,9 @@
                 <table class="log-table" aria-label="日志表">
                   <thead>
                     <tr>
-                      <th style="width:56px;">ID</th>
-                      <th style="width:170px;">时间</th>
-                      <th style="width:160px;">类型</th>
+                      <th class="col-w-56">ID</th>
+                      <th class="col-w-170">时间</th>
+                      <th class="col-w-160">类型</th>
                       <th>详情</th>
                     </tr>
                   </thead>
@@ -1352,7 +1427,7 @@
                     {% endfor %}
                     {% if not logs %}
                     <tr>
-                      <td colspan="4" class="muted" style="padding:16px;">暂无系统日志</td>
+                      <td colspan="4" class="table-empty-cell">暂无系统日志</td>
                     </tr>
                     {% endif %}
                   </tbody>
@@ -1416,17 +1491,23 @@
                   <div>
                     <div class="log-box-title">阈值设置（按天）</div>
                   </div>
-                  <form id="status_cfg_form" class="status-form" autocomplete="off">
-                    <div class="field field-sm">
-                      <label for="llm_tokens_limit">大模型 Token 阈值</label>
-                      <input id="llm_tokens_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 200000" />
+                  <div class="status-cfg-actions">
+                    <span id="status_cfg_msg" class="metric-form__message muted"></span>
+                    <button id="status_cfg_save" class="btn btn-primary" type="submit" form="status_cfg_form">保存</button>
+                  </div>
+                </div>
+                <div class="status-cfg-body">
+                  <form id="status_cfg_form" class="metric-form" autocomplete="off">
+                    <div class="metric-form__grid">
+                      <div class="field metric-form__field">
+                        <label for="llm_tokens_limit">大模型 Token 阈值</label>
+                        <input id="llm_tokens_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 200000" />
+                      </div>
+                      <div class="field metric-form__field">
+                        <label for="sms_calls_limit">短信认证阈值</label>
+                        <input id="sms_calls_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 1000" />
+                      </div>
                     </div>
-                    <div class="field field-sm">
-                      <label for="sms_calls_limit">短信认证阈值</label>
-                      <input id="sms_calls_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 1000" />
-                    </div>
-                    <button id="status_cfg_save" class="btn btn-primary" type="submit">保存</button>
-                    <span id="status_cfg_msg" class="muted" style="font-weight:900;"></span>
                   </form>
                 </div>
               </div>
@@ -1436,34 +1517,28 @@
                   <div>
                     <div class="log-box-title">系统统计（按天）</div>
                   </div>
-                  <form id="status_range_form" class="density-filter" aria-label="选择系统统计时间范围">
-                    <div class="range-group" aria-label="时间范围">
-                      <div class="field field-sm">
+                  <form id="status_range_form" class="density-filter toolbar-form toolbar-form--compact" aria-label="选择系统统计时间范围">
+                    <div class="range-group toolbar-range" aria-label="时间范围">
+                      <div class="field toolbar-field--date">
                         <div class="date-proxy">
                           <input id="status_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="开始日期" />
                           <input id="status_start" class="input date-native" type="date" aria-label="开始日期" tabindex="-1" aria-hidden="true" />
                           <button class="date-btn" type="button" data-for="status_start" aria-label="选择开始(起)日期">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                              <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                              <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                            </svg>
+                            <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
                           </button>
                         </div>
                       </div>
                       <div class="range-sep" aria-hidden="true">—</div>
-                      <div class="field field-sm">
+                      <div class="field toolbar-field--date">
                         <div class="date-proxy">
                           <input id="status_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="结束日期" />
                           <input id="status_end" class="input date-native" type="date" aria-label="结束日期" tabindex="-1" aria-hidden="true" />
                           <button class="date-btn" type="button" data-for="status_end" aria-label="选择结束(止)日期">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                              <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                              <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                            </svg>
+                            <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
                           </button>
                         </div>
                       </div>
-                      <div class="actions">
+                      <div class="toolbar-actions">
                         <button class="btn" type="submit">查询</button>
                         <button class="btn" type="button" id="status_range_reset">重置</button>
                       </div>
@@ -1474,12 +1549,12 @@
                 <div class="table-scroll">
                   <table class="status-table" aria-label="系统状态统计表（按天）">
                     <colgroup>
-                      <col style="width: 120px;" />
-                      <col style="width: 110px;" />
-                      <col style="width: 110px;" />
-                      <col style="width: 110px;" />
-                      <col style="width: 150px;" />
-                      <col style="width: 110px;" />
+                      <col class="col-w-120" />
+                      <col class="col-w-110" />
+                      <col class="col-w-110" />
+                      <col class="col-w-110" />
+                      <col class="col-w-150" />
+                      <col class="col-w-110" />
                     </colgroup>
                     <thead>
                       <tr>
@@ -1492,7 +1567,7 @@
                       </tr>
                     </thead>
                     <tbody id="status_table_body">
-                      <tr><td colspan="6" class="muted" style="padding:16px;">暂无数据</td></tr>
+                      <tr class="empty-row"><td colspan="6">暂无数据</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -1690,8 +1765,8 @@
           if (!plotlyEl || !emptyEl) return;
 
           if (!hasData) {
-            plotlyEl.style.display = "none";
-            emptyEl.style.display = "";
+            plotlyEl.hidden = true;
+            emptyEl.hidden = false;
             return;
           }
 
@@ -1699,10 +1774,13 @@
           const yVals = counts.map((v) => Number(v || 0));
           const allZero = yVals.every((v) => v <= 0);
           if (allZero) {
-            plotlyEl.style.display = "none";
-            emptyEl.style.display = "";
+            plotlyEl.hidden = true;
+            emptyEl.hidden = false;
             return;
           }
+
+          plotlyEl.hidden = false;
+          emptyEl.hidden = true;
 
           const avgWindow = 7;
           const movingAvg = yVals.map((_, idx) => {
@@ -2285,7 +2363,7 @@
           const items = data && Array.isArray(data.items) ? data.items : [];
           if (!elTbody) return;
           if (!items.length) {
-            elTbody.innerHTML = '<tr><td colspan="6" class="muted" style="padding:16px;">暂无数据</td></tr>';
+            elTbody.innerHTML = '<tr class="empty-row"><td colspan="6">暂无数据</td></tr>';
             if (elPager) elPager.hidden = true;
             return;
           }
@@ -2715,34 +2793,111 @@
       });
 
       // Date proxy for invite window (yyyy/mm/dd).
-      const initDateProxy = (id) => {
-        const native = document.getElementById(id);
-        const display = document.getElementById(id + "_display");
-        if (!native || !display) return;
-        const fmt = (v) => (v ? String(v).replaceAll("-", "/") : "");
-        const open = () => {
-          try {
-            if (native.showPicker) native.showPicker();
-            else {
-              native.focus();
-              native.click();
-            }
-          } catch (_) {
-            try { native.focus(); } catch (_) {}
-          }
+      const initDurationPicker = () => {
+        const hidden = document.getElementById("time_limit_seconds");
+        const display = document.getElementById("time_limit_seconds_display");
+        const modal = document.getElementById("duration_modal_dashboard");
+        const openBtn = document.getElementById("time_picker_open");
+        const hours = document.getElementById("duration_hours");
+        const minutes = document.getElementById("duration_minutes");
+        const applyBtn = document.getElementById("duration_apply");
+        const cancelBtn = document.getElementById("duration_cancel");
+        const presetButtons = Array.from(document.querySelectorAll("#duration_modal_dashboard .duration-preset[data-duration]"));
+        if (!hidden || !display || !modal || !openBtn || !hours || !minutes || !applyBtn || !cancelBtn) return;
+
+        const pad2 = (v) => String(v).padStart(2, "0");
+        const parse = (raw) => {
+          const m = String(raw || "").trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+          if (!m) return { hours: 2, minutes: 0 };
+          const h = Math.max(0, Math.min(23, parseInt(m[1], 10) || 0));
+          const mm = Math.max(0, Math.min(55, parseInt(m[2], 10) || 0));
+          return { hours: h, minutes: mm - (mm % 5) };
         };
-        display.value = fmt(native.value);
+        const format = (h, m) => `${pad2(h)}:${pad2(m)}:00`;
+        const syncPresetState = () => {
+          const value = format(hours.value, minutes.value);
+          presetButtons.forEach((btn) => {
+            btn.classList.toggle("is-active", btn.dataset.duration === value);
+          });
+        };
+        const syncDisplay = () => {
+          const next = format(hours.value, minutes.value);
+          hidden.value = next;
+          display.value = next;
+          syncPresetState();
+        };
+        const syncSelectors = () => {
+          const current = parse(hidden.value || display.value || "02:00:00");
+          hours.value = pad2(current.hours);
+          minutes.value = pad2(current.minutes);
+          hidden.value = format(current.hours, current.minutes);
+          display.value = hidden.value;
+          syncPresetState();
+        };
+        const open = () => {
+          syncSelectors();
+          modal.hidden = false;
+          document.body.style.overflow = "hidden";
+          window.setTimeout(() => {
+            try { hours.focus(); } catch (_) {}
+          }, 0);
+        };
+        const close = () => {
+          modal.hidden = true;
+          document.body.style.overflow = "";
+        };
+
+        hours.innerHTML = "";
+        minutes.innerHTML = "";
+        for (let h = 0; h <= 23; h += 1) {
+          const opt = document.createElement("option");
+          opt.value = pad2(h);
+          opt.textContent = `${pad2(h)} 小时`;
+          hours.appendChild(opt);
+        }
+        for (let m = 0; m < 60; m += 5) {
+          const opt = document.createElement("option");
+          opt.value = pad2(m);
+          opt.textContent = `${pad2(m)} 分钟`;
+          minutes.appendChild(opt);
+        }
+
+        syncSelectors();
         display.addEventListener("click", open);
-        display.addEventListener("keydown", (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            open();
-          }
+        display.addEventListener("keydown", (ev) => {
+          if (ev.key !== "Enter" && ev.key !== " ") return;
+          ev.preventDefault();
+          open();
         });
-        native.addEventListener("change", () => {
-          display.value = fmt(native.value);
+        openBtn.addEventListener("click", open);
+        cancelBtn.addEventListener("click", close);
+        applyBtn.addEventListener("click", () => {
+          syncDisplay();
+          close();
+        });
+        hours.addEventListener("change", syncPresetState);
+        minutes.addEventListener("change", syncPresetState);
+        presetButtons.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const current = parse(btn.dataset.duration || "");
+            hours.value = pad2(current.hours);
+            minutes.value = pad2(current.minutes);
+            syncPresetState();
+          });
+        });
+        modal.addEventListener("click", (ev) => {
+          if (ev.target === modal) close();
+        });
+        document.addEventListener("keydown", (ev) => {
+          if (ev.key === "Escape" && !modal.hidden) close();
         });
       };
+
+      const initDateProxy = (id) => {
+        if (!window.AdminDatePicker || typeof window.AdminDatePicker.bind !== "function") return;
+        window.AdminDatePicker.bind(id);
+      };
+      initDurationPicker();
       initDateProxy("invite_start_date");
       initDateProxy("invite_end_date");
       initDateProxy("attempt_start_from");
@@ -2751,22 +2906,6 @@
       initDateProxy("chart_end");
       initDateProxy("status_start");
       initDateProxy("status_end");
-      document.querySelectorAll("button.date-btn[data-for]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const id = btn.getAttribute("data-for");
-          const native = id ? document.getElementById(id) : null;
-          if (!native) return;
-          try {
-            if (native.showPicker) native.showPicker();
-            else {
-              native.focus();
-              native.click();
-            }
-          } catch (_) {
-            try { native.focus(); } catch (_) {}
-          }
-        });
-      });
 
       // Auto-refresh attempt list status/score (no full page reload).
       // Goal: after the candidate submits, admin status flips to "正在判卷" without manual refresh.
@@ -2874,4 +3013,3 @@
 
     </script>
 {% endblock %}
-

@@ -4,7 +4,7 @@
   "files.encoding": "utf8",
   "files.autoGuessEncoding": false,
   "files.eol": "\n",
-  "explorer.excludeGitIgnore": true,
+  "explorer.excludeGitIgnore": false,
   "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
   "python.terminal.activateEnvironment": true,
   "python.analysis.extraPaths": [

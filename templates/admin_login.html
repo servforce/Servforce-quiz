@@ -4,7 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>管理员登录</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='assets/css/material-symbols.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}" />
     <style>
       body.admin-login {
         min-height: 100vh;
@@ -24,7 +26,7 @@
       }
       .hero {
         position: relative;
-        border-radius: 20px;
+        border-radius: var(--radius-xl);
         overflow: hidden;
         border: 1px solid rgba(15, 23, 42, 0.08);
         background:
@@ -36,7 +38,12 @@
         padding: 36px 32px;
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
+        justify-content: flex-start;
+        gap: 18px;
+      }
+      .hero-top {
+        display: grid;
+        gap: 14px;
       }
       .brand {
         display: flex;
@@ -46,53 +53,113 @@
       .logo {
         width: 42px;
         height: 42px;
-        border-radius: 14px;
-        background-color: #ffffff;
-        background-image: url("{{ url_for('static', filename='logo.svg') }}");
+        border-radius: var(--radius-md);
+        background-color: transparent;
+        background-image: url("{{ url_for('static', filename='logo.png') }}");
         background-repeat: no-repeat;
         background-position: center;
-        background-size: contain;
-        box-shadow: 0 12px 26px rgba(2, 6, 23, 0.14);
+        background-size: 100% 100%;
+        box-shadow: none;
       }
       .brand-title { font-size: 38px; font-weight: 900; line-height: 1.1; letter-spacing: -0.02em; color: #0b1f44; }
-      .brand-sub { margin-top: 6px; font-size: 20px; font-weight: 700; color: rgba(15, 23, 42, 0.75); }
-      .hero-copy p { margin: 0; font-size: 22px; line-height: 1.75; color: rgba(30, 41, 59, 0.88); max-width: none; width: 100%; }
+      .brand-sub { margin-top: 6px; font-size: 18px; font-weight: 500; color: rgba(15, 23, 42, 0.72); }
+      .hero-copy p {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.72;
+        color: rgba(30, 41, 59, 0.84);
+        max-width: none;
+        width: 100%;
+      }
+      .hero-copy .accent {
+        color: var(--brand-strong);
+        font-weight: 700;
+      }
       .feature-grid {
-        margin-top: 16px;
+        margin-top: 18px;
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
+        gap: 12px;
       }
       .feature-item {
+        display: grid;
+        grid-template-columns: 40px minmax(0, 1fr);
+        align-items: start;
+        column-gap: 12px;
         border: 1px solid rgba(15, 23, 42, 0.12);
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         background: rgba(255, 255, 255, 0.60);
         padding: 12px 14px;
       }
+      .feature-icon {
+        width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-md);
+        background: rgba(37, 99, 235, 0.10);
+        color: var(--brand-strong);
+        font-size: 22px;
+        line-height: 1;
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 500,
+          "GRAD" 0,
+          "opsz" 22;
+      }
+      .feature-body {
+        min-width: 0;
+      }
       .feature-item strong {
         display: block;
-        font-size: 19px;
+        font-size: 15px;
+        font-weight: 700;
         color: #0b1f44;
-        line-height: 1.2;
+        line-height: 1.25;
       }
-      .feature-item span {
+      .feature-body span {
         display: block;
-        margin-top: 6px;
-        font-size: 18px;
+        margin-top: 4px;
+        font-size: 15px;
         color: rgba(15, 23, 42, 0.72);
-        line-height: 1.35;
+        line-height: 1.55;
       }
       .flow-line {
-        margin-top: 18px;
-        font-size: 19px;
-        font-weight: 800;
-        color: rgba(15, 23, 42, 0.78);
-      }
-      .hero-meta {
-        margin-top: 26px;
+        margin-top: 20px;
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 17px;
+        font-weight: 600;
+        color: rgba(15, 23, 42, 0.78);
+        line-height: 1.5;
+      }
+      .flow-line .flow-step {
+        display: inline-flex;
+        align-items: center;
+      }
+      .flow-line .flow-arrow {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(15, 23, 42, 0.42);
+      }
+      .flow-line .flow-arrow .material-symbols-rounded {
+        font-size: 18px;
+        line-height: 1;
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 500,
+          "GRAD" 0,
+          "opsz" 20;
+      }
+      .hero-meta {
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
         gap: 12px;
       }
       .pill {
@@ -104,8 +171,8 @@
         background: rgba(255, 255, 255, 0.70);
         border: 1px solid rgba(15, 23, 42, 0.10);
         color: rgba(15, 23, 42, 0.86);
-        font-size: 19px;
-        font-weight: 800;
+        font-size: 16px;
+        font-weight: 600;
       }
       .dot {
         width: 10px;
@@ -116,7 +183,7 @@
       }
 
       .card {
-        border-radius: 20px;
+        border-radius: var(--radius-xl);
         border: 1px solid rgba(15, 23, 42, 0.08);
         background:
           radial-gradient(900px 420px at 12% 18%, rgba(37, 99, 235, 0.14), transparent 62%),
@@ -124,7 +191,7 @@
           linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.90));
         box-shadow: 0 16px 40px rgba(2, 6, 23, 0.10);
         min-height: 620px;
-        padding: 30px 34px;
+        padding: 28px 30px;
         display: flex;
         align-items: flex-start;
       }
@@ -137,9 +204,10 @@
         display: flex;
         flex-direction: column;
         align-items: stretch;
+        gap: 14px;
       }
       .card-head {
-        margin-bottom: 18px;
+        margin-bottom: 0;
         padding-left: 0;
       }
       .card-head h2 {
@@ -159,12 +227,38 @@
         background: rgba(15, 37, 82, 0.24);
       }
       .login-form {
-        margin-top: auto;
-        margin-bottom: auto;
-        padding: 18px 18px 16px;
-        border-radius: 16px;
-        border: 1px solid rgba(148, 163, 184, 0.24);
-        background: rgba(255, 255, 255, 0.65);
+        margin: auto 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        display: grid;
+        gap: 16px;
+      }
+      .flash {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0;
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(225, 29, 72, 0.22);
+        background: rgba(225, 29, 72, 0.08);
+        color: #9f1239;
+        font-size: 15px;
+        font-weight: 500;
+        line-height: 1.45;
+      }
+      .flash::before {
+        content: "error";
+        font-family: "Material Symbols Rounded";
+        font-size: 18px;
+        line-height: 1;
+        color: #e11d48;
+        font-variation-settings:
+          "FILL" 1,
+          "wght" 500,
+          "GRAD" 0,
+          "opsz" 20;
       }
       .card-head p {
         margin: 8px 0 20px;
@@ -173,83 +267,92 @@
         font-weight: 700;
       }
       .field {
-        margin-bottom: 16px;
+        margin: 0;
         display: grid;
         grid-template-columns: 1fr;
         align-items: start;
-        gap: 8px;
+        gap: 6px;
       }
       .field label {
         margin: 0;
-        font-size: 22px;
-        font-weight: 850;
+        font-size: 18px;
+        font-weight: 500;
         color: rgba(15, 23, 42, 0.82);
         justify-self: start;
       }
-      .login-form input[type="text"],
-      .login-form input[type="password"] {
+      .login-input {
         width: 100%;
-        height: 56px;
+        height: 48px;
         padding: 0 14px;
-        border-radius: 13px;
-        font-size: 24px !important;
+        border-radius: var(--radius-md);
+        font-size: 18px !important;
         line-height: 1.2 !important;
         font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Segoe UI", Arial, sans-serif !important;
-        font-weight: 600 !important;
+        font-weight: 500 !important;
         letter-spacing: 0 !important;
         border: 1px solid rgba(148, 163, 184, 0.28);
-        background: #eef4ff;
+        background: rgba(255, 255, 255, 0.94);
         -webkit-appearance: none;
         appearance: none;
         transition: border-color 120ms ease, box-shadow 120ms ease;
       }
-      .login-form input[type="text"]:focus,
-      .login-form input[type="password"]:focus {
+      .login-input:focus {
         outline: none;
-        font-size: 24px !important;
+        font-size: 18px !important;
         line-height: 1.2 !important;
         font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Segoe UI", Arial, sans-serif !important;
-        font-weight: 600 !important;
+        font-weight: 500 !important;
         letter-spacing: 0 !important;
         border-color: rgba(37, 99, 235, 0.45);
         box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
       }
-      .login-form input[type="text"]::-webkit-input-placeholder,
-      .login-form input[type="password"]::-webkit-input-placeholder { font-size: 24px; font-weight: 500; }
-      .login-form input[type="text"]::placeholder,
-      .login-form input[type="password"]::placeholder { font-size: 24px; font-weight: 500; }
-      .login-form input[type="text"]:-webkit-autofill,
-      .login-form input[type="text"]:-webkit-autofill:hover,
-      .login-form input[type="text"]:-webkit-autofill:focus,
-      .login-form input[type="text"]:-webkit-autofill:active,
-      .login-form input[type="password"]:-webkit-autofill,
-      .login-form input[type="password"]:-webkit-autofill:hover,
-      .login-form input[type="password"]:-webkit-autofill:focus,
-      .login-form input[type="password"]:-webkit-autofill:active {
+      .login-input::-webkit-input-placeholder { font-size: 18px !important; font-weight: 400 !important; line-height: 1.2 !important; }
+      .login-input::placeholder { font-size: 18px !important; font-weight: 400 !important; line-height: 1.2 !important; }
+      .login-input[type="password"] {
+        font-size: 18px !important;
+        font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Segoe UI", Arial, sans-serif !important;
+        letter-spacing: 0 !important;
+      }
+      .login-input[type="password"]::placeholder,
+      .login-input[type="password"]::-webkit-input-placeholder {
+        letter-spacing: 0 !important;
+      }
+      .login-input:-webkit-autofill,
+      .login-input:-webkit-autofill:hover,
+      .login-input:-webkit-autofill:focus,
+      .login-input:-webkit-autofill:active {
         -webkit-text-fill-color: #0f172a !important;
-        font-size: 24px !important;
+        font-size: 18px !important;
         line-height: 1.2 !important;
         font-family: "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "Segoe UI", Arial, sans-serif !important;
-        font-weight: 600 !important;
-        box-shadow: 0 0 0 1000px #eef4ff inset !important;
+        font-weight: 500 !important;
+        box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.94) inset !important;
         transition: background-color 99999s ease-in-out 0s;
       }
       .card .btn {
         width: 100%;
-        height: 52px;
-        margin-top: 8px;
+        height: 48px;
+        margin-top: 2px;
         margin-left: 0;
         margin-right: 0;
         display: block;
-        border-radius: 12px;
-        font-size: 23px;
-        font-weight: 900;
-        border: 1px solid rgba(15, 23, 42, 0.14);
-        background: #0f2552;
+        border-radius: var(--radius-md);
+        font-size: 18px;
+        font-weight: 600;
+        border: 1px solid rgba(29, 78, 216, 0.42);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 42%),
+          linear-gradient(135deg, #3b82f6 0%, #2563eb 42%, #1d4ed8 100%);
         color: #ffffff;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.30),
+          0 12px 28px rgba(37, 99, 235, 0.24);
       }
       .card .btn:hover {
-        filter: brightness(1.04);
+        filter: brightness(1.04) saturate(1.06);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.34),
+          0 16px 32px rgba(37, 99, 235, 0.28);
         text-decoration: none;
       }
 
@@ -268,38 +371,67 @@
           <div class="brand">
             <div class="logo" aria-hidden="true"></div>
             <div>
-              <div class="brand-title">Servforce Quiz</div>
+              <div class="brand-title">MD Quiz</div>
             </div>
           </div>
           <div class="hero-copy">
-            <p>面向招聘全流程的一体化系统：从试卷配置、邀约投递、在线作答到智能判卷与运营监控，统一在一个后台完成。</p>
+            <p>面向招聘全流程的一体化系统：从<span class="accent">试卷配置</span>、<span class="accent">邀约投递</span>、在线作答到<span class="accent">智能判卷</span>与运营监控，统一在一个后台完成。</p>
             <div class="feature-grid" aria-label="系统能力总览">
               <div class="feature-item">
-                <strong>试卷管理</strong>
-                <span>上传/编辑题目，版本化维护</span>
+                <span class="material-symbols-rounded feature-icon" aria-hidden="true">description</span>
+                <div class="feature-body">
+                  <strong>试卷管理</strong>
+                  <span>上传/编辑题目，版本化维护</span>
+                </div>
               </div>
               <div class="feature-item">
-                <strong>候选人管理</strong>
-                <span>简历入库、信息归档、检索筛选</span>
+                <span class="material-symbols-rounded feature-icon" aria-hidden="true">groups</span>
+                <div class="feature-body">
+                  <strong>候选人管理</strong>
+                  <span>简历入库、信息归档、检索筛选</span>
+                </div>
               </div>
               <div class="feature-item">
-                <strong>答题邀约</strong>
-                <span>链接/二维码发放，进度追踪</span>
+                <span class="material-symbols-rounded feature-icon" aria-hidden="true">edit_square</span>
+                <div class="feature-body">
+                  <strong>答题邀约</strong>
+                  <span>链接/二维码发放，进度追踪</span>
+                </div>
               </div>
               <div class="feature-item">
-                <strong>智能判卷</strong>
-                <span>自动评分、评语生成、结果沉淀</span>
+                <span class="material-symbols-rounded feature-icon" aria-hidden="true">grading</span>
+                <div class="feature-body">
+                  <strong>智能判卷</strong>
+                  <span>自动评分、评语生成、结果沉淀</span>
+                </div>
               </div>
               <div class="feature-item">
-                <strong>系统日志</strong>
-                <span>关键操作留痕，行为可追溯</span>
+                <span class="material-symbols-rounded feature-icon" aria-hidden="true">article</span>
+                <div class="feature-body">
+                  <strong>系统日志</strong>
+                  <span>关键操作留痕，行为可追溯</span>
+                </div>
               </div>
               <div class="feature-item">
-                <strong>系统状态</strong>
-                <span>Token/短信用量监控与预警</span>
+                <span class="material-symbols-rounded feature-icon" aria-hidden="true">monitor_heart</span>
+                <div class="feature-body">
+                  <strong>系统状态</strong>
+                  <span>Token/短信用量监控与预警</span>
+                </div>
               </div>
             </div>
-            <div class="flow-line">流程闭环：试卷 -> 邀约 -> 作答 -> 判卷 -> 复盘</div>
+            <div class="flow-line">
+              <span>流程闭环：</span>
+              <span class="flow-step accent">试卷</span>
+              <span class="flow-arrow" aria-hidden="true"><span class="material-symbols-rounded">chevron_right</span></span>
+              <span class="flow-step accent">邀约</span>
+              <span class="flow-arrow" aria-hidden="true"><span class="material-symbols-rounded">chevron_right</span></span>
+              <span class="flow-step accent">作答</span>
+              <span class="flow-arrow" aria-hidden="true"><span class="material-symbols-rounded">chevron_right</span></span>
+              <span class="flow-step accent">判卷</span>
+              <span class="flow-arrow" aria-hidden="true"><span class="material-symbols-rounded">chevron_right</span></span>
+              <span class="flow-step accent">复盘</span>
+            </div>
           </div>
         </div>
         <div class="hero-meta">
@@ -335,4 +467,3 @@
     </div>
   </body>
 </html>
-

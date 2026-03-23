@@ -28,12 +28,11 @@ markdown_quiz/
   web/runtime_support.py  兼容聚合导出
   config.py               兼容配置导出
   db.py                   PostgreSQL 初始化、查询与写入
-  storage/json_store.py   运行目录准备
   qml/                    QML Markdown 解析器
   services/               业务服务层
   templates/              Jinja2 模板
   static/                 静态资源
-  storage/                运行期文件存储目录
+  storage/                默认运行期文件目录（由 STORAGE_DIR 控制，通常不入库）
   scripts/dev/            本地启动与测试脚本
   tests/                  pytest 测试
   docs/                   补充设计文档
@@ -161,13 +160,26 @@ ADMIN_PASSWORD=password
 ### 5. 启动应用
 
 ```bash
-scripts/dev/run-web.sh
+scripts/dev/webctl.sh start
+```
+
+常用控制命令：
+
+```bash
+scripts/dev/webctl.sh start
+scripts/dev/webctl.sh status
+scripts/dev/webctl.sh restart
+scripts/dev/webctl.sh stop
+scripts/dev/webctl.sh logs
+scripts/dev/webctl.sh run
 ```
 
 默认访问地址：
 
 - 后台登录页：`http://127.0.0.1:5000/admin/login`
 - 后台首页：`http://127.0.0.1:5000/admin`
+
+脚本会打印当前监听主机、端口、访问 URL、PID 和日志文件路径；后台日志默认写到 `tmp/logs/web.log`。
 
 应用启动时会自动执行数据库初始化和必要的表结构升级。
 
@@ -186,6 +198,9 @@ scripts/dev/test.sh -q
 - `APP_SECRET_KEY`: Flask 会话和签名密钥
 - `ADMIN_USERNAME`: 后台用户名，默认 `admin`
 - `ADMIN_PASSWORD`: 后台密码，默认 `password`
+- `APP_HOST`: Web 监听地址，默认 `0.0.0.0`
+- `APP_DEBUG`: 是否开启 Flask debug，默认直接运行时开启
+- `APP_USE_RELOADER`: 是否开启 Flask reloader，默认跟随 `APP_DEBUG`
 - `PORT`: Web 端口，默认 `5000`
 - `STORAGE_DIR`: 文件存储目录，默认项目下的 `storage`
 - `LOG_LEVEL`: 日志级别

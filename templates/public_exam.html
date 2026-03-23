@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ spec.title | title_clean }}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <script>
       window.MathJax = {
@@ -27,7 +28,7 @@
         width: min(100%, 1240px);
         max-width: 100%;
         height: auto;
-        border-radius: 10px;
+        border-radius: var(--radius-sm);
         display: block;
         margin: 12px auto;
         padding: 10px;
@@ -59,7 +60,7 @@
       }
       .exam-submit-corner .btn {
         padding: 12px 18px;
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         font-size: 16px;
         font-weight: 900;
         min-width: 120px;
@@ -83,7 +84,7 @@
         width: 260px;
         max-width: calc(100vw - 36px);
         padding: 10px 12px;
-        border-radius: 18px;
+        border-radius: var(--radius-lg);
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(255, 255, 255, 0.94);
         box-shadow: 0 22px 56px rgba(2, 6, 23, 0.18);
@@ -144,9 +145,9 @@
   <body>
     <header class="topbar">
       <div class="container topbar-inner">
-        <div class="brand" aria-label="Servforce Quiz">
+        <div class="brand" aria-label="MD Quiz">
           <span class="brand-badge" aria-hidden="true"></span>
-          <span>Servforce Quiz</span>
+          <span>MD Quiz</span>
         </div>
       </div>
     </header>

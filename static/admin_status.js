@@ -35,25 +35,11 @@
   const clampPage = () => { if (!Number.isFinite(page) || page <= 0) page = 1; if (page > totalPages()) page = totalPages(); };
 
   const initDateProxy = (id) => {
-    const native = document.getElementById(id);
-    const display = document.getElementById(`${id}_display`);
-    if (!native || !display) return;
-    const sync = () => { display.value = native.value ? String(native.value).replaceAll("-", "/") : ""; };
-    const open = () => { try { if (native.showPicker) native.showPicker(); else native.click(); } catch (_) {} };
-    sync();
-    native.addEventListener("change", sync);
-    display.addEventListener("click", open);
+    if (!window.AdminDatePicker || typeof window.AdminDatePicker.bind !== "function") return;
+    window.AdminDatePicker.bind(id);
   };
 
   ["status_start", "status_end"].forEach(initDateProxy);
-  document.querySelectorAll("button.date-btn[data-for]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-for");
-      const native = id ? document.getElementById(id) : null;
-      if (!native) return;
-      try { if (native.showPicker) native.showPicker(); else native.click(); } catch (_) {}
-    });
-  });
 
   const setAlert = (summary) => {
     const overall = String(summary && summary.overall_level ? summary.overall_level : "ok");
@@ -108,7 +94,7 @@
         <td>${Number(it.sms_calls || 0)}</td>
       </tr>
     `).join("");
-    elTbody.innerHTML = rows || '<tr><td colspan="6" class="muted" style="padding:16px;">暂无数据</td></tr>';
+    elTbody.innerHTML = rows || '<tr class="empty-row"><td colspan="6">暂无数据</td></tr>';
     renderPager();
   };
 

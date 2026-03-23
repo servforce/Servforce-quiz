@@ -19,7 +19,7 @@
         width: min(100%, 1600px);
         max-width: 100%;
         height: auto;
-        border-radius: 10px;
+        border-radius: var(--radius-sm);
         display: block;
         margin: 12px auto;
         padding: 10px;
@@ -32,7 +32,7 @@
       .q {
         position: relative;
         border: 0;
-        border-radius: 18px;
+        border-radius: var(--radius-lg);
         background: rgba(255, 255, 255, 0.92);
         box-shadow: none;
         overflow: hidden;
@@ -88,7 +88,7 @@
         gap: 12px;
         align-items: flex-start;
         padding: 12px 14px;
-        border-radius: 16px;
+        border-radius: var(--radius-lg);
         border: 0;
         background: rgba(255, 255, 255, 0.92);
       }
@@ -100,7 +100,7 @@
         justify-content: center;
         min-width: 34px;
         height: 26px;
-        border-radius: 10px;
+        border-radius: var(--radius-sm);
         border: 0;
         background: rgba(15, 23, 42, 0.03);
         font-weight: 950;
@@ -110,7 +110,7 @@
       .ans {
         margin-top: 14px;
         border: 0;
-        border-radius: 16px;
+        border-radius: var(--radius-lg);
         padding: 12px 14px;
         background: rgba(255, 255, 255, 0.92);
       }
@@ -131,7 +131,7 @@
       .review-page .section-head .btn {
         font-size: var(--admin-font-size-control);
         padding: 12px 18px;
-        border-radius: 14px;
+        border-radius: var(--radius-md);
       }
     </style>
 {% endblock %}
@@ -171,8 +171,8 @@
             {% set mx = q.score_max %}
             {% set ok = (score is not none and mx is not none and (score|int) >= (mx|int)) %}
             <div class="q {{ 'ok' if ok else 'bad' }}">
-              <div class="flex" style="justify-content: space-between; align-items: center;">
-                <div class="flex" style="gap:10px; flex-wrap: wrap;">
+              <div class="q-head">
+                <div class="q-meta">
                   <div><b>{{ q.label or q.qid }}</b></div>
                   <div><code>{{ type_label_map.get(q.type, q.type) }}</code></div>
                   {% if mx is not none %}<span class="pill">{{ mx }}分</span>{% endif %}
@@ -182,10 +182,10 @@
                 </div>
               </div>
 
-              <div class="md" style="margin-top:8px;">{{ q.stem_md | md }}</div>
+              <div class="md md-spaced">{{ q.stem_md | md }}</div>
 
               {% if q.type in ['single','multiple'] and q.options %}
-                <div style="margin-top:10px; display:grid; gap:6px;">
+                <div class="option-list">
                   {% set chosen = q.answer %}
                   {% if chosen is string %}
                     {% set chosen_list = [chosen] %}
@@ -201,8 +201,8 @@
                     {% if is_correct %}{% set cls = 'ok' %}{% endif %}
                     {% if is_chosen and not is_correct %}{% set cls = 'bad' %}{% endif %}
                     <div class="opt {{ cls }}">
-                      <div style="min-width: 26px;"><b>{{ o.key }}</b></div>
-                      <div style="flex:1;">{{ o.text }}</div>
+                      <div class="option-key"><b>{{ o.key }}</b></div>
+                      <div class="option-text">{{ o.text }}</div>
                       {% if is_correct %}<span class="pill ok">正确</span>{% endif %}
                       {% if is_chosen and not is_correct %}<span class="pill bad">选错</span>{% endif %}
                       {% if is_chosen and is_correct %}<span class="pill ok">选对</span>{% endif %}
@@ -213,11 +213,11 @@
 
               {% if q.type == 'short' %}
                 <div class="ans">
-                  <div class="sub" style="margin:0 0 6px;">候选者答案</div>
+                  <div class="sub sub-label">候选者答案</div>
                   <pre class="code">{{ q.answer or "" }}</pre>
                   {% if q.reason %}
-                    <div class="sub" style="margin-top:10px;">判分要点</div>
-                    <div class="sub" style="margin-top:6px; color: var(--text);">{{ q.reason }}</div>
+                    <div class="sub sub-heading">判分要点</div>
+                    <div class="sub sub-copy">{{ q.reason }}</div>
                   {% endif %}
                 </div>
               {% endif %}
@@ -226,4 +226,3 @@
         </section>
       </div>
 {% endblock %}
-

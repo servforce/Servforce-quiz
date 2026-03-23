@@ -6,9 +6,9 @@
     <style>
       /* Match the screenshot: larger white surface (page size unchanged, only this view). */
       .container { max-width: 1080px; width: min(1080px, 100%); }
-      .card-mini { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 12px; padding: 14px; background: rgba(15, 23, 42, 0.02); }
-      .linkbox { padding: 10px 12px; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 12px; background: rgba(255, 255, 255, 0.92); word-break: break-all; }
-      .qr { display: grid; place-items: center; padding: 10px; background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 12px; }
+      .card-mini { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: var(--radius-md); padding: 14px; background: rgba(15, 23, 42, 0.02); }
+      .linkbox { padding: 10px 12px; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.92); word-break: break-all; }
+      .qr { display: grid; place-items: center; padding: 10px; background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(15, 23, 42, 0.12); border-radius: var(--radius-md); }
       .sr-only {
         position: absolute;
         width: 1px;
@@ -52,7 +52,7 @@
       #inviteSurface {
         width: min(900px, 100%);
         margin: 0 auto;
-        min-height: calc(100vh - 64px - 18px - 36px);
+        min-height: 0;
       }
       #inviteBody { flex: 1 1 auto; }
 
@@ -138,5 +138,4 @@
       }
     </script>
 {% endblock %}
-
 

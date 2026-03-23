@@ -4,35 +4,147 @@
 {% set admin_page_subtitle = "创建邀请与查看作答状态" %}
 {% block head_extra %}
     <style>
-      .admin-surface { font-size: var(--admin-font-size-base); min-height: clamp(760px, calc(100vh - 120px), 920px); }
-      .assign-grid-inline { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; align-items: end; }
+      .admin-surface { font-size: var(--admin-font-size-base); min-height: 0; }
       .assign-form .field { margin: 0; width: 100%; max-width: none; }
-      .assign-form .field.field-mid { grid-column: span 2; }
-      .assign-form .field.field-time { grid-column: span 2; }
-      .assign-form .field.field-start { grid-column: 1 / span 2; }
-      .assign-form .field.field-end { grid-column: 3 / span 2; }
-      .assign-actions { grid-column: 5 / span 2; margin-top: 0; display: flex; justify-content: flex-end; align-self: end; }
       .assign-form .field label { margin-bottom: 6px; }
-      .attempt-filter { display:flex; flex-wrap: nowrap; align-items: flex-end; gap: 10px; margin: 0 0 10px; width: 100%; }
+      .time-picker { position: relative; width: 100%; }
+      .time-display {
+        padding-right: 42px;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.96);
+      }
+      .time-picker-btn {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 32px;
+        height: 32px;
+        border-radius: var(--radius-sm);
+        border: 0;
+        background: transparent;
+        color: rgba(15, 23, 42, 0.72);
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        line-height: 1;
+      }
+      .time-picker-btn:hover {
+        background: rgba(239, 246, 255, 0.9);
+        color: var(--brand-strong);
+      }
+      .duration-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 3200;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        background: rgba(15, 23, 42, 0.34);
+      }
+      .duration-modal[hidden] { display: none; }
+      .duration-card {
+        width: min(420px, 92vw);
+        border-radius: var(--radius-lg);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.20);
+        overflow: hidden;
+      }
+      .duration-card-head {
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(37, 99, 235, 0.10);
+        background: rgba(247, 250, 255, 0.86);
+      }
+      .duration-card-head h3 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.2;
+      }
+      .duration-card-body {
+        display: grid;
+        gap: 14px;
+        padding: 16px;
+      }
+      .duration-presets {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .duration-preset {
+        min-width: 76px;
+        height: 34px;
+        padding: 0 12px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        background: rgba(248, 250, 252, 0.9);
+        color: rgba(15, 23, 42, 0.78);
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .duration-preset.is-active {
+        border-color: rgba(37, 99, 235, 0.28);
+        background: rgba(37, 99, 235, 0.10);
+        color: var(--brand-strong);
+      }
+      .duration-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        gap: 10px;
+        align-items: end;
+      }
+      .duration-grid .field { margin: 0; }
+      .duration-grid .field label {
+        display: inline-block;
+        margin-bottom: 6px;
+        font-size: var(--admin-font-size-label);
+        color: rgba(15, 23, 42, 0.72);
+      }
+      .duration-grid .input,
+      .duration-grid select {
+        width: 100%;
+        height: 40px;
+      }
+      .duration-sep {
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: rgba(15, 23, 42, 0.45);
+        font-weight: 700;
+      }
+      .duration-card-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 16px 16px;
+        border-top: 1px solid rgba(37, 99, 235, 0.10);
+        background: rgba(247, 250, 255, 0.60);
+      }
+      .attempt-filter { margin: 0 0 10px; }
       .attempt-filter .field { margin: 0; }
-      .attempt-filter .field.field-q { flex: 0 1 520px; max-width: 520px; min-width: 300px; }
-      .attempt-filter .field.field-sm { flex: 0 0 230px; }
-      .attempt-filter .input { height: 42px; padding-top: 0; padding-bottom: 0; line-height: 1.25; font-size: var(--admin-font-size-control); }
-      .range-group { display: flex; align-items: flex-end; gap: 10px; margin-left: auto; }
-      .range-sep { height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0 2px; color: rgba(15, 23, 42, 0.55); font-weight: 900; user-select: none; }
-      .date-proxy { position: relative; width: 100%; }
-      .date-display { padding-right: 42px; cursor: pointer; }
-      .date-native { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-      .date-btn { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border-radius: 10px; border: 1px solid rgba(15, 23, 42, 0.12); background: rgba(255, 255, 255, 0.95); color: rgba(15, 23, 42, 0.72); display: grid; place-items: center; cursor: pointer; }
+      .attempt-filter .toolbar-field--query { min-width: 0; max-width: none; }
+      .attempt-actions { justify-content: flex-end; }
+      .attempt-actions:empty { display: none; }
+      .range-sep { height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0 2px; color: rgba(15, 23, 42, 0.55); font-weight: 900; user-select: none; }
       .table-scroll { flex: 1 1 auto; min-height: 0; }
+      .attempt-table th,
+      .attempt-table td { vertical-align: middle; }
+      .attempt-table th {
+        padding: 10px 8px;
+        line-height: 1.15;
+      }
+      .attempt-table td {
+        padding: 14px 10px;
+      }
       .tri-pager { margin-top: auto; justify-content: flex-end; padding-top: 12px; }
       tr.row-link { cursor: pointer; }
       tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
       a.row-a, a.token-copy { color: inherit; text-decoration: none; }
       a.row-a:hover, a.token-copy:hover { text-decoration: underline; }
-      @media (max-width: 1400px) { .assign-grid-inline { grid-template-columns: repeat(4, minmax(0, 1fr)); } .assign-form .field.field-mid, .assign-form .field.field-time, .assign-form .field.field-start, .assign-form .field.field-end, .assign-actions { grid-column: span 2; } }
-      @media (max-width: 1100px) { .assign-grid-inline { grid-template-columns: repeat(2, minmax(0, 1fr)); } .assign-form .field.field-mid, .assign-form .field.field-time, .assign-form .field.field-start, .assign-form .field.field-end, .assign-actions { grid-column: span 1; } }
-      @media (max-width: 980px) { .assign-grid-inline { grid-template-columns: 1fr; } .attempt-filter { flex-wrap: wrap; } .range-group { margin-left: 0; flex-wrap: wrap; } }
+      @media (max-width: 980px) { .attempt-actions { justify-content: flex-start; } }
     </style>
 {% endblock %}
 {% block content %}
@@ -40,30 +152,47 @@
         <section class="section">
           <div class="panel-head"><div></div></div>
           <form class="assign-form" method="post" action="/admin/assignments">
-            <div class="assign-grid-inline">
-              <div class="field field-mid"><label for="exam_key">试卷</label><select id="exam_key" name="exam_key" required>{% for e in exams_all %}<option value="{{ e.exam_key }}" {% if assign_exam_key and assign_exam_key == e.exam_key %}selected{% endif %}>{{ e.exam_key }}</option>{% endfor %}</select></div>
-              <div class="field field-mid"><label for="candidate_id">候选人</label><select id="candidate_id" name="candidate_id" required>{% for c in candidates %}<option value="{{ c.id }}" {% if assign_candidate_id and (assign_candidate_id|int) == c.id %}selected{% endif %}>#{{ c.id }} {{ c.name }} {{ c.phone }}</option>{% endfor %}</select></div>
-              <div class="field field-time"><label for="time_limit_seconds">答题时长</label><input id="time_limit_seconds" class="input" name="time_limit_seconds" value="02:00:00" placeholder="02:00:00" /></div>
+            <div class="invite-grid">
+              <div class="field invite-grid__exam"><label for="exam_key">试卷</label><select id="exam_key" name="exam_key" required>{% for e in exams_all %}<option value="{{ e.exam_key }}" {% if assign_exam_key and assign_exam_key == e.exam_key %}selected{% endif %}>{{ e.exam_key }}</option>{% endfor %}</select></div>
+              <div class="field invite-grid__candidate"><label for="candidate_id">候选人</label><select id="candidate_id" name="candidate_id" required>{% for c in candidates %}<option value="{{ c.id }}" {% if assign_candidate_id and (assign_candidate_id|int) == c.id %}selected{% endif %}>#{{ c.id }} {{ c.name }} {{ c.phone }}</option>{% endfor %}</select></div>
+              <div class="field invite-grid__duration">
+                <label for="time_limit_seconds_display">答题时长</label>
+                <input id="time_limit_seconds" type="hidden" name="time_limit_seconds" value="02:00:00" />
+                <div class="time-picker">
+                  <input id="time_limit_seconds_display" class="input time-display" type="text" value="02:00:00" placeholder="02:00:00" readonly aria-haspopup="dialog" aria-controls="duration_modal" />
+                  <button class="time-picker-btn" type="button" id="time_picker_open" aria-label="选择答题时长"><span class="material-symbols-rounded" aria-hidden="true">schedule</span></button>
+                </div>
+              </div>
               <input type="hidden" name="pass_threshold" value="60" />
-              <div class="field field-start"><label for="invite_start_date">开始日期</label><div class="date-proxy"><input id="invite_start_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="invite_start_date" class="input date-native" type="date" name="invite_start_date" value="" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="invite_start_date" aria-label="选择答题开始日期">📅</button></div></div>
-              <div class="field field-end"><label for="invite_end_date">结束日期</label><div class="date-proxy"><input id="invite_end_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="invite_end_date" class="input date-native" type="date" name="invite_end_date" value="" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="invite_end_date" aria-label="选择答题结束日期">📅</button></div></div>
-              <div class="assign-actions"><button class="btn btn-primary" type="submit">创建答题邀约</button></div>
+              <div class="field invite-grid__start"><label for="invite_start_date">开始日期</label><div class="date-proxy"><input id="invite_start_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="invite_start_date" class="input date-native" type="date" name="invite_start_date" value="" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="invite_start_date" aria-label="选择答题开始日期"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
+              <div class="field invite-grid__end"><label for="invite_end_date">结束日期</label><div class="date-proxy"><input id="invite_end_date_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="invite_end_date" class="input date-native" type="date" name="invite_end_date" value="" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="invite_end_date" aria-label="选择答题结束日期"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
+              <div class="invite-grid__actions"><button class="btn btn-primary" type="submit">创建答题邀约</button></div>
             </div>
           </form>
         </section>
         <section class="section">
-          <form class="attempt-filter" method="get" action="{{ url_for('admin_assignments') }}">
-            <div class="field field-q"><input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷/Token" autocomplete="off" aria-label="查询" /></div>
-            <div class="range-group">
-              <div class="field field-sm"><div class="date-proxy"><input id="attempt_start_from_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="attempt_start_from" class="input date-native" type="date" name="attempt_start_from" value="{{ attempt_start_from or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="attempt_start_from" aria-label="选择开始时间(起)">📅</button></div></div>
+          <form class="attempt-filter toolbar-form" method="get" action="{{ url_for('admin_assignments') }}">
+            <div class="field toolbar-field--query"><input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷/Token" autocomplete="off" aria-label="查询" /></div>
+            <div class="range-group toolbar-range">
+              <div class="field toolbar-field--date"><div class="date-proxy"><input id="attempt_start_from_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="attempt_start_from" class="input date-native" type="date" name="attempt_start_from" value="{{ attempt_start_from or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="attempt_start_from" aria-label="选择开始时间(起)"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
               <div class="range-sep" aria-hidden="true">-</div>
-              <div class="field field-sm"><div class="date-proxy"><input id="attempt_start_to_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="attempt_start_to" class="input date-native" type="date" name="attempt_start_to" value="{{ attempt_start_to or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="attempt_start_to" aria-label="选择开始时间(止)">📅</button></div></div>
+              <div class="field toolbar-field--date"><div class="date-proxy"><input id="attempt_start_to_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="attempt_start_to" class="input date-native" type="date" name="attempt_start_to" value="{{ attempt_start_to or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="attempt_start_to" aria-label="选择开始时间(止)"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
             </div>
-            <div class="attempt-actions"></div>
+            <div class="attempt-actions toolbar-actions"></div>
           </form>
           <div class="table-scroll">
             <table class="attempt-table" aria-label="候选人答题情况列表">
-              <thead><tr><th style="width:32px;">ID</th><th style="width:56px;">姓名</th><th style="width:96px;">电话</th><th style="width:110px;">试卷</th><th style="width:92px;">Token</th><th class="center" style="width:68px;">状态</th><th class="center" style="width:40px;">成绩</th><th style="width:300px;">时间</th></tr></thead>
+              <colgroup>
+                <col class="col-w-5p" />
+                <col class="col-w-10p" />
+                <col class="col-w-12p" />
+                <col class="col-w-14p" />
+                <col class="col-w-15p" />
+                <col class="col-w-10p" />
+                <col class="col-w-8p" />
+                <col class="col-w-26p" />
+              </colgroup>
+              <thead><tr><th>ID</th><th>姓名</th><th>电话</th><th>试卷</th><th>TOKEN</th><th class="center">状态</th><th class="center">成绩</th><th>时间</th></tr></thead>
               <tbody>
                 {% for c in attempt_candidates %}
                 <tr {% if c.attempt_href or c.attempt_msg %}class="row-link"{% endif %} {% if c.attempt_href %}data-href="{{ c.attempt_href }}"{% endif %} {% if c.attempt_msg %}data-msg="{{ c.attempt_msg }}"{% endif %} data-token="{{ c.token }}">
@@ -88,6 +217,37 @@
             {% if attempt_page < total_attempt_pages_display %}<a class="tri-btn" href="{{ url_for('admin_assignments') }}?attempt_page={{ attempt_page + 1 }}{{ attempt_qs_extra }}" aria-label="下一页" title="下一页">▼</a>{% else %}<span class="tri-btn disabled" aria-hidden="true">▼</span>{% endif %}
           </div>
         </section>
+      </div>
+      <div id="duration_modal" class="duration-modal" hidden>
+        <div class="duration-card" role="dialog" aria-modal="true" aria-label="选择答题时长">
+          <div class="duration-card-head">
+            <h3>选择答题时长</h3>
+          </div>
+          <div class="duration-card-body">
+            <div class="duration-presets" aria-label="常用时长">
+              <button class="duration-preset" type="button" data-duration="00:30:00">30分钟</button>
+              <button class="duration-preset" type="button" data-duration="01:00:00">1小时</button>
+              <button class="duration-preset" type="button" data-duration="01:30:00">1.5小时</button>
+              <button class="duration-preset" type="button" data-duration="02:00:00">2小时</button>
+              <button class="duration-preset" type="button" data-duration="03:00:00">3小时</button>
+            </div>
+            <div class="duration-grid">
+              <div class="field">
+                <label for="duration_hours">小时</label>
+                <select id="duration_hours"></select>
+              </div>
+              <div class="duration-sep" aria-hidden="true">:</div>
+              <div class="field">
+                <label for="duration_minutes">分钟</label>
+                <select id="duration_minutes"></select>
+              </div>
+            </div>
+          </div>
+          <div class="duration-card-foot">
+            <button id="duration_cancel" class="btn" type="button">取消</button>
+            <button id="duration_apply" class="btn btn-primary" type="button">确定</button>
+          </div>
+        </div>
       </div>
 {% endblock %}
 {% block scripts %}

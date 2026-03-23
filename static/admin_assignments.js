@@ -21,28 +21,113 @@
   };
 
   const initDateProxy = (id) => {
-    const native = document.getElementById(id);
-    const display = document.getElementById(`${id}_display`);
-    if (!native || !display) return;
-    const sync = () => { display.value = native.value ? String(native.value).replaceAll("-", "/") : ""; };
-    const open = () => {
-      try { if (native.showPicker) native.showPicker(); else native.click(); } catch (_) { try { native.focus(); } catch (_) {} }
+    if (!window.AdminDatePicker || typeof window.AdminDatePicker.bind !== "function") return;
+    window.AdminDatePicker.bind(id);
+  };
+
+  const initDurationPicker = () => {
+    const hidden = document.getElementById("time_limit_seconds");
+    const display = document.getElementById("time_limit_seconds_display");
+    const modal = document.getElementById("duration_modal");
+    const openBtn = document.getElementById("time_picker_open");
+    const hours = document.getElementById("duration_hours");
+    const minutes = document.getElementById("duration_minutes");
+    const applyBtn = document.getElementById("duration_apply");
+    const cancelBtn = document.getElementById("duration_cancel");
+    const presetButtons = Array.from(document.querySelectorAll(".duration-preset[data-duration]"));
+    if (!hidden || !display || !modal || !openBtn || !hours || !minutes || !applyBtn || !cancelBtn) return;
+
+    const pad2 = (v) => String(v).padStart(2, "0");
+    const parse = (raw) => {
+      const m = String(raw || "").trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      if (!m) return { hours: 2, minutes: 0 };
+      const h = Math.max(0, Math.min(23, parseInt(m[1], 10) || 0));
+      const mm = Math.max(0, Math.min(55, parseInt(m[2], 10) || 0));
+      return { hours: h, minutes: mm - (mm % 5) };
     };
-    sync();
-    native.addEventListener("change", sync);
+    const format = (h, m) => `${pad2(h)}:${pad2(m)}:00`;
+    const syncPresetState = () => {
+      const value = format(hours.value, minutes.value);
+      presetButtons.forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.duration === value);
+      });
+    };
+    const syncDisplay = () => {
+      const next = format(hours.value, minutes.value);
+      hidden.value = next;
+      display.value = next;
+      syncPresetState();
+    };
+    const syncSelectors = () => {
+      const current = parse(hidden.value || display.value || "02:00:00");
+      hours.value = pad2(current.hours);
+      minutes.value = pad2(current.minutes);
+      hidden.value = format(current.hours, current.minutes);
+      display.value = hidden.value;
+      syncPresetState();
+    };
+    const open = () => {
+      syncSelectors();
+      modal.hidden = false;
+      document.body.style.overflow = "hidden";
+      window.setTimeout(() => {
+        try { hours.focus(); } catch (_) {}
+      }, 0);
+    };
+    const close = () => {
+      modal.hidden = true;
+      document.body.style.overflow = "";
+    };
+
+    hours.innerHTML = "";
+    minutes.innerHTML = "";
+    for (let h = 0; h <= 23; h += 1) {
+      const opt = document.createElement("option");
+      opt.value = pad2(h);
+      opt.textContent = `${pad2(h)} 小时`;
+      hours.appendChild(opt);
+    }
+    for (let m = 0; m < 60; m += 5) {
+      const opt = document.createElement("option");
+      opt.value = pad2(m);
+      opt.textContent = `${pad2(m)} 分钟`;
+      minutes.appendChild(opt);
+    }
+
+    syncSelectors();
     display.addEventListener("click", open);
+    display.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      open();
+    });
+    openBtn.addEventListener("click", open);
+    cancelBtn.addEventListener("click", close);
+    applyBtn.addEventListener("click", () => {
+      syncDisplay();
+      close();
+    });
+    hours.addEventListener("change", syncPresetState);
+    minutes.addEventListener("change", syncPresetState);
+    presetButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const current = parse(btn.dataset.duration || "");
+        hours.value = pad2(current.hours);
+        minutes.value = pad2(current.minutes);
+        syncPresetState();
+      });
+    });
+    modal.addEventListener("click", (ev) => {
+      if (ev.target === modal) close();
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && !modal.hidden) close();
+    });
   };
 
   ensureDefaultInviteDates();
+  initDurationPicker();
   ["invite_start_date", "invite_end_date", "attempt_start_from", "attempt_start_to"].forEach(initDateProxy);
-  document.querySelectorAll("button.date-btn[data-for]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-for");
-      const native = id ? document.getElementById(id) : null;
-      if (!native) return;
-      try { if (native.showPicker) native.showPicker(); else native.click(); } catch (_) {}
-    });
-  });
 
   const attemptQ = document.getElementById("attempt_q");
   if (attemptQ && attemptQ.form) {

@@ -14,7 +14,7 @@
         min-height: 0;
         resize: none;
         padding: 12px 14px;
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(255, 255, 255, 0.92);
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -30,7 +30,7 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         font-size: var(--admin-font-size-control);
         color: var(--text);
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(255, 255, 255, 0.92);
       }
@@ -59,7 +59,7 @@
         align-items: center;
         gap: 8px;
         padding: 12px 16px;
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         font-weight: 700;
         font-size: var(--admin-font-size-control);
         color: var(--text);
@@ -91,17 +91,17 @@
         padding: 0 18px;
         text-align: center;
         justify-content: center;
-        border-radius: 16px;
+        border-radius: var(--radius-lg);
         font-weight: 900;
       }
       .head-actions .save-btn {
-        background: linear-gradient(180deg, #fde047, #eab308) !important;
-        border-color: rgba(234, 179, 8, 0.30) !important;
+        background: #eab308 !important;
+        border-color: #d97706 !important;
         color: #422006 !important;
       }
       .head-actions .save-btn:hover {
-        background: linear-gradient(180deg, #facc15, #d97706) !important;
-        border-color: rgba(202, 138, 4, 0.36) !important;
+        background: #d97706 !important;
+        border-color: #b45309 !important;
         color: #422006 !important;
       }
       .head-actions .back-btn {
@@ -233,4 +233,3 @@
       })();
     </script>
 {% endblock %}
-

@@ -4,68 +4,244 @@
 {% set admin_page_subtitle = "查看日志密度与操作明细" %}
 {% block head_extra %}
     <style>
-      .admin-surface { font-size: var(--admin-font-size-base); min-height: clamp(760px, calc(100vh - 120px), 920px); }
-      .log-box { margin-bottom: 14px; border-radius: 16px; background: rgba(248, 250, 252, 0.90); padding: 16px; }
-      .log-box-head { display:grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; margin-bottom: 10px; }
-      .legend-grid { display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-      .legend-item { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius: 12px; background: rgba(255,255,255,0.82); }
+      .admin-surface {
+        font-size: var(--admin-font-size-base);
+        min-height: 0;
+        display: grid;
+        gap: 16px;
+        align-content: start;
+        padding: 16px;
+      }
+      .log-box {
+        margin: 0;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: rgba(247, 250, 255, 0.76);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .log-box-title {
+        margin: 0;
+        font-size: var(--admin-font-size-title);
+        font-weight: 950;
+        line-height: 1.15;
+        color: var(--text);
+      }
+      .log-box > .log-box-title {
+        display: flex;
+        align-items: center;
+        min-height: var(--admin-panel-head-min-height);
+        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
+        border-bottom: 1px solid rgba(37, 99, 235, 0.10);
+        background: rgba(255, 255, 255, 0.52);
+      }
+      .log-box-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        min-height: var(--admin-panel-head-min-height);
+        gap: var(--admin-panel-head-gap);
+        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
+        border-bottom: 1px solid rgba(37, 99, 235, 0.10);
+        background: rgba(255, 255, 255, 0.52);
+      }
+      .legend-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        padding: 16px 18px 18px;
+      }
+      .legend-grid.legend-grid--footer {
+        border-top: 1px solid rgba(37, 99, 235, 0.10);
+        gap: 0;
+        padding: 0;
+        background: rgba(255, 255, 255, 0.52);
+      }
+      .legend-grid.legend-grid--footer .legend-item {
+        min-height: 0;
+        padding: 14px 16px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        font-size: 14px;
+      }
+      .legend-grid.legend-grid--footer .legend-item + .legend-item {
+        border-left: 1px solid rgba(37, 99, 235, 0.10);
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 48px;
+        padding: 10px 12px;
+        border: 1px solid rgba(37, 99, 235, 0.10);
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.88);
+      }
       .legend-dot { width: 10px; height: 10px; border-radius: 999px; }
-      .legend-cnt { margin-left:auto; font-weight: 900; }
-      .density-filter { display:flex; flex-wrap: nowrap; align-items: flex-end; gap: 10px; margin: 0; }
-      .range-group { display:flex; align-items: flex-end; gap: 10px; }
+      .legend-cnt { margin-left:auto; font-size: 15px; font-weight: 900; }
+      .density-filter { margin: 0 0 0 auto; }
       .field { margin: 0; }
-      .field-sm { width: 190px; }
-      .date-proxy { position: relative; width: 100%; }
-      .date-display { padding-right: 42px; cursor: pointer; }
-      .date-native { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
-      .date-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); border: 1px solid rgba(15, 23, 42, 0.12); background: rgba(255, 255, 255, 0.65); width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: rgba(15, 23, 42, 0.75); }
       .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
-      .density-plotly { min-height: 400px; }
-      .table-scroll { flex: 1 1 auto; min-height: 0; }
-      .tri-pager { margin-top: auto; justify-content: flex-end; padding-top: 12px; }
-      @media (max-width: 980px) { .legend-grid { grid-template-columns: 1fr; } .density-filter { flex-wrap: wrap; } }
+      .density-wrap {
+        padding: 18px;
+        background: rgba(255, 255, 255, 0.48);
+      }
+      .density-plotly { min-height: 240px; }
+      .density-empty {
+        min-height: 140px;
+        display: grid;
+        place-items: center;
+        padding: 16px;
+        border: 1px dashed rgba(37, 99, 235, 0.16);
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.82);
+        color: var(--muted-strong);
+        font-weight: 500;
+        text-align: center;
+      }
+      .table-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: auto;
+        border-top: 1px solid rgba(37, 99, 235, 0.10);
+        background: rgba(255, 255, 255, 0.48);
+      }
+      .log-table { width: 100%; min-width: 980px; table-layout: fixed; font-size: var(--admin-font-size-table-body); }
+      .log-table th,
+      .log-table td {
+        padding: 14px 18px;
+        vertical-align: middle;
+        line-height: 1.3;
+      }
+      .log-table th {
+        white-space: nowrap;
+        font-size: var(--admin-font-size-table-head);
+        font-weight: 800;
+        text-transform: none;
+        letter-spacing: 0;
+        line-height: 1.2;
+      }
+      .log-table td { font-variant-numeric: tabular-nums; }
+      .log-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .log-table .type-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 10px;
+        border: 1px solid transparent;
+        border-radius: var(--radius-pill);
+        font-size: 12px;
+        font-weight: 900;
+        white-space: nowrap;
+      }
+      .log-table .type-pill.cat-candidate { border-color: rgba(22, 163, 74, 0.28); background: rgba(22, 163, 74, 0.10); color: #166534; }
+      .log-table .type-pill.cat-exam { border-color: rgba(124, 58, 237, 0.28); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
+      .log-table .type-pill.cat-grading { border-color: rgba(245, 158, 11, 0.32); background: rgba(245, 158, 11, 0.12); color: #92400e; }
+      .log-table .type-pill.cat-assignment { border-color: rgba(37, 99, 235, 0.28); background: rgba(37, 99, 235, 0.10); color: #1d4ed8; }
+      .log-table .type-pill.cat-ui { border-color: rgba(100, 116, 139, 0.28); background: rgba(100, 116, 139, 0.10); color: #334155; }
+      .log-table .type-pill.cat-system { border-color: rgba(17, 24, 39, 0.20); background: rgba(17, 24, 39, 0.06); color: rgba(15, 23, 42, 0.86); }
+      .empty-row td {
+        padding: 14px 18px;
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .tri-pager {
+        position: static;
+        bottom: auto;
+        width: 100%;
+        max-width: none;
+        margin-top: auto;
+        margin-left: 0;
+        justify-content: flex-end;
+        padding: 6px 18px 8px;
+        border-top: 1px solid rgba(37, 99, 235, 0.10);
+        background: rgba(255, 255, 255, 0.48);
+      }
+      .tri-pager .page-info {
+        margin-right: auto;
+        font-size: 13px;
+        line-height: 1.2;
+      }
+      .tri-pager .tri-btn {
+        width: 38px;
+        height: 32px;
+      }
+      @media (max-width: 980px) {
+        .admin-surface { padding: 16px; }
+        .legend-grid { grid-template-columns: 1fr; }
+        .legend-grid.legend-grid--footer .legend-item + .legend-item {
+          border-left: 0;
+          border-top: 1px solid rgba(37, 99, 235, 0.10);
+        }
+        .density-filter {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: stretch;
+          width: 100%;
+          margin-left: 0;
+        }
+        .toolbar-range {
+          width: 100%;
+          flex-wrap: wrap;
+        }
+        .toolbar-field--date {
+          width: 100%;
+          flex: 1 1 100%;
+        }
+        .density-wrap,
+        .legend-grid,
+        .log-box > .log-box-title,
+        .log-box-head,
+        .tri-pager {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .log-table th,
+        .log-table td {
+          padding: 14px 16px;
+        }
+      }
     </style>
 {% endblock %}
 {% block content %}
       <div class="surface admin-surface" role="region" aria-label="系统日志">
         <div class="log-box">
-          <div class="log-box-title">任务类型图例</div>
-          <div class="legend-grid">
-            <div class="legend-item"><span class="legend-dot" style="background: #16a34a;"></span><span>候选者操作</span><span class="legend-cnt">{{ log_counts.candidate if log_counts else 0 }}</span></div>
-            <div class="legend-item"><span class="legend-dot" style="background: #7c3aed;"></span><span>试卷操作</span><span class="legend-cnt">{{ log_counts.exam if log_counts else 0 }}</span></div>
-            <div class="legend-item"><span class="legend-dot" style="background: #f59e0b;"></span><span>判卷操作</span><span class="legend-cnt">{{ log_counts.grading if log_counts else 0 }}</span></div>
-            <div class="legend-item"><span class="legend-dot" style="background: #2563eb;"></span><span>答题邀约</span><span class="legend-cnt">{{ log_counts.assignment if log_counts else 0 }}</span></div>
-            <div class="legend-item"><span class="legend-dot" style="background: #0f172a;"></span><span>系统</span><span class="legend-cnt">{{ log_counts.system if log_counts else 0 }}</span></div>
-          </div>
-        </div>
-        <div class="log-box">
           <div class="log-box-head">
             <div class="log-box-title">任务密度图</div>
-            <form class="density-filter" method="get" action="{{ url_for('admin_logs') }}">
-              <div class="range-group">
-                <div class="field field-sm"><div class="date-proxy"><input id="chart_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="chart_start" class="input date-native" type="date" name="chart_start" value="{{ chart_range_start or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="chart_start">📅</button></div></div>
+            <form class="density-filter toolbar-form toolbar-form--compact" method="get" action="{{ url_for('admin_logs') }}">
+              <div class="range-group toolbar-range">
+                <div class="field toolbar-field--date"><div class="date-proxy"><input id="chart_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="chart_start" class="input date-native" type="date" name="chart_start" value="{{ chart_range_start or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="chart_start" aria-label="选择开始日期"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
                 <div class="range-sep" aria-hidden="true">-</div>
-                <div class="field field-sm"><div class="date-proxy"><input id="chart_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="chart_end" class="input date-native" type="date" name="chart_end" value="{{ chart_range_end or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="chart_end">📅</button></div></div>
+                <div class="field toolbar-field--date"><div class="date-proxy"><input id="chart_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="chart_end" class="input date-native" type="date" name="chart_end" value="{{ chart_range_end or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="chart_end" aria-label="选择结束日期"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
               </div>
-              <div class="actions"><button class="btn btn-primary" type="submit">查询</button><a class="btn" href="{{ url_for('admin_logs') }}">重置</a></div>
+              <div class="toolbar-actions"><button class="btn btn-primary" type="submit">查询</button><a class="btn" href="{{ url_for('admin_logs') }}">重置</a></div>
             </form>
           </div>
           <div class="density-wrap">
             <div id="log_density_plotly" class="density-plotly" aria-label="任务密度图（Plotly）"></div>
-            <div id="log_density_empty" class="density-empty" style="display:none;">该时间范围暂无操作记录。</div>
+            <div id="log_density_empty" class="density-empty" hidden>该时间范围暂无操作记录。</div>
             <script id="log_density_data" type="application/json">{{ {"days": (chart_days or []), "counts": (chart_counts or [])}|tojson }}</script>
+          </div>
+          <div class="legend-grid legend-grid--footer" aria-label="任务类型图例">
+            <div class="legend-item"><span class="legend-dot legend-dot--candidate"></span><span>候选者操作</span><span class="legend-cnt">{{ log_counts.candidate if log_counts else 0 }}</span></div>
+            <div class="legend-item"><span class="legend-dot legend-dot--exam"></span><span>试卷操作</span><span class="legend-cnt">{{ log_counts.exam if log_counts else 0 }}</span></div>
+            <div class="legend-item"><span class="legend-dot legend-dot--grading"></span><span>判卷操作</span><span class="legend-cnt">{{ log_counts.grading if log_counts else 0 }}</span></div>
+            <div class="legend-item"><span class="legend-dot legend-dot--assignment"></span><span>答题邀约</span><span class="legend-cnt">{{ log_counts.assignment if log_counts else 0 }}</span></div>
+            <div class="legend-item"><span class="legend-dot legend-dot--system"></span><span>系统</span><span class="legend-cnt">{{ log_counts.system if log_counts else 0 }}</span></div>
           </div>
         </div>
         <div class="log-box">
           <div class="log-box-title">任务详情列表</div>
           <div class="table-scroll">
             <table class="log-table" aria-label="日志表">
-              <thead><tr><th style="width:56px;">ID</th><th style="width:170px;">时间</th><th style="width:160px;">类型</th><th>详情</th></tr></thead>
+              <thead><tr><th class="col-w-56">ID</th><th class="col-w-170">时间</th><th class="col-w-160">类型</th><th>详情</th></tr></thead>
               <tbody id="logs_table_body">
                 {% for it in (logs or []) %}
                 <tr><td>{{ it.id }}</td><td class="nowrap">{{ it.at.strftime("%Y-%m-%d %H:%M:%S") if it.at else "" }}</td><td><span class="type-pill cat-{{ it.type_key or 'system' }}">{{ it.type_label or "" }}</span></td><td class="ellipsis">{{ it.detail_text or "" }}</td></tr>
                 {% endfor %}
-                {% if not logs %}<tr><td colspan="4" class="muted" style="padding:16px;">暂无系统日志</td></tr>{% endif %}
+                {% if not logs %}<tr class="empty-row"><td colspan="4">暂无系统日志</td></tr>{% endif %}
               </tbody>
             </table>
           </div>

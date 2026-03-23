@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>上传简历</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='ui.css') }}" />
     <style>
       body {
@@ -24,7 +25,7 @@
       .hero {
         margin: 8px 0 18px;
         padding: 20px;
-        border-radius: 18px;
+        border-radius: var(--radius-lg);
         border: 1px solid rgba(15, 23, 42, 0.10);
         background: rgba(248, 250, 252, 0.75);
         position: relative;
@@ -43,7 +44,7 @@
         transform: translate(-50%, -50%);
         z-index: 50;
         padding: 16px 20px;
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         border: 1px solid rgba(220, 38, 38, 0.22);
         background: rgba(255, 255, 255, 0.92);
         color: rgba(15, 23, 42, 0.92);
@@ -111,7 +112,7 @@
       .actions .btn-primary {
         min-width: 180px;
         min-height: 46px;
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         padding: 0 28px;
       }
       input[type="file"] {

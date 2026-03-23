@@ -11,14 +11,25 @@
       #candidateProfileSurface {
         width: 100%;
         max-width: none;
-        min-height: clamp(760px, calc(100vh - 120px), 920px);
+        min-height: 0;
         align-self: stretch;
         font-size: var(--admin-font-size-base);
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        overflow: visible;
+        gap: 16px;
       }
-      /* Page tone: softer colors and clearer hierarchy (avoid all-black/bold look). */
-      .surface[aria-label="候选人详情"] { color: #333; font-size: var(--admin-font-size-base); }
-      .surface[aria-label="候选人详情"] .mutedv { color: rgba(51, 51, 51, 0.70); }
-      .surface[aria-label="候选人详情"] .time { color: #080; font-weight: 800; }
+      #candidateProfileSurface > .section {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: var(--shadow-soft);
+        border-bottom: 0;
+      }
+      .surface[aria-label="候选人详情"] { color: var(--text); font-size: var(--admin-font-size-base); }
+      .surface[aria-label="候选人详情"] .mutedv { color: var(--muted); }
+      .surface[aria-label="候选人详情"] .time { color: var(--brand-strong); font-weight: 700; }
       .head-row {
         display: flex;
         align-items: center;
@@ -33,12 +44,12 @@
         align-items: center;
         gap: 10px;
         padding: 7px 12px;
-        border-radius: 12px;
-        border: 1px solid rgba(15, 23, 42, 0.10);
-        background: rgba(248, 250, 252, 0.75);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.72);
         font-weight: 800;
         font-size: var(--admin-font-size-control);
-        color: rgba(15, 23, 42, 0.80);
+        color: var(--text);
       }
       /* Segmented control (looks like a pager-style switch, not 3 separate buttons). */
       .head-tabs {
@@ -46,9 +57,9 @@
         align-items: center;
         flex-wrap: nowrap;
         border-radius: 999px;
-        border: 0;
-        background: transparent;
-        padding: 0;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.74);
+        padding: 4px;
         gap: 0;
       }
       .head-tab {
@@ -63,17 +74,17 @@
         line-height: 1;
         cursor: pointer;
         user-select: none;
-        color: rgba(15, 23, 42, 0.72);
+        color: var(--muted-strong);
       }
-      .head-tab:hover { background: rgba(15, 23, 42, 0.04); }
+      .head-tab:hover { background: rgba(255, 255, 255, 0.66); }
       .head-tab.active {
-        background: rgba(37, 99, 235, 0.12);
-        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.18);
-        color: rgba(15, 23, 42, 0.92);
+        background: var(--brand-gradient);
+        box-shadow: 0 10px 22px rgba(37, 99, 235, 0.16);
+        color: #fff;
       }
       .head-tab:focus-visible {
         outline: none;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
       }
       .head-actions {
         display: inline-flex;
@@ -88,11 +99,11 @@
         align-items: center;
         justify-content: center;
         min-width: 120px;
-        height: 46px;
+        height: 42px;
         padding: 0 18px;
         line-height: 1;
         font-size: var(--admin-font-size-control);
-        border-radius: 16px;
+        border-radius: var(--radius-md);
         text-decoration: none;
         font-weight: 800;
         border: 1px solid transparent;
@@ -103,7 +114,7 @@
       }
       .head-actions .btn:focus-visible {
         outline: none;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
       }
       .head-actions form {
         margin: 0;
@@ -111,36 +122,36 @@
       }
       .head-actions .download-btn {
         min-width: 46px;
-        background: linear-gradient(180deg, #2f3a4f, #1f2937);
-        border-color: rgba(31, 41, 55, 0.94);
-        color: #fff;
-        box-shadow: 0 8px 18px rgba(31, 41, 55, 0.18);
+        background: rgba(255, 255, 255, 0.88);
+        border-color: var(--border);
+        color: var(--text);
+        box-shadow: none;
       }
       .head-actions .download-btn:hover {
-        background: linear-gradient(180deg, #374151, #253041);
-        box-shadow: 0 10px 22px rgba(31, 41, 55, 0.22);
+        background: rgba(255, 255, 255, 0.96);
+        border-color: var(--border-strong);
       }
       .head-actions .btn.reparse-btn {
-        background: linear-gradient(180deg, #fde047, #eab308) !important;
-        border-color: rgba(234, 179, 8, 0.30) !important;
+        background: #eab308 !important;
+        border-color: #d97706 !important;
         color: #422006 !important;
         box-shadow: 0 8px 18px rgba(234, 179, 8, 0.16);
         padding: 0 22px;
       }
       .head-actions .btn.reparse-btn:hover {
-        background: linear-gradient(180deg, #facc15, #d97706) !important;
-        border-color: rgba(202, 138, 4, 0.36) !important;
+        background: #d97706 !important;
+        border-color: #b45309 !important;
         color: #422006 !important;
         box-shadow: 0 10px 22px rgba(234, 179, 8, 0.20);
       }
       .head-actions .back-btn {
         background: rgba(255, 255, 255, 0.88);
-        border-color: rgba(15, 23, 42, 0.12);
-        color: rgba(15, 23, 42, 0.82);
+        border-color: var(--border);
+        color: var(--text);
       }
       .head-actions .back-btn:hover {
-        background: #fff;
-        border-color: rgba(15, 23, 42, 0.2);
+        background: rgba(255, 255, 255, 0.96);
+        border-color: var(--border-strong);
       }
       .head-actions .btn-icon {
         display: inline-flex;
@@ -149,32 +160,28 @@
         width: 46px;
         height: 46px;
         padding: 0;
-        border-radius: 16px;
+        border-radius: var(--radius-lg);
       }
-      .head-actions .btn-icon svg {
-        width: 24px !important;
-        height: 24px !important;
+      .head-actions .btn-icon .material-symbols-rounded {
+        font-size: 24px;
+        line-height: 1;
         display: block;
-      }
-      .head-actions .btn-icon svg.resume-doc-icon {
-        width: 24px !important;
-        height: 24px !important;
-      }
-      .head-actions .btn-icon svg path {
-        stroke-width: 2.4 !important;
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 24;
       }
       .head-actions-main { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-      /* Keep legacy class for in-page buttons, but align with system primary style. */
-      .btn-purple { background: none; }
       /* Editing is removed on this page; keep view layout only. */
       .input-sm {
         width: 100%;
         max-width: 380px;
         padding: 9px 10px;
-        border-radius: 12px;
-        border: 1px solid rgba(15, 23, 42, 0.16);
-        background: rgba(255, 255, 255, 0.92);
-        font-weight: 800;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.9);
+        font-weight: 700;
         font-size: var(--admin-font-size-control);
       }
       textarea.input-sm { max-width: 100%; min-height: 140px; }
@@ -186,28 +193,28 @@
       .table-mini th, .table-mini td {
         text-align: left;
         padding: 8px 8px;
-        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        border-bottom: 1px solid rgba(37, 99, 235, 0.10);
         vertical-align: top;
       }
-      .table-mini th { font-size: var(--admin-font-size-table-head); font-weight: 900; background: rgba(248, 250, 252, 0.75); }
+      .table-mini th { font-size: var(--admin-font-size-table-head); font-weight: 900; background: rgba(255, 255, 255, 0.66); }
       .row-actions { display:flex; gap:8px; }
-      .btn-mini { padding: 7px 10px; border-radius: 12px; font-weight: 900; }
+      .btn-mini { padding: 7px 10px; border-radius: var(--radius-md); font-weight: 900; }
       .pill {
         display: inline-flex;
         align-items: center;
         gap: 8px;
         padding: 6px 10px;
         border-radius: 999px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(248, 250, 252, 0.75);
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.72);
         font-weight: 800;
         font-size: var(--admin-font-size-pill);
-        color: rgba(15, 23, 42, 0.75);
+        color: var(--text);
       }
       .grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 14px;
+        gap: 16px;
       }
       .info-split {
         display: grid;
@@ -217,18 +224,18 @@
       }
       .info-right {
         padding-left: 22px;
-        border-left: 1px solid rgba(15, 23, 42, 0.10);
+        border-left: 1px solid rgba(37, 99, 235, 0.12);
       }
       .card {
-        border: 0;
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid rgba(37, 99, 235, 0.12);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(250, 247, 255, 0.62));
         box-shadow: none;
         overflow: hidden;
       }
       .card-head {
         padding: 14px 16px;
-        border-bottom: 0;
+        border-bottom: 1px solid rgba(37, 99, 235, 0.10);
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -237,19 +244,19 @@
       }
       .card-title {
         font-weight: 900;
-        letter-spacing: 0.2px;
-        font-size: calc(var(--admin-font-size-title) + 4px);
-        color: #7c3aed;
+        letter-spacing: -0.01em;
+        font-size: 18px;
+        color: var(--text);
       }
-      .card-body { padding: 14px 16px; }
+      .card-body { padding: 16px; }
       .kv {
         display: grid;
         grid-template-columns: 120px 1fr;
         gap: 8px 12px;
         align-items: start;
       }
-      .k { font-weight: 700; font-size: var(--admin-font-size-label); color: rgba(51, 51, 51, 0.70); }
-      .v { font-weight: 650; color: #333; }
+      .k { font-weight: 700; font-size: var(--admin-font-size-label); color: var(--muted); }
+      .v { font-weight: 650; color: var(--text); }
       .mutedv { font-weight: 700; }
       .info-kv { display: grid; grid-template-columns: 120px 1fr; gap: 10px 16px; align-items: start; }
       .info-kv .k { font-size: var(--admin-font-size-label); white-space: nowrap; }
@@ -258,7 +265,7 @@
       .eval {
         margin-top: 14px;
         padding: 12px 14px;
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         border: 1px solid rgba(15, 23, 42, 0.10);
         background: rgba(248, 250, 252, 0.85);
       }
@@ -269,7 +276,7 @@
       .eng-kv { display:grid; grid-template-columns: 120px 1fr; gap: 10px 14px; align-items: center; }
       .eng-kv .k { font-size: var(--admin-font-size-label); }
       .eng-kv .v { font-size: var(--admin-font-size-control); font-weight: 800; }
-      .edu-item { padding: 10px 0; border-bottom: 1px dashed rgba(15, 23, 42, 0.12); }
+      .edu-item { padding: 10px 0; border-bottom: 1px dashed rgba(37, 99, 235, 0.12); }
       .edu-item:last-child { border-bottom: 0; }
       .edu-row {
         display: grid;
@@ -287,7 +294,7 @@
       .edu-degree { font-weight: 900; }
       .edu-school { font-weight: 800; }
       .edu-major { font-weight: 700; }
-      .edu-time { font-weight: 800; font-size: var(--admin-font-size-control); white-space: nowrap; color: #080; }
+      .edu-time { font-weight: 700; font-size: var(--admin-font-size-control); white-space: nowrap; color: var(--brand-strong); }
       .uni-badge {
         display: inline-flex;
         align-items: center;
@@ -296,32 +303,32 @@
         font-size: var(--admin-font-size-pill);
         font-weight: 900;
         letter-spacing: 0.2px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: #fff;
+        border: 1px solid rgba(37, 99, 235, 0.12);
+        background: rgba(255, 255, 255, 0.74);
         white-space: nowrap;
       }
       .uni-badge--ivy {
-        border-color: rgba(124, 58, 237, 0.35);
-        background: rgba(124, 58, 237, 0.12);
-        color: rgb(88, 28, 135) !important;
+        border-color: rgba(37, 99, 235, 0.24);
+        background: rgba(37, 99, 235, 0.10);
+        color: rgb(30, 64, 175) !important;
       }
       .uni-badge--985 {
-        border-color: rgba(37, 99, 235, 0.35);
-        background: rgba(37, 99, 235, 0.12);
-        color: rgb(30, 64, 175) !important;
+        border-color: rgba(34, 197, 94, 0.24);
+        background: rgba(34, 197, 94, 0.10);
+        color: rgb(21, 128, 61) !important;
       }
       .uni-badge--211 {
         border-color: rgba(16, 185, 129, 0.35);
         background: rgba(16, 185, 129, 0.12);
         color: rgb(6, 95, 70) !important;
       }
-      .projects { display: grid; gap: 10px; }
+      .projects { display: grid; gap: 12px; }
       .resume-raw {
         white-space: pre-wrap;
         word-break: break-word;
         font-family: inherit;
         font-weight: 650;
-        color: rgba(15, 23, 42, 0.90);
+        color: var(--text);
         line-height: 1.75;
         margin: 0;
       }
@@ -340,18 +347,19 @@
       .attempt-results-table th:nth-child(5),
       .attempt-results-table td:nth-child(5) { text-align: center; font-variant-numeric: tabular-nums; }
       .attempt-results-table tr.row-link { cursor: pointer; }
-      .attempt-results-table tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
+      .attempt-results-table tr.row-link:hover td { background: linear-gradient(135deg, rgba(37, 99, 235, 0.04), rgba(34, 197, 94, 0.04)); }
       .proj {
-        border: 0;
-        border-radius: 14px;
+        border-top: 1px dashed rgba(37, 99, 235, 0.12);
+        border-radius: 0;
         background: transparent;
-        padding: 12px 12px;
+        padding: 14px 0 0;
       }
+      .projects > .proj:first-child { border-top: 0; padding-top: 0; }
       .proj.eval-item { display: flex; flex-direction: column; }
       .proj-head { display:flex; align-items: baseline; justify-content: space-between; gap: 12px; }
       .proj-head--meta-only { justify-content: flex-end; }
       .proj-name { font-weight: 900; }
-      .proj-meta { font-weight: 800; font-size: var(--admin-font-size-small); white-space: nowrap; color: #080; }
+      .proj-meta { font-weight: 700; font-size: var(--admin-font-size-small); white-space: nowrap; color: var(--brand-strong); }
       .eval-foot {
         margin-top: auto;
         padding-top: 10px;
@@ -373,22 +381,22 @@
         gap: 6px;
         padding: 6px 12px;
         border-radius: 999px;
-        border: 0;
-        background: transparent;
+        border: 1px solid transparent;
+        background: rgba(255, 255, 255, 0.72);
         font-weight: 900;
         font-size: var(--admin-font-size-control);
         line-height: 1;
-        color: rgba(51, 51, 51, 0.92);
+        color: var(--text);
         white-space: nowrap;
       }
-      .eval-tag.llm { background: transparent; color: rgb(30, 64, 175); }
-      .eval-tag.admin { background: transparent; color: rgb(88, 28, 135); }
+      .eval-tag.llm { border-color: rgba(37, 99, 235, 0.18); background: rgba(37, 99, 235, 0.10); color: rgb(30, 64, 175); }
+      .eval-tag.admin { border-color: rgba(34, 197, 94, 0.18); background: rgba(34, 197, 94, 0.10); color: rgb(21, 128, 61); }
       .eval-time {
         text-align: right;
         font-weight: 800;
         font-size: var(--admin-font-size-control);
         white-space: nowrap;
-        color: #080;
+        color: var(--brand-strong);
       }
       .eval-block {
         padding-left: 10px;
@@ -454,10 +462,10 @@
       .card[data-view="evaluations"] .input-sm {
         border: 0;
         box-shadow: none;
-        background: rgba(255, 255, 255, 0.72);
+        background: rgba(255, 255, 255, 0.8);
       }
       .card[data-view="evaluations"] form textarea.input-sm {
-        border: 1px solid rgba(15, 23, 42, 0.16);
+        border: 1px solid var(--border);
       }
       @media (max-width: 980px) {
         .grid { grid-template-columns: 1fr; }
@@ -470,13 +478,11 @@
       @media (max-width: 720px) {
         .head-tab { height: 38px; font-size: var(--admin-font-size-control); padding: 0 12px; }
         .head-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
-        .head-actions .btn { min-width: 108px; height: 44px; font-size: var(--admin-font-size-control); padding: 0 14px; border-radius: 14px; }
+        .head-actions .btn { min-width: 108px; height: 44px; font-size: var(--admin-font-size-control); padding: 0 14px; border-radius: var(--radius-md); }
         .head-actions .reparse-btn { padding: 0 16px; }
         .head-actions .download-btn { min-width: 44px; }
-        .head-actions .btn-icon { width: 44px; height: 44px; border-radius: 14px; }
-        .head-actions .btn-icon svg { width: 22px !important; height: 22px !important; }
-        .head-actions .btn-icon svg.resume-doc-icon { width: 22px !important; height: 22px !important; }
-        .head-actions .btn-icon svg path { stroke-width: 2.3 !important; }
+        .head-actions .btn-icon { width: 44px; height: 44px; border-radius: var(--radius-md); }
+        .head-actions .btn-icon .material-symbols-rounded { font-size: 22px; }
         .card-title { font-size: var(--admin-font-size-title); }
         .info-kv .v { font-size: var(--admin-font-size-table-body); }
         .edu-time { font-size: var(--admin-font-size-control); }
@@ -498,25 +504,15 @@
             <div class="head-actions">
               {% if c.resume_size %}
               <a class="btn btn-icon download-btn" href="{{ url_for('admin_candidate_resume_download', candidate_id=c.id) }}" title="&#19979;&#36733;&#31616;&#21382;" aria-label="&#19979;&#36733;&#31616;&#21382;">
-                <svg class="resume-doc-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="M14 3v4h4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="M12 11v6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="m9.5 14.5 2.5 2.5 2.5-2.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
-                </svg>
+                <span class="material-symbols-rounded" aria-hidden="true">download</span>
               </a>
               {% else %}
-              <span class="btn btn-icon download-btn" style="opacity:.55; pointer-events:none;" title="&#26242;&#26080;&#31616;&#21382;" aria-label="&#26242;&#26080;&#31616;&#21382;">
-                <svg class="resume-doc-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M14 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="M14 3v4h4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="M12 11v6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
-                  <path d="m9.5 14.5 2.5 2.5 2.5-2.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"></path>
-                </svg>
+              <span class="btn btn-icon download-btn btn-disabled" title="&#26242;&#26080;&#31616;&#21382;" aria-label="&#26242;&#26080;&#31616;&#21382;">
+                <span class="material-symbols-rounded" aria-hidden="true">download</span>
               </span>
               {% endif %}
               <form method="post" action="{{ url_for('admin_candidate_resume_reparse', candidate_id=c.id) }}" enctype="multipart/form-data" id="candidateReparseForm">
-                <input id="candidateReparseFile" type="file" name="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+                <input id="candidateReparseFile" class="sr-file-input" type="file" name="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*" />
                 <button class="btn btn-warning reparse-btn" type="button" id="candidateReparseBtn">&#19978;&#20256;&#31616;&#21382;&#24182;&#35299;&#26512;</button>
               </form>
               <a class="btn back-btn" href="/admin/candidates" id="backBtn">返回</a>
@@ -552,8 +548,8 @@
                       </div>
                     </div>
                     {% if details_status == 'failed' and details_error %}
-                      <div style="margin-top:12px;">
-                        <div class="k" style="margin-bottom:6px;">解析失败原因</div>
+                      <div class="stack-note">
+                        <div class="k stack-note__label">解析失败原因</div>
                         <div class="mutedv">{{ details_error }}</div>
                       </div>
                     {% endif %}
@@ -628,7 +624,7 @@
                           <div class="proj-meta time">{{ p.period or '—' }}</div>
                         </div>
                         {% if p.body %}
-                          <pre class="resume-raw" style="margin-top:10px;">{{ p.body }}</pre>
+                          <pre class="resume-raw resume-raw-spaced">{{ p.body }}</pre>
                         {% endif %}
                       </div>
                     {% endfor %}
@@ -641,17 +637,17 @@
               </div>
             </div>
 
-            <div class="card span2" data-view="attempts" style="display:none;">
+            <div class="card span2" data-view="attempts" hidden>
               <div class="card-body">
                 {% if attempt_results and attempt_results|length > 0 %}
                   <div class="table-scroll">
                     <table class="attempt-results-table" aria-label="答题结果列表">
                       <colgroup>
-                        <col style="width: 8%;" />
-                        <col style="width: 28%;" />
-                        <col style="width: 10%;" />
-                        <col style="width: 27%;" />
-                        <col style="width: 27%;" />
+                        <col class="col-w-8p" />
+                        <col class="col-w-28p" />
+                        <col class="col-w-10p" />
+                        <col class="col-w-27p" />
+                        <col class="col-w-27p" />
                       </colgroup>
                       <thead>
                         <tr>
@@ -681,7 +677,7 @@
               </div>
             </div>
 
-            <div class="card span2" data-view="evaluations" style="display:none;">
+            <div class="card span2" data-view="evaluations" hidden>
               <div class="card-body">
                 <div class="projects">
                   <div class="proj eval-item">
@@ -704,7 +700,7 @@
 
                   {% if admin_evaluations and admin_evaluations|length > 0 %}
                     {% for it in admin_evaluations %}
-                      <div class="proj eval-item" style="background: rgba(255, 255, 255, 0.75);">
+                      <div class="proj eval-item">
                         <div class="eval-head">
                           <span class="eval-tag admin">管理员评价</span>
                         </div>
@@ -720,15 +716,15 @@
                     {% endfor %}
                   {% endif %}
 
-                  <div class="proj" style="background: rgba(255, 255, 255, 0.75);">
-                    <form method="post" action="/admin/candidates/{{ c.id }}/evaluation/update" style="margin:0;">
+                  <div class="proj">
+                    <form method="post" action="/admin/candidates/{{ c.id }}/evaluation/update" class="form-reset">
                       <div class="eval-head">
                         <span class="eval-tag admin">新增管理员评价</span>
                       </div>
                       <div class="eval-block">
                         <textarea class="input-sm" name="evaluation" placeholder="评价内容"></textarea>
                         <div class="eval-form-actions">
-                          <button class="btn btn-purple" type="submit">保存</button>
+                          <button class="btn btn-primary" type="submit">保存</button>
                         </div>
                       </div>
                     </form>
@@ -752,7 +748,7 @@
           });
           document.querySelectorAll('.card[data-view]').forEach((card) => {
             const show = card.getAttribute('data-view') === view;
-            card.style.display = show ? '' : 'none';
+            card.hidden = !show;
           });
         };
 
@@ -798,5 +794,3 @@
       })();
     </script>
 {% endblock %}
-
-

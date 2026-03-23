@@ -24,15 +24,19 @@
         padding: 0 16px;
         line-height: 1;
         font-size: var(--admin-font-size-control);
-        border-radius: 14px;
+        border-radius: var(--radius-md);
       }
       /* Avoid nested forms: let form children participate in the grid. */
       .form-grid form { display: contents; }
       .status-code { display: inline-block; white-space: nowrap; }
-      .search-inline { display:flex; flex-wrap: nowrap; align-items: center; gap: 18px; margin: 0; width: 100%; }
-      .search-inline .field { margin: 0; flex: 1 1 240px; }
-      .search-inline .field.field-q { flex: 0 0 280px; max-width: 280px; min-width: 280px; }
-      .search-inline .field.field-sm { flex: 0 0 190px; }
+      .search-inline {
+        margin: 0;
+      }
+      .section-head > .search-inline {
+        flex: 1 1 auto;
+      }
+      .search-inline .field { margin: 0; min-width: 0; }
+      .search-inline .toolbar-field--query { max-width: 360px; }
       .section-head .search-inline label { display: none; }
       /* Ensure date inputs match the text input height (hard requirement). */
       .search-inline .input {
@@ -41,21 +45,15 @@
         padding-bottom: 0;
         line-height: 1.25;
       }
-      .range-group { display: flex; align-items: center; gap: 10px; margin-left: 110px; flex: 0 0 430px; min-width: 430px; }
-      .range-group .field { flex: 1 1 190px; }
-      .search-actions {
-        display: inline-flex;
-        gap: 10px;
-        align-items: center;
-        margin-left: auto;
+      .range-group {
+        margin-left: 0;
+        min-width: 0;
+        flex: 0 0 auto;
       }
+      .search-actions { margin-left: 0; }
       .search-actions { display: none; }
-      .search-create {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        margin-left: auto;
-      }
+      .search-actions:empty { display: none; }
+      .search-create { margin-left: 0; }
       .range-sep {
         height: 40px;
         display: inline-flex;
@@ -66,36 +64,6 @@
         font-weight: 900;
         user-select: none;
       }
-      /* Custom date-display to avoid locale-mixed "日" in native date input text while keeping picker. */
-      .date-proxy { position: relative; width: 100%; }
-      .date-proxy .date-display { padding-right: 42px; cursor: pointer; }
-      .date-proxy .date-native {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 1px;
-        height: 1px;
-        opacity: 0;
-        pointer-events: none;
-      }
-      .date-proxy .date-btn {
-        position: absolute;
-        right: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 28px;
-        height: 28px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 10px;
-        border: 0;
-        background: transparent;
-        box-shadow: none;
-        cursor: pointer;
-        padding: 0;
-      }
-      .date-proxy .date-btn:hover { background: rgba(15, 23, 42, 0.04); }
       /* Make query/reset buttons look like the top "创建候选人/上传简历" buttons. */
       .search-inline .btn {
         display: inline-flex;
@@ -105,14 +73,14 @@
         padding: 0 16px;
         line-height: 1;
         font-size: var(--admin-font-size-control);
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         text-decoration: none;
       }
       .search-inline a.btn:hover { text-decoration: none; }
       .search-create .btn {
         width: auto;
-        min-width: 118px;
-        padding: 0 18px;
+        min-width: 96px;
+        padding: 0 14px;
         font-weight: 900;
       }
       .btn-icon {
@@ -132,7 +100,7 @@
         padding: 0 14px;
         font-size: var(--admin-font-size-control);
         font-weight: 900;
-        border-radius: 16px;
+        border-radius: var(--radius-lg);
         line-height: 1;
       }
       .cand-actions .btn-icon {
@@ -159,7 +127,7 @@
         min-width: 320px;
         max-width: min(88vw, 720px);
         padding: 14px 18px;
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         border: 1px solid rgba(37, 99, 235, 0.25);
         background: rgba(239, 246, 255, 0.97);
         box-shadow: 0 18px 40px rgba(2, 6, 23, 0.20);
@@ -177,7 +145,7 @@
       /* Make Candidate Management font scale match Exams Management (admin dashboard). */
       .admin-surface { font-size: var(--admin-font-size-base); }
       .admin-surface {
-        min-height: clamp(760px, calc(100vh - 120px), 920px);
+        min-height: 0;
       }
       .admin-surface > .section:last-child {
         flex: 1 1 auto;
@@ -205,7 +173,6 @@
       .form-grid #candidateCreateForm .btn.btn-primary,
       .form-grid #resumePickBtn.btn.btn-primary { font-size: var(--admin-font-size-control); }
       .search-inline .btn { font-size: var(--admin-font-size-control); }
-      .date-proxy .date-btn { width: 32px; height: 32px; right: 8px; }
       table.cands-table {
         width: 100%;
         table-layout: fixed;
@@ -217,31 +184,42 @@
       }
       table.cands-table th,
       table.cands-table td {
-        padding: 18px 22px;
         vertical-align: middle;
         text-align: left;
       }
-      table.cands-table th:first-child,
+      table.cands-table th {
+        padding: 12px 16px;
+        line-height: 1.2;
+      }
+      table.cands-table td {
+        padding: 18px 22px;
+      }
+      table.cands-table th:first-child {
+        padding-left: 10px;
+        padding-right: 12px;
+      }
       table.cands-table td:first-child {
         padding-left: 10px;
         padding-right: 16px;
       }
-      table.cands-table th:nth-child(2),
-      table.cands-table td:nth-child(2) {
-        padding-left: 68px;
-      }
+      table.cands-table th:nth-child(2) { padding-left: 34px; }
+      table.cands-table td:nth-child(2) { padding-left: 68px; }
       table.cands-table th:nth-child(3),
+      table.cands-table th:nth-child(4) { padding-left: 18px; }
       table.cands-table td:nth-child(3),
-      table.cands-table th:nth-child(4),
-      table.cands-table td:nth-child(4) {
-        padding-left: 28px;
+      table.cands-table td:nth-child(4) { padding-left: 28px; }
+      table.cands-table th:nth-child(5) {
+        padding-left: 18px;
+        padding-right: 18px;
       }
-      table.cands-table th:nth-child(5),
       table.cands-table td:nth-child(5) {
         padding-left: 24px;
         padding-right: 24px;
       }
-      table.cands-table th:last-child,
+      table.cands-table th:last-child {
+        padding-left: 12px;
+        padding-right: 10px;
+      }
       table.cands-table td:last-child {
         padding-left: 16px;
         padding-right: 10px;
@@ -265,8 +243,8 @@
       .parsing-card {
         min-width: 320px;
         max-width: 90vw;
-        padding: 18px 20px;
-        border-radius: 14px;
+        padding: 16px;
+        border-radius: var(--radius-md);
         border: 1px solid rgba(15, 23, 42, 0.14);
         background: rgba(255, 255, 255, 0.98);
         box-shadow: 0 18px 42px rgba(2, 6, 23, 0.28);
@@ -297,7 +275,7 @@
       .quick-create-modal {
         width: min(440px, 92vw);
         padding: 18px;
-        border-radius: 18px;
+        border-radius: var(--radius-lg);
         border: 1px solid rgba(15, 23, 42, 0.12);
         background: rgba(255, 255, 255, 0.98);
         box-shadow: 0 24px 48px rgba(2, 6, 23, 0.24);
@@ -326,7 +304,7 @@
         width: 100%;
         padding: 8px 10px;
         border: 1px solid rgba(15, 23, 42, 0.12);
-        border-radius: 12px;
+        border-radius: var(--radius-md);
         background: rgba(255, 255, 255, 0.94);
         font-size: var(--admin-font-size-control);
       }
@@ -337,12 +315,12 @@
         margin-top: 4px;
       }
       .quick-create-actions .btn-primary {
-        background: linear-gradient(180deg, #22c55e, #16a34a);
-        border-color: rgba(22, 163, 74, 0.20);
+        background: #2563eb;
+        border-color: #2563eb;
       }
       .quick-create-actions .btn-primary:hover {
-        background: linear-gradient(180deg, #16a34a, #15803d);
-        border-color: rgba(21, 128, 61, 0.22);
+        background: #1d4ed8;
+        border-color: #1d4ed8;
       }
 
       /* Center Resume header/value so they sit on the same vertical line (like “题数 / 62”). */
@@ -352,13 +330,28 @@
       table.cands-table td:last-child { text-align: right; }
       tr.row-link { cursor: pointer; }
       tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
+      @media (max-width: 1120px) {
+        .search-inline {
+          align-items: flex-start;
+        }
+        .range-group {
+          flex-wrap: wrap;
+        }
+        .search-create {
+          align-self: center;
+        }
+      }
       @media (max-width: 980px) {
         .form-grid { grid-template-columns: 1fr; max-width: 100%; }
-        .search-inline { flex-wrap: wrap; }
-        .search-inline .field.field-q { flex: 1 1 100%; max-width: 100%; min-width: 0; }
-        .search-inline .field.field-sm { flex: 1 1 100%; }
-        .range-group { margin-left: 0; flex: 1 1 100%; min-width: 0; }
-        .search-create { margin-left: 0; }
+        .search-inline { align-items: stretch; }
+        .search-inline .toolbar-field--query {
+          flex-basis: 100%;
+          max-width: 100%;
+          min-width: 0;
+        }
+        .search-inline .toolbar-field--date { width: 100%; }
+        .range-group { flex-wrap: wrap; width: 100%; }
+        .search-create { justify-self: auto; }
       }
       .admin-surface > .section:first-child { display: none; }
     </style>
@@ -396,7 +389,7 @@
             </form>
             <form id="resumeUploadForm" method="post" action="/admin/candidates/resume/upload" enctype="multipart/form-data">
               <div class="resume-upload-cell">
-                <input id="resumeFile" class="input" type="file" name="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*" style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;" />
+                <input id="resumeFile" class="sr-file-input" type="file" name="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*" />
                 <button id="resumePickBtn" class="btn btn-primary" type="button">上传简历</button>
               </div>
             </form>
@@ -406,44 +399,38 @@
 
         <section class="section">
           <div class="section-head">
-            <form class="search-inline" method="get" action="/admin/candidates">
-              <div class="field field-q">
+            <form class="search-inline toolbar-form" method="get" action="/admin/candidates">
+              <div class="field toolbar-field--query">
                 <label for="q">候选人列表</label>
                  <input id="q" class="input" name="q" value="{{ q or '' }}" placeholder="ID/姓名/手机号" autocomplete="off" />
               </div>
-              <div class="range-group">
-                <div class="field field-sm">
+              <div class="range-group toolbar-range">
+                <div class="field toolbar-field--date">
                   <label for="created_from">创建时间(起)</label>
                   <div class="date-proxy">
                     <input id="created_from_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
                     <input id="created_from" class="input date-native" type="date" name="created_from" value="{{ created_from or '' }}" tabindex="-1" aria-hidden="true" />
                     <button class="date-btn" type="button" data-for="created_from" aria-label="选择创建时间(起)">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                      </svg>
+                      <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
                     </button>
                   </div>
                 </div>
                 <div class="range-sep" aria-hidden="true">—</div>
-                <div class="field field-sm">
+                <div class="field toolbar-field--date">
                   <label for="created_to">创建时间(止)</label>
                   <div class="date-proxy">
                     <input id="created_to_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly />
                     <input id="created_to" class="input date-native" type="date" name="created_to" value="{{ created_to or '' }}" tabindex="-1" aria-hidden="true" />
                     <button class="date-btn" type="button" data-for="created_to" aria-label="选择创建时间(止)">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M8 2v3M16 2v3M3.5 9h17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M6.5 5h11A3 3 0 0 1 20.5 8v11a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3z" stroke="currentColor" stroke-width="2" />
-                      </svg>
+                      <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
                     </button>
                   </div>
                 </div>
               </div>
-              <div class="search-create">
+              <div class="search-create toolbar-action-slot">
                 <button id="quickCreateOpenBtn" class="btn btn-primary" type="button">创建候选人</button>
               </div>
-              <div class="search-actions">
+              <div class="search-actions toolbar-actions">
                 <button class="btn btn-primary" type="submit">查询</button>
                 <a class="btn btn-primary" href="/admin/candidates">重置</a>
               </div>
@@ -453,12 +440,12 @@
           <div class="table-scroll">
             <table class="cands-table" aria-label="候选人列表">
               <colgroup>
-                <col style="width: 7%;" />
-                <col style="width: 18%;" />
-                <col style="width: 18%;" />
-                <col style="width: 25%;" />
-                <col style="width: 12%;" />
-                <col style="width: 20%;" />
+                <col class="col-w-7p" />
+                <col class="col-w-18p" />
+                <col class="col-w-18p" />
+                <col class="col-w-25p" />
+                <col class="col-w-12p" />
+                <col class="col-w-20p" />
               </colgroup>
               <thead>
                 <tr>
@@ -482,12 +469,12 @@
                     {% if c.has_resume %}
                       <code class="status-code">已上传</code>
                     {% else %}
-                      <span class="status-code" style="color: var(--muted);">无</span>
+                      <span class="status-code muted">无</span>
                     {% endif %}
                   </td>
-                  <td style="white-space: nowrap;">
+                  <td class="nowrap">
                     <div class="cand-actions">
-                      <form method="post" action="/admin/candidates/{{ c.id }}/delete" style="display:inline; margin:0;" onsubmit="return confirm('确认删除该候选人？');">
+                      <form method="post" action="/admin/candidates/{{ c.id }}/delete" class="inline-form" onsubmit="return confirm('确认删除该候选人？');">
                         <button class="btn btn-danger" type="submit">删除</button>
                       </form>
                       <a class="btn btn-primary btn-icon invite-create-btn" href="/admin/assignments?assign_candidate_id={{ c.id }}" title="创建邀约" aria-label="创建邀约">创建邀约</a>
@@ -619,51 +606,13 @@
 	        el.addEventListener("click", (e) => e.stopPropagation());
 	      });
 
-        // Date range: keep native date picker but display unified yyyy/mm/dd text (avoid locale-mixed "日").
-        const fmtYmdSlash = (v) => {
-          const s = String(v || "").trim();
-          if (!s) return "";
-          // native date input returns YYYY-MM-DD.
-          const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-          if (m) return `${m[1]}/${m[2]}/${m[3]}`;
-          return s.replaceAll("-", "/");
-        };
+        // Date range: use shared custom picker and keep hidden native input only for form submit.
         const initDateProxy = (id) => {
-          const native = document.getElementById(id);
-          const display = document.getElementById(`${id}_display`);
-          if (!native || !display) return;
-
-          const sync = () => {
-            display.value = fmtYmdSlash(native.value);
-          };
-          sync();
-          native.addEventListener("change", sync);
-
-          const open = () => {
-            try {
-              if (typeof native.showPicker === "function") native.showPicker();
-              else native.click();
-            } catch (e) {
-              try { native.focus(); } catch (e2) {}
-            }
-          };
-          display.addEventListener("click", open);
+          if (!window.AdminDatePicker || typeof window.AdminDatePicker.bind !== "function") return;
+          window.AdminDatePicker.bind(id);
         };
         initDateProxy("created_from");
         initDateProxy("created_to");
-        document.querySelectorAll("button.date-btn[data-for]").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            const id = btn.getAttribute("data-for");
-            const native = id ? document.getElementById(id) : null;
-            if (!native) return;
-            try {
-              if (typeof native.showPicker === "function") native.showPicker();
-              else native.click();
-            } catch (e) {
-              try { native.focus(); } catch (e2) {}
-            }
-          });
-        });
 
         const quickCreateModal = document.getElementById("quickCreateModal");
         const quickCreateOpenBtn = document.getElementById("quickCreateOpenBtn");
@@ -721,4 +670,3 @@
         })();
       </script>
 {% endblock %}
-

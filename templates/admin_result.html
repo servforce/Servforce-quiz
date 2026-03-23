@@ -11,7 +11,7 @@
       pre {
         background: rgba(15, 23, 42, 0.04);
         padding: 12px;
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         overflow: auto;
         border: 1px solid rgba(15, 23, 42, 0.10);
       }
@@ -47,12 +47,11 @@
             </div>
           {% else %}
             <details open>
-              <summary class="muted" style="cursor:pointer; font-weight:700;">调试信息（JSON）</summary>
-              <pre style="margin-top:10px;">{{ assignment | tojson(indent=2) }}</pre>
+              <summary class="muted details-summary">调试信息（JSON）</summary>
+              <pre class="details-pre">{{ assignment | tojson(indent=2) }}</pre>
             </details>
           {% endif %}
         </section>
       </div>
 {% endblock %}
-
 
