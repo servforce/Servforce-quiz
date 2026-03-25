@@ -29,7 +29,9 @@ def register_public_verify_routes(app: Flask) -> None:
                 end_date="",
             )
 
-        if not get_exam_definition(exam_key):
+        exam = get_exam_definition(exam_key)
+        exam_version_id = resolve_exam_version_id_for_new_assignment(exam_key)
+        if not exam or not exam_version_id:
             abort(404)
 
         cookie_name = f"public_invite_{t}"
@@ -47,6 +49,7 @@ def register_public_verify_routes(app: Flask) -> None:
         result = create_assignment(
             exam_key=exam_key,
             candidate_id=0,
+            exam_version_id=exam_version_id,
             base_url=base_url,
             phone="",
             invite_start_date=None,
@@ -63,7 +66,7 @@ def register_public_verify_routes(app: Flask) -> None:
         try:
             with assignment_locked(token):
                 a = load_assignment(token)
-                a["public_invite"] = {"token": t, "exam_key": exam_key}
+                a["public_invite"] = {"token": t, "exam_key": exam_key, "exam_version_id": exam_version_id}
                 save_assignment(token, a)
         except Exception:
             pass

@@ -24,6 +24,7 @@ def test_create_assignment_persists_via_db(monkeypatch):
     result = assignment_service.create_assignment(
         exam_key="python-basic",
         candidate_id=12,
+        exam_version_id=7,
         base_url="http://127.0.0.1:5000",
         phone="13800138000",
     )
@@ -35,6 +36,7 @@ def test_create_assignment_persists_via_db(monkeypatch):
     assert recorded["token"] == "demo-token"
     assert isinstance(recorded["assignment"], dict)
     assert recorded["assignment"]["exam_key"] == "python-basic"
+    assert recorded["assignment"]["exam_version_id"] == 7
     assert recorded["assignment"]["candidate_id"] == 12
 
 

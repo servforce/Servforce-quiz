@@ -15,7 +15,7 @@ def get_health(container=Depends(get_container)):
         "status": "ok",
         "service": "md-quiz",
         "mode": "fastapi",
-        "legacy_bridge": container.settings.enable_legacy_bridge,
+        "admin_path": "/admin",
     }
 
 
@@ -33,9 +33,8 @@ def get_bootstrap(container=Depends(get_container)):
             "primary": "#2563eb",
             "accent": "#22c55e",
         },
-        "ui": {
-            "path": "/",
-            "legacy_path": container.settings.legacy_mount_path,
+        "admin": {
+            "path": "/admin",
         },
         "runtime_config": container.runtime_service.get_runtime_config().model_dump(),
     }

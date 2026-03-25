@@ -191,7 +191,7 @@ def _grade_assignment_background(token: str) -> None:
 
     grading_llm_total_tokens = 0
     try:
-        exam = get_exam_definition(str(snapshot.get("exam_key") or "").strip()) or {}
+        exam = get_exam_snapshot_for_assignment(snapshot) or {}
         spec = exam.get("spec") if isinstance(exam.get("spec"), dict) else {}
         if not spec:
             raise FileNotFoundError(str(snapshot.get("exam_key") or ""))
@@ -364,6 +364,12 @@ def _try_load_public_spec(exam_key: str) -> dict | None:
     return public_spec if isinstance(public_spec, dict) else None
 
 
+def _try_load_public_spec_for_assignment(assignment: dict) -> dict | None:
+    exam = get_exam_snapshot_for_assignment(assignment) or {}
+    public_spec = exam.get("public_spec")
+    return public_spec if isinstance(public_spec, dict) else None
+
+
 def _redact_spec_for_archive(spec: dict) -> dict:
     # 当公开试卷对象缺失时，回退到完整试卷并去掉标准答案。
     out = dict(spec or {})
@@ -396,15 +402,19 @@ def _archive_candidate_attempt(assignment: dict, *, spec: dict | None = None) ->
     exam_key = str(assignment.get("exam_key") or "")
     if not exam_key:
         return
+    try:
+        exam_version_id = int(assignment.get("exam_version_id") or 0)
+    except Exception:
+        exam_version_id = 0
 
     grading = assignment.get("grading") or {}
     answers = assignment.get("answers") or {}
 
     # Use full spec when available to persist correct answers for admin review.
     if spec is None:
-        exam = get_exam_definition(exam_key) or {}
+        exam = get_exam_snapshot_for_assignment(assignment) or {}
         spec = exam.get("spec") if isinstance(exam.get("spec"), dict) else {}
-    public_spec = _try_load_public_spec(exam_key)
+    public_spec = _try_load_public_spec_for_assignment(assignment)
     if public_spec is None:
         public_spec = _redact_spec_for_archive(spec or {})
 
@@ -465,6 +475,7 @@ def _archive_candidate_attempt(assignment: dict, *, spec: dict | None = None) ->
         "candidate": {"id": c.get("id"), "name": c.get("name"), "phone": c.get("phone")},
         "exam": {
             "exam_key": exam_key,
+            "exam_version_id": (exam_version_id or None),
             "title": public_spec.get("title"),
             "description": public_spec.get("description"),
         },
@@ -485,6 +496,7 @@ def _archive_candidate_attempt(assignment: dict, *, spec: dict | None = None) ->
         token=token,
         candidate_id=int(candidate_id),
         exam_key=exam_key,
+        exam_version_id=(exam_version_id or None),
         phone=str(c.get("phone") or ""),
         archive=archive,
     )
@@ -529,9 +541,16 @@ def _augment_archive_with_spec(archive: dict) -> dict:
         exam_key = str(((archive.get("exam") or {}).get("exam_key")) or "").strip()
     except Exception:
         exam_key = ""
+    try:
+        exam_version_id = int(((archive.get("exam") or {}).get("exam_version_id")) or 0)
+    except Exception:
+        exam_version_id = 0
     if not exam_key:
         return archive
-    exam = get_exam_definition(exam_key) or {}
+    if exam_version_id > 0:
+        exam = get_exam_version_snapshot(exam_version_id) or {}
+    else:
+        exam = get_exam_definition(exam_key) or {}
     spec = exam.get("spec")
     if not isinstance(spec, dict):
         return archive

@@ -2,938 +2,7 @@
 {% set admin_active = "exams" %}
 {% set admin_page_title = "管理后台" %}
 {% set admin_page_subtitle = "题库、邀请、日志与资源状态统一视图" %}
-{% block head_extra %}
-    <style>
-      .hint {
-        display: flex;
-        align-items: flex-end;
-        justify-content: space-between;
-        gap: 10px;
-        padding: 12px 14px;
-        border: 1px dashed rgba(15, 23, 42, 0.18);
-        background: rgba(15, 23, 42, 0.02);
-        border-radius: var(--radius-md);
-        margin: 10px 0 14px;
-      }
-      .hint strong { font-size: var(--admin-font-size-control); }
-      .hint span { color: var(--muted); font-size: var(--admin-font-size-control); }
-      .grid-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
-      @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
-      .assign-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-      @media (max-width: 980px) { .assign-grid-2 { grid-template-columns: 1fr; } }
-
-      .upload-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-      .upload-row .field { margin: 0; }
-      #tab-exams .upload-row { margin-top: 0; }
-      .upload-row .field-file-hidden {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-      }
-      .upload-row .ai-gen-toggle {
-        display: inline-flex;
-        align-items: center;
-        height: 40px;
-        margin: 0;
-        font-weight: 800;
-        white-space: nowrap;
-        cursor: pointer;
-      }
-      .ai-gen-modal {
-        position: fixed;
-        inset: 0;
-        z-index: 1200;
-        display: grid;
-        place-items: center;
-        padding: 20px;
-        background: rgba(15, 23, 42, 0.36);
-      }
-      .ai-gen-modal[hidden] { display: none; }
-      .ai-gen-panel {
-        width: min(1060px, 96vw);
-        max-height: min(96vh, 1800px);
-        overflow: auto;
-        padding: 14px;
-        border: 1px solid rgba(15, 23, 42, 0.10);
-        border-radius: var(--radius-lg);
-        background: #fff;
-        box-shadow: 0 20px 48px rgba(15, 23, 42, 0.24);
-      }
-      .ai-gen-loading {
-        position: fixed;
-        inset: 0;
-        z-index: 3000;
-        display: grid;
-        place-items: center;
-        background: rgba(15, 23, 42, 0.38);
-      }
-      .ai-gen-loading[hidden] { display: none; }
-      .ai-gen-loading-box {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        padding: 10px 14px;
-        border-radius: var(--radius-md);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(255, 255, 255, 0.96);
-        font-weight: 800;
-        color: rgba(15, 23, 42, 0.86);
-      }
-      .ai-gen-spinner {
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        border: 2px solid rgba(15, 23, 42, 0.18);
-        border-top-color: rgba(15, 23, 42, 0.92);
-        animation: ai-spin 0.8s linear infinite;
-      }
-      @keyframes ai-spin { to { transform: rotate(360deg); } }
-      .ai-gen-panel-head {
-        margin-bottom: 8px;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        gap: 10px;
-      }
-      .ai-gen-panel-head .ai-top-btn {
-        height: 42px;
-        min-width: 132px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0 14px;
-      }
-      .ai-gen-panel-head .ai-top-btn:disabled {
-        opacity: 0.65;
-        cursor: not-allowed;
-        box-shadow: none;
-      }
-      .ai-gen-panel-head .ai-top-btn-close {
-        height: 38px;
-        min-width: 86px;
-        padding: 0 12px;
-        font-size: var(--admin-font-size-control);
-      }
-      .ai-gen-panel.ai-gen-row { display: block; }
-      .ai-gen-panel .field-ai-prompt { width: 100%; max-width: none; display: block; }
-      .ai-gen-panel .ai-prompt-input { width: 100%; }
-      .ai-check-result {
-        margin: 8px 0 10px;
-        padding: 10px 12px;
-        border-radius: var(--radius-md);
-        border: 1px solid rgba(15, 23, 42, 0.14);
-        background: rgba(15, 23, 42, 0.03);
-        font-size: var(--admin-font-size-control);
-        line-height: 1.6;
-        color: rgba(15, 23, 42, 0.86);
-      }
-      .ai-check-result.ok {
-        border-color: rgba(22, 163, 74, 0.30);
-        background: rgba(22, 163, 74, 0.08);
-        color: #166534;
-      }
-      .ai-check-result.warn {
-        border-color: rgba(245, 158, 11, 0.35);
-        background: rgba(245, 158, 11, 0.10);
-        color: #92400e;
-      }
-      .confirm-modal {
-        position: fixed;
-        inset: 0;
-        z-index: 3200;
-        display: grid;
-        place-items: center;
-        padding: 16px;
-        background: rgba(15, 23, 42, 0.40);
-      }
-      .confirm-modal[hidden] { display: none; }
-      .confirm-card {
-        width: min(440px, 94vw);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        border-radius: var(--radius-lg);
-        background: #fff;
-        box-shadow: 0 18px 40px rgba(2, 6, 23, 0.24);
-        padding: 16px;
-      }
-      .confirm-title {
-        margin: 0 0 8px;
-        font-size: var(--admin-font-size-control);
-        font-weight: 900;
-        color: rgba(15, 23, 42, 0.92);
-      }
-      .confirm-actions {
-        margin-top: 12px;
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-      }
-      .flash {
-        transition: opacity 160ms ease, transform 160ms ease;
-      }
-      .flash.fade-out {
-        opacity: 0;
-        transform: translateY(-4px);
-      }
-      .ai-gen-row {
-        margin-top: 0;
-        display: flex;
-        gap: 10px;
-        align-items: flex-end;
-        flex-wrap: wrap;
-      }
-      .ai-gen-row .field { margin: 0; }
-      .ai-gen-row .field-ai-prompt { flex: 1 1 760px; max-width: 100%; }
-      .ai-gen-row .ai-gen-actions { display: inline-flex; gap: 10px; align-items: flex-end; }
-      .ai-gen-row .ai-gen-actions .btn { height: 40px; font-size: var(--admin-font-size-control); border-radius: var(--radius-md); }
-      .ai-prompt-head {
-        display: flex;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 12px;
-        margin-bottom: 6px;
-      }
-      .ai-prompt-head > label { margin: 0; }
-      .ai-prompt-input {
-        min-height: 432px;
-        resize: vertical;
-        white-space: pre-wrap;
-      }
-      .chk-inline {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        height: auto;
-        padding: 0;
-        border: 0;
-        border-radius: 0;
-        background: transparent;
-        font-weight: 700;
-        color: rgba(15, 23, 42, 0.82);
-      }
-      .chk-inline input[type="checkbox"] { width: 16px; height: 16px; }
-      input[type="file"].file-input {
-        display: block;
-        width: min(620px, 100%);
-        padding: 8px 10px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        border-radius: var(--radius-md);
-        background: rgba(255, 255, 255, 0.92);
-      }
-
-      .exam-toolbar {
-        margin: 10px 0 14px;
-        display: flex;
-        align-items: flex-end;
-        justify-content: flex-start;
-        gap: 18px;
-        flex-wrap: wrap;
-      }
-      .exam-toolbar .exam-search-wrap { flex: 0 1 360px; min-width: 240px; }
-      .exam-search { margin: 6px 0 8px; display: flex; gap: 10px; align-items: flex-end; flex: 1; min-width: 280px; flex-wrap: wrap; }
-      .exam-toolbar .exam-search { margin: 0; flex: 0 1 auto; min-width: 0; }
-      .exam-search { max-width: 100%; }
-      /* Make the search box about quarter-width (while staying responsive). */
-      .exam-search .field { margin: 0; flex: 0 1 360px; min-width: 220px; max-width: 25%; }
-      .exam-toolbar .exam-search .field { flex: 1 1 auto; min-width: 0; max-width: none; }
-      #tab-exams .exam-search .field label { display: none; }
-      #tab-exams {
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-      }
-      #tab-exams .table-scroll { flex: 1 1 auto; min-height: 0; }
-      #tab-exams .tri-pager { margin-top: auto; justify-content: flex-end; padding-top: 12px; }
-      @media (max-width: 980px) { .exam-search .field { max-width: 100%; } }
-      @media (max-width: 980px) {
-        .exam-toolbar { align-items: stretch; gap: 10px; }
-        .exam-toolbar .exam-search-wrap { flex: 1 1 100%; min-width: 0; }
-      }
-
-      /* NOTE: Standard pager + fixed-height surface are defined in static/ui.css */
-
-      tr.row-link { cursor: pointer; }
-      tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
-      a.row-a { color: inherit; text-decoration: none; }
-      a.row-a code { color: inherit; }
-      a.row-a:hover { text-decoration: underline; }
-
-      a.token-copy { color: inherit; text-decoration: none; cursor: copy; }
-      a.token-copy:hover { text-decoration: underline; }
-      a.token-copy:focus-visible {
-        outline: 3px solid rgba(37, 99, 235, 0.20);
-        outline-offset: 2px;
-        border-radius: var(--radius-sm);
-      }
-
-      /* Attempt list date range filter (scoped to #tab-assign only). */
-      #tab-assign .assign-attempts .attempt-head { display:flex; flex-direction: column; align-items: stretch; gap: 10px; margin: 0 0 10px; padding: 0; }
-      #tab-assign .assign-attempts .attempt-head .title { margin: 0; font-size: var(--admin-font-size-control); }
-      /* Keep filter row compact and aligned with the shared toolbar primitives. */
-      #tab-assign .assign-attempts .attempt-filter { margin: 0; }
-      #tab-assign .assign-attempts .attempt-filter .field { margin: 0; }
-      #tab-assign .assign-attempts .attempt-filter .toolbar-field--query { min-width: 0; max-width: none; }
-      #tab-assign .assign-attempts .attempt-actions { justify-content: flex-end; }
-      #tab-assign .assign-attempts .range-sep {
-        height: 40px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0 2px;
-        color: rgba(15, 23, 42, 0.55);
-        font-weight: 900;
-        user-select: none;
-      }
-      @media (max-width: 1100px) {
-        #tab-assign .assign-attempts .attempt-actions { justify-content: flex-start; }
-      }
-
-      table.exam-table { width: 100%; table-layout: auto; }
-      table.exam-table th, table.exam-table td {
-        vertical-align: middle;
-        padding: 16px 20px;
-      }
-      table.exam-table th { white-space: nowrap; }
-      th.col-id, td.col-id { text-align: left; white-space: nowrap; }
-      th.col-exam-key, td.col-key { text-align: left; }
-      td.col-key, td.col-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-      /* "答题邀请" tab: fit all columns without horizontal scrolling (no font-size changes). */
-      .assign-attempts .table-scroll { overflow-x: visible; padding-left: 0; padding-right: 0; }
-      table.attempt-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
-      table.attempt-table th, table.attempt-table td { padding-left: 1px; padding-right: 1px; vertical-align: middle; }
-      table.attempt-table th { white-space: normal; }
-      table.attempt-table td.nowrap { white-space: normal; }
-      table.attempt-table td.ellipsis { white-space: normal; overflow: visible; text-overflow: clip; }
-      table.attempt-table td code { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
-      table.attempt-table td.nowrap > div { white-space: nowrap; }
-      td.col-key .exam-key { white-space: nowrap; display: block; overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-      th.col-count, td.col-count { text-align: left; white-space: nowrap; }
-      th.col-updated, td.col-updated { text-align: left; white-space: nowrap; }
-      th.col-actions, td.col-actions { white-space: nowrap; text-align: right; width: 1%; }
-      .shift-updated { display: inline-block; }
-      .btn-icon {
-        min-width: 64px;
-        padding: 9px 12px;
-        text-align: center;
-        font-size: var(--admin-font-size-control);
-        line-height: 1;
-      }
-      .exam-actions { display: inline-flex; gap: 10px; align-items: center; justify-content: flex-end; width: 100%; }
-      .exam-actions .btn { padding: 7px 10px; font-weight: 800; }
-      .exam-actions .btn-icon { min-width: 44px; padding: 7px 0; }
-
-      .assign-form { max-width: 100%; margin: 0; }
-      #tab-assign .assign-form { margin-top: 10px; }
-
-      /* Make "试卷管理" font scale match "答题邀请" (readable/consistent). */
-      #tab-exams { font-size: var(--admin-font-size-base); }
-      #tab-exams .panel-head .title { font-size: var(--admin-font-size-title-lg); letter-spacing: -0.02em; }
-      #tab-exams .panel-head .sub { display: none; }
-      #tab-exams .field label { font-size: var(--admin-font-size-label); font-weight: 800; color: rgba(15, 23, 42, 0.78); }
-      #tab-exams .input,
-      #tab-exams select,
-      #tab-exams input[type="file"].file-input {
-        height: 40px;
-        padding-top: 0;
-        padding-bottom: 0;
-        line-height: 1.25;
-        font-size: var(--admin-font-size-control);
-      }
-      #tab-exams input[type="file"].file-input { padding: 6px 10px; line-height: 1.2; }
-      #tab-exams .btn {
-        height: 40px;
-        font-size: var(--admin-font-size-control);
-        border-radius: var(--radius-md);
-        line-height: 1;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-      }
-      #tab-exams table.exam-table { font-size: var(--admin-font-size-table-body); }
-      #tab-exams table.exam-table th { font-size: var(--admin-font-size-table-head); }
-      #tab-exams .public-invite-toggle {
-        width: 54px;
-        height: 30px;
-        border-radius: 999px;
-        border: 1px solid rgba(15,23,42,.16);
-        background: rgba(148,163,184,.25);
-        position: relative;
-        padding: 0;
-        cursor: pointer;
-        box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
-      }
-      #tab-exams .public-invite-toggle[aria-pressed="true"] {
-        background: rgba(79, 70, 229, .92);
-        border-color: rgba(79, 70, 229, .35);
-      }
-      #tab-exams .public-invite-toggle .knob {
-        position: absolute;
-        top: 3px;
-        left: 3px;
-        width: 24px;
-        height: 24px;
-        border-radius: 999px;
-        background: #fff;
-        box-shadow: 0 6px 16px rgba(2,6,23,.22);
-        transition: transform .18s ease;
-      }
-      #tab-exams .public-invite-toggle[aria-pressed="true"] .knob {
-        transform: translateX(24px);
-      }
-      #tab-exams .public-invite-toggle:disabled { opacity: .6; cursor: not-allowed; }
-
-      /* Invite form visual polish (scoped to "答题邀请" only). */
-      #tab-assign { font-size: var(--admin-font-size-base); }
-      #tab-assign .panel-head .title { font-size: var(--admin-font-size-title-lg); letter-spacing: -0.02em; }
-      #tab-assign .panel-head .sub { font-size: var(--admin-font-size-small); line-height: 1.6; color: rgba(15, 23, 42, 0.70); }
-      #tab-assign .assign-form {
-        max-width: 1280px;
-        margin: 10px auto 0;
-        background: rgba(255, 255, 255, 0.86);
-        border: 1px solid rgba(15, 23, 42, 0.10);
-        border-radius: var(--radius-lg);
-        padding: 16px 16px 14px;
-        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
-        backdrop-filter: blur(6px);
-      }
-      #tab-assign .assign-form .field { margin: 0; width: 100%; max-width: none; }
-      #tab-assign .assign-form .time-picker { position: relative; width: 100%; }
-      #tab-assign .assign-form .time-display {
-        padding-right: 42px;
-        cursor: pointer;
-        background: rgba(255, 255, 255, 0.96);
-      }
-      #tab-assign .assign-form .time-picker-btn {
-        position: absolute;
-        right: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 32px;
-        height: 32px;
-        border-radius: var(--radius-sm);
-        border: 0;
-        background: transparent;
-        color: rgba(15, 23, 42, 0.72);
-        display: grid;
-        place-items: center;
-        cursor: pointer;
-        appearance: none;
-        -webkit-appearance: none;
-        line-height: 1;
-      }
-      #tab-assign .assign-form .time-picker-btn:hover {
-        background: rgba(239, 246, 255, 0.9);
-        color: var(--brand-strong);
-      }
-      #tab-assign .assign-form .field label {
-        font-size: var(--admin-font-size-label);
-        font-weight: 800;
-        color: rgba(15, 23, 42, 0.78);
-        margin-bottom: 6px;
-      }
-      #tab-assign .assign-form .input,
-      #tab-assign .assign-form select {
-        height: 44px;
-        font-size: var(--admin-font-size-control);
-        padding-top: 0;
-        padding-bottom: 0;
-        line-height: 1.25;
-      }
-      #tab-assign .assign-form .field { max-width: none; }
-      #tab-assign .assign-form select { font-weight: 700; }
-      #tab-assign .assign-form input::placeholder { color: rgba(15, 23, 42, 0.42); }
-      #tab-assign .assign-form .input:focus,
-      #tab-assign .assign-form select:focus {
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.20);
-        border-color: rgba(37, 99, 235, 0.55);
-      }
-      #tab-assign .assign-form .assign-divider { display: none; }
-      #tab-assign .assign-form .assign-grid-params { margin-top: 0; }
-      #tab-assign .assign-form .field select { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      #tab-assign .assign-form .invite-grid__actions .btn {
-        min-width: 180px;
-        height: 44px;
-        padding: 0 18px;
-        border-radius: var(--radius-md);
-        font-size: var(--admin-font-size-control);
-      }
-      #duration_modal_dashboard {
-        position: fixed;
-        inset: 0;
-        z-index: 3200;
-        display: grid;
-        place-items: center;
-        padding: 16px;
-        background: rgba(15, 23, 42, 0.34);
-      }
-      #duration_modal_dashboard[hidden] { display: none; }
-      #duration_modal_dashboard .duration-card {
-        width: min(420px, 92vw);
-        border-radius: var(--radius-lg);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(255, 255, 255, 0.98);
-        box-shadow: 0 18px 48px rgba(15, 23, 42, 0.20);
-        overflow: hidden;
-      }
-      #duration_modal_dashboard .duration-card-head {
-        padding: 14px 16px;
-        border-bottom: 1px solid rgba(37, 99, 235, 0.10);
-        background: rgba(247, 250, 255, 0.86);
-      }
-      #duration_modal_dashboard .duration-card-head h3 {
-        margin: 0;
-        font-size: 18px;
-        line-height: 1.2;
-      }
-      #duration_modal_dashboard .duration-card-body {
-        display: grid;
-        gap: 14px;
-        padding: 16px;
-      }
-      #duration_modal_dashboard .duration-presets {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-      #duration_modal_dashboard .duration-preset {
-        min-width: 76px;
-        height: 34px;
-        padding: 0 12px;
-        border-radius: var(--radius-md);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(248, 250, 252, 0.9);
-        color: rgba(15, 23, 42, 0.78);
-        font-size: 14px;
-        cursor: pointer;
-      }
-      #duration_modal_dashboard .duration-preset.is-active {
-        border-color: rgba(37, 99, 235, 0.28);
-        background: rgba(37, 99, 235, 0.10);
-        color: var(--brand-strong);
-      }
-      #duration_modal_dashboard .duration-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-        gap: 10px;
-        align-items: end;
-      }
-      #duration_modal_dashboard .duration-grid .field { margin: 0; }
-      #duration_modal_dashboard .duration-grid .field label {
-        display: inline-block;
-        margin-bottom: 6px;
-        font-size: var(--admin-font-size-label);
-        color: rgba(15, 23, 42, 0.72);
-      }
-      #duration_modal_dashboard .duration-grid .input,
-      #duration_modal_dashboard .duration-grid select {
-        width: 100%;
-        height: 40px;
-      }
-      #duration_modal_dashboard .duration-sep {
-        height: 40px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: rgba(15, 23, 42, 0.45);
-        font-weight: 700;
-      }
-      #duration_modal_dashboard .duration-card-foot {
-        display: flex;
-        justify-content: flex-end;
-        gap: 10px;
-        padding: 14px 16px 16px;
-        border-top: 1px solid rgba(37, 99, 235, 0.10);
-        background: rgba(247, 250, 255, 0.60);
-      }
-      @media (max-width: 980px) {
-        #tab-assign .assign-form { max-width: 100%; margin-left: 0; margin-right: 0; }
-      }
-      .assign-attempts {
-        max-width: 100%;
-        margin: 36px 0 0;
-        display: flex;
-        flex-direction: column;
-        flex: 1 1 auto;
-        min-height: 0;
-      }
-      .table-scroll { overflow-x: auto; }
-      .attempt-table { width: 100%; min-width: 1200px; font-size: var(--admin-font-size-table-body); }
-      /* Fill available width like candidate list: avoid hardcoded per-column pixel widths shrinking the table. */
-      #tab-assign .table-scroll .attempt-table {
-        width: 100% !important;
-        min-width: 100% !important;
-        table-layout: fixed !important;
-      }
-      #tab-assign .table-scroll .attempt-table thead th[style] {
-        width: auto !important;
-      }
-      #tab-assign .table-scroll .attempt-table th,
-      #tab-assign .table-scroll .attempt-table td {
-        padding-left: 12px !important;
-        padding-right: 12px !important;
-      }
-      /* Keep column spacing visually even across the whole row. */
-      #tab-assign .table-scroll .attempt-table th:nth-child(1),
-      #tab-assign .table-scroll .attempt-table td:nth-child(1) { width: 2% !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(2),
-      #tab-assign .table-scroll .attempt-table td:nth-child(2) { width: 2% !important; text-align: left; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(3),
-      #tab-assign .table-scroll .attempt-table td:nth-child(3) { width: 11% !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(4),
-      #tab-assign .table-scroll .attempt-table td:nth-child(4) { width: 18% !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(5),
-      #tab-assign .table-scroll .attempt-table td:nth-child(5) { width: 18% !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(6),
-      #tab-assign .table-scroll .attempt-table td:nth-child(6) { width: 10% !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(7),
-      #tab-assign .table-scroll .attempt-table td:nth-child(7) { width: 7% !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(8),
-      #tab-assign .table-scroll .attempt-table td:nth-child(8) { width: 26% !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(2),
-      #tab-assign .table-scroll .attempt-table td:nth-child(2) { padding-left: 0 !important; padding-right: 2px !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(3),
-      #tab-assign .table-scroll .attempt-table td:nth-child(3) { padding-left: 2px !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(1),
-      #tab-assign .table-scroll .attempt-table td:nth-child(1) { padding-right: 0 !important; }
-      /* Increase visual gap between 电话(3) and 试卷(4). */
-      #tab-assign .table-scroll .attempt-table th:nth-child(3),
-      #tab-assign .table-scroll .attempt-table td:nth-child(3) { padding-right: 28px !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(4),
-      #tab-assign .table-scroll .attempt-table td:nth-child(4) { padding-left: 28px !important; }
-      /* Increase visual gap between 试卷(4) and Token(5) by ~0.5x. */
-      #tab-assign .table-scroll .attempt-table th:nth-child(4),
-      #tab-assign .table-scroll .attempt-table td:nth-child(4) { padding-right: 18px !important; }
-      #tab-assign .table-scroll .attempt-table th:nth-child(5),
-      #tab-assign .table-scroll .attempt-table td:nth-child(5) { padding-left: 18px !important; }
-      .attempt-table th, .attempt-table td { vertical-align: middle; }
-      .attempt-table th {
-        white-space: nowrap;
-        font-size: var(--admin-font-size-table-head);
-        text-transform: none;
-        letter-spacing: 0;
-      }
-      .attempt-table .deleted-mark,
-      .attempt-table code.deleted-mark {
-        text-decoration: line-through;
-        text-decoration-thickness: 1.5px;
-        text-decoration-color: rgba(239, 68, 68, 0.85);
-      }
-      .attempt-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .attempt-table th.center, .attempt-table td.center { text-align: center; }
-      .attempt-table td.nowrap { white-space: nowrap; }
-      .attempt-table td.center { font-variant-numeric: tabular-nums; }
-      .status-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 7px 14px;
-        border-radius: 999px;
-        font-weight: 900;
-        font-size: var(--admin-font-size-pill);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(15, 23, 42, 0.03);
-        color: rgba(15, 23, 42, 0.86);
-        white-space: nowrap;
-      }
-      .status-pill.invited { border-color: rgba(37, 99, 235, 0.28); background: rgba(37, 99, 235, 0.10); color: #1d4ed8; }
-      .status-pill.distributed { border-color: rgba(37, 99, 235, 0.28); background: rgba(37, 99, 235, 0.10); color: #1d4ed8; }
-      .status-pill.verified { border-color: rgba(16, 185, 129, 0.28); background: rgba(16, 185, 129, 0.10); color: #047857; }
-      .status-pill.in_exam { border-color: rgba(249, 115, 22, 0.30); background: rgba(249, 115, 22, 0.10); color: #9a3412; }
-      .status-pill.grading { border-color: rgba(124, 58, 237, 0.30); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
-      .status-pill.finished { border-color: rgba(22, 163, 74, 0.30); background: rgba(22, 163, 74, 0.10); color: #166534; }
-      .status-pill.expired { border-color: rgba(220, 38, 38, 0.30); background: rgba(220, 38, 38, 0.08); color: #b91c1c; }
-      .log-table { width: 100%; min-width: 980px; table-layout: fixed; font-size: var(--admin-font-size-table-body); }
-      .log-table th, .log-table td { vertical-align: middle; line-height: 1.3; }
-      .log-table th { white-space: nowrap; font-size: var(--admin-font-size-table-head); font-weight: 800; text-transform: none; letter-spacing: 0; line-height: 1.2; }
-      .log-table td { font-variant-numeric: tabular-nums; }
-      .log-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .log-table code { white-space: nowrap; }
-      .log-table .type-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-weight: 900;
-        font-size: var(--admin-font-size-pill);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(15, 23, 42, 0.03);
-        color: rgba(15, 23, 42, 0.86);
-        white-space: nowrap;
-      }
-      .log-table .type-pill.cat-candidate { border-color: rgba(22, 163, 74, 0.28); background: rgba(22, 163, 74, 0.10); color: #166534; }
-      .log-table .type-pill.cat-exam { border-color: rgba(124, 58, 237, 0.28); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
-      .log-table .type-pill.cat-grading { border-color: rgba(245, 158, 11, 0.32); background: rgba(245, 158, 11, 0.12); color: #92400e; }
-      .log-table .type-pill.cat-assignment { border-color: rgba(37, 99, 235, 0.28); background: rgba(37, 99, 235, 0.10); color: #1d4ed8; }
-      .log-table .type-pill.cat-ui { border-color: rgba(100, 116, 139, 0.28); background: rgba(100, 116, 139, 0.10); color: #334155; }
-      .log-table .type-pill.cat-system { border-color: rgba(17, 24, 39, 0.20); background: rgba(17, 24, 39, 0.06); color: rgba(15, 23, 42, 0.86); }
-      .log-box {
-        border: 1px solid rgba(15, 23, 42, 0.10);
-        border-radius: var(--radius-md);
-        background: rgba(248, 250, 252, 0.55);
-        padding: 12px 12px;
-        margin: 12px 0;
-      }
-      /* Logs (tab-logs) visual scale */
-      #tab-logs .log-box,
-      #tab-status .log-box { padding: 0; overflow: hidden; }
-      #tab-logs .log-box-title { font-weight: 950; margin: 0; font-size: var(--admin-font-size-title); line-height: 1.15; }
-      #tab-logs .log-box > .log-box-title {
-        display: flex;
-        align-items: center;
-        min-height: var(--admin-panel-head-min-height);
-        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
-        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-        background: rgba(255, 255, 255, 0.52);
-      }
-      #tab-logs .log-box-head {
-        display:flex;
-        align-items: center;
-        justify-content: space-between;
-        min-height: var(--admin-panel-head-min-height);
-        gap: var(--admin-panel-head-gap);
-        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
-        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-        background: rgba(255, 255, 255, 0.52);
-      }
-      #tab-logs .log-box-head .log-box-title { margin: 0; }
-      #tab-logs .log-box-sub { color: rgba(15, 23, 42, 0.60); font-size: var(--admin-font-size-small); font-weight: 950; white-space: nowrap; }
-      #tab-logs .tri-pager {
-        padding-top: 6px;
-        gap: 8px;
-      }
-      #tab-logs .tri-pager .page-info {
-        font-size: 13px;
-        line-height: 1.2;
-      }
-      #tab-logs .tri-pager .tri-btn {
-        width: 38px;
-        height: 32px;
-      }
-      #tab-logs .legend-grid { display:flex; flex-wrap: wrap; gap: 12px; }
-      #tab-logs .legend-grid.legend-grid--footer {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 0;
-        border-top: 1px solid rgba(15, 23, 42, 0.08);
-        margin-top: 12px;
-        padding: 0;
-        background: rgba(255, 255, 255, 0.52);
-      }
-      #tab-logs .legend-grid.legend-grid--footer .legend-item {
-        min-height: 0;
-        padding: 14px 16px;
-        border: 0;
-        border-radius: 0;
-        background: transparent;
-        font-size: 14px;
-      }
-      #tab-logs .legend-grid.legend-grid--footer .legend-item + .legend-item {
-        border-left: 1px solid rgba(15, 23, 42, 0.08);
-      }
-      .legend-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        padding: 11px 16px;
-        border-radius: 999px;
-        border: 1px solid rgba(15, 23, 42, 0.10);
-        background: rgba(255, 255, 255, 0.78);
-        font-weight: 900;
-        font-size: var(--admin-font-size-control);
-      }
-      .legend-dot { width: 14px; height: 14px; border-radius: 999px; display:inline-block; }
-      .legend-cnt { color: rgba(15, 23, 42, 0.62); font-size: 15px; font-weight: 950; }
-      .density-wrap { width: 100%; overflow: hidden; }
-      .density-plotly {
-        width: 100%;
-        min-height: 420px;
-        border: 1px solid rgba(15, 23, 42, 0.08);
-        border-radius: var(--radius-md);
-        background: rgba(255, 255, 255, 0.72);
-      }
-      .density-empty {
-        min-height: 140px;
-        padding: 16px 8px;
-        color: rgba(15, 23, 42, 0.55);
-        font-size: var(--admin-font-size-control);
-        font-weight: 500;
-      }
-      .density-bars { display:flex; align-items: flex-end; gap: 10px; padding: 10px 4px 4px; min-height: 180px; }
-      .density-bar {
-        width: 22px;
-        border-radius: var(--radius-sm) var(--radius-sm) var(--radius-xs) var(--radius-xs);
-        background: rgba(37, 99, 235, 0.20);
-        border: 1px solid rgba(37, 99, 235, 0.25);
-      }
-      .density-bar:hover { background: rgba(37, 99, 235, 0.30); }
-      .density-bar.zero {
-        background: transparent;
-        border-color: transparent;
-      }
-      .density-bar.zero:hover { background: transparent; }
-      .density-tip {
-        position: fixed;
-        z-index: 60;
-        padding: 6px 10px;
-        border-radius: var(--radius-md);
-        background: rgba(15, 23, 42, 0.92);
-        color: rgba(255, 255, 255, 0.96);
-        font-size: var(--admin-font-size-control);
-        font-weight: 900;
-        letter-spacing: 0.2px;
-        white-space: nowrap;
-        pointer-events: none;
-        transform: translate(-50%, -120%);
-        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
-      }
-      .density-x { display:flex; gap: 10px; padding: 0 4px 8px; }
-      .density-x span { width: 22px; font-size: var(--admin-font-size-control); color: rgba(15, 23, 42, 0.55); text-align: center; }
-
-      /* Logs: density range filter */
-      #tab-logs .density-filter { margin: 0 0 0 auto; }
-      #tab-logs .density-filter .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
-      @media (max-width: 980px) {
-        #tab-logs .density-filter { margin-left: 0; }
-        #tab-logs .legend-grid.legend-grid--footer { grid-template-columns: 1fr; }
-        #tab-logs .legend-grid.legend-grid--footer .legend-item + .legend-item {
-          border-left: 0;
-          border-top: 1px solid rgba(15, 23, 42, 0.08);
-        }
-      }
-
-      /* Logs: hide header + filter area (keep page clean). */
-      #tab-logs .panel-head,
-      #tab-logs .section-head.attempt-head { display: none; }
-      /* We reuse `.assign-attempts` wrapper, but its default margin-top leaves a blank block on logs tab. */
-      #tab-logs .assign-attempts { margin: 0; }
-
-      /* System Status */
-      #tab-status { font-size: var(--admin-font-size-base); }
-      /* Hard requirement: status white background should fill the whole available surface (blue frame). */
-      /* Also remove the top "empty bands" inside status tab. */
-      #tab-status.panel { padding-top: 0; }
-      #tab-status .status-wrap { max-width: none; width: 100%; margin: 0; padding: 0 2px 18px; }
-      #tab-status .log-box { border-radius: var(--radius-lg); background: rgba(248, 250, 252, 0.90); }
-      #tab-status .log-box > .log-box-title {
-        display: flex;
-        align-items: center;
-        min-height: var(--admin-panel-head-min-height);
-        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
-        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-        background: rgba(255, 255, 255, 0.52);
-      }
-      #tab-status .log-box-head {
-        display:grid;
-        grid-template-columns: 1fr auto;
-        align-items: center;
-        min-height: var(--admin-panel-head-min-height);
-        gap: var(--admin-panel-head-gap);
-        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
-        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-        background: rgba(255, 255, 255, 0.52);
-        margin-bottom: 0;
-      }
-      #tab-status .log-box-title { font-weight: 500; margin: 0; font-size: var(--admin-font-size-title); line-height: 1.15; }
-      /* Keep titles in one line (e.g. "系统统计（按天）"). */
-      #tab-status .log-box-head > div { min-width: 0; }
-      #tab-status .log-box-head .log-box-title { white-space: nowrap; }
-      #tab-status .status-head {
-        padding: 16px 18px;
-        border-radius: var(--radius-lg);
-        border: 1px solid rgba(15, 23, 42, 0.10);
-        background: rgba(255, 255, 255, 0.78);
-        margin: 0 0 12px;
-        font-weight: 950;
-        text-align: center;
-        font-size: var(--admin-font-size-title-lg);
-      }
-      #tab-status .status-head.level-ok { border-color: rgba(22, 163, 74, 0.35); background: rgba(22, 163, 74, 0.10); color: #166534; }
-      #tab-status .status-head.level-warn { border-color: rgba(249, 115, 22, 0.40); background: rgba(249, 115, 22, 0.10); }
-      #tab-status .status-head.level-danger { border-color: rgba(220, 38, 38, 0.40); background: rgba(220, 38, 38, 0.10); }
-      #tab-status .status-head.level-critical { border-color: rgba(220, 38, 38, 0.55); background: rgba(220, 38, 38, 0.14); }
-      #tab-status .status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; background: rgba(255, 255, 255, 0.48); }
-      #tab-status .kpi { padding: 16px 18px 18px; background: transparent; }
-      #tab-status .kpi + .kpi { border-left: 1px solid rgba(15, 23, 42, 0.08); }
-      #tab-status .k-title { font-weight: 950; color: rgba(15, 23, 42, 0.75); margin-bottom: 6px; }
-      #tab-status .k-main { font-size: var(--admin-font-size-kpi); font-weight: 1100; letter-spacing: -0.02em; }
-      #tab-status .k-sub { margin-top: 4px; color: rgba(15, 23, 42, 0.62); font-size: var(--admin-font-size-small); font-weight: 950; }
-      /* Threshold settings: title on the left, controls on the right (like other header bars). */
-      #tab-status .status-cfg-box .log-box-head { margin-bottom: 0; }
-      #tab-status .status-cfg-box .log-box-title { margin: 0; }
-      #tab-status .status-cfg-box .status-cfg-body {
-        padding: 16px 18px 18px;
-      }
-      #tab-status .status-cfg-box .status-cfg-body .metric-form {
-        display: block;
-      }
-      #tab-status .status-cfg-box .metric-form__grid { flex: 1 1 auto; }
-      #tab-status .status-cfg-box .status-cfg-actions {
-        display: inline-flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 10px;
-      }
-      #tab-status .status-cfg-box .status-cfg-actions .metric-form__message {
-        min-width: 88px;
-        min-height: 20px;
-        text-align: right;
-      }
-      #tab-status .status-cfg-box .metric-form .field label {
-        font-size: var(--admin-font-size-label);
-        display: inline-block;
-        margin-bottom: 6px;
-        font-weight: 500;
-        color: rgba(15, 23, 42, 0.75);
-      }
-      #tab-status .status-cfg-box .metric-form .field {
-        max-width: 320px;
-      }
-      #tab-status .status-cfg-box .metric-form .input { font-size: var(--admin-font-size-control); }
-      #tab-status .status-cfg-box .metric-form .btn { font-size: var(--admin-font-size-control); }
-      #tab-status .status-cfg-box .status-cfg-actions .btn {
-        min-width: 108px;
-        width: auto;
-      }
-      /* We reuse `.assign-attempts` for layout, but its global margin-top is too big for status tab. */
-      #tab-status .assign-attempts { margin: 0; }
-      #tab-status .assign-attempts .log-box:first-child { margin-top: 0; }
-      #tab-status table.status-table { width: 100%; min-width: 980px; border-collapse: collapse; }
-      #tab-status table.status-table th { text-align:left; font-size: var(--admin-font-size-table-head); color: rgba(15, 23, 42, 0.92); font-weight: 500; padding: 10px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.10); text-transform: none; letter-spacing: 0; line-height: 1.2; }
-      #tab-status table.status-table td { padding: 14px 8px; border-bottom: 1px solid rgba(15, 23, 42, 0.08); font-weight: 500; font-size: var(--admin-font-size-table-body); color: rgba(15, 23, 42, 0.65); line-height: 1.35; }
-      #tab-status table.status-table td.muted { font-weight: 500; }
-      #tab-status #status_pager[hidden] { display: none !important; }
-
-      /* Status range filter: tidy, grouped controls (avoid "floating" inputs). */
-      #tab-status .density-filter {
-        margin: 0;
-        max-width: none;
-        background: rgba(255, 255, 255, 0.78);
-        border: 1px solid rgba(15, 23, 42, 0.10);
-        border-radius: var(--radius-md);
-        padding: 8px 10px;
-      }
-      /* Date proxy (yyyy/mm/dd) for system status filters. */
-      #tab-status .density-filter .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 500; }
-      #tab-status .density-filter .btn[type="submit"] { background: rgba(37, 99, 235, 0.10); border-color: rgba(37, 99, 235, 0.20); }
-      @media (max-width: 1100px) {
-        #tab-status .log-box-head { grid-template-columns: 1fr; align-items: stretch; }
-        #tab-status .density-filter { width: 100%; justify-content: flex-start; }
-      }
-
-      @media (max-width: 980px) {
-        #tab-status .status-grid { grid-template-columns: 1fr; }
-        #tab-status .kpi + .kpi {
-          border-left: 0;
-          border-top: 1px solid rgba(15, 23, 42, 0.08);
-        }
-      }
-    </style>
-{% endblock %}
+{% block body_class %}page-admin-dashboard{% endblock %}
 {% block content %}
       <div class="surface admin-surface" role="region" aria-label="后台内容">
         <section id="tab-exams" class="panel active" role="tabpanel" aria-label="试卷管理">
@@ -1307,19 +376,12 @@
           </div>
         </section>
 
-        <section id="tab-logs" class="panel" role="tabpanel" aria-label="系统日志">
-          <div class="panel-head">
-            <div>
-              <h2 class="title">系统日志</h2>
-              <p class="sub">系统行为记录：候选人/试卷操作、邀约、答题时间、大模型 Token 消耗等。</p>
-            </div>
-          </div>
-
-          <div class="assign-attempts" role="region" aria-label="日志列表">
-            <div class="log-box" aria-label="日志概览">
-              <div class="log-box-head">
-                <div class="log-box-title">任务密度图</div>
-                <form class="density-filter toolbar-form toolbar-form--compact" method="get" action="/admin#tab-logs" aria-label="选择任务密度时间范围">
+        <section id="tab-logs" class="panel pt-0 text-[15px]" role="tabpanel" aria-label="系统日志">
+          <div class="grid gap-4" role="region" aria-label="日志列表">
+            <section class="overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]" aria-label="日志概览">
+              <div class="grid min-h-[52px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200/80 bg-white/60 px-[18px] py-[10px] max-[980px]:grid-cols-1 max-[980px]:items-stretch max-[980px]:gap-2 max-[980px]:px-4 max-[980px]:py-2.5">
+                <h2 class="m-0 text-[20px] font-black leading-[1.15] text-blue-700 max-[980px]:hidden">任务密度图</h2>
+	                <form class="grid w-full max-w-[860px] grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-2 justify-self-end max-[980px]:grid-cols-1 max-[980px]:justify-self-stretch" method="get" action="/admin#tab-logs" aria-label="选择任务密度时间范围">
                   <input type="hidden" name="exam_q" value="{{ exam_q or '' }}" />
                   <input type="hidden" name="exam_page" value="{{ exam_page or '' }}" />
                   <input type="hidden" name="attempt_q" value="{{ attempt_q or '' }}" />
@@ -1330,8 +392,8 @@
                   <input type="hidden" name="assign_candidate_id" value="{{ assign_candidate_id or '' }}" />
                   <input type="hidden" name="log_page" value="{{ log_page or '' }}" />
 
-                  <div class="range-group toolbar-range" aria-label="时间范围">
-                    <div class="field toolbar-field--date">
+                  <div class="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2" aria-label="时间范围">
+                    <div class="field toolbar-field--date !w-auto !min-w-0 !shrink !flex-none">
                       <div class="date-proxy">
                         <input id="chart_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="开始日期" />
                         <input id="chart_start" class="input date-native" type="date" name="chart_start" value="{{ chart_range_start or '' }}" tabindex="-1" aria-hidden="true" />
@@ -1340,10 +402,8 @@
                         </button>
                       </div>
                     </div>
-
-                    <div class="range-sep" aria-hidden="true">—</div>
-
-                    <div class="field toolbar-field--date">
+                    <div class="inline-flex h-10 items-center justify-center px-0.5 text-slate-400" aria-hidden="true">—</div>
+                    <div class="field toolbar-field--date !w-auto !min-w-0 !shrink !flex-none">
                       <div class="date-proxy">
                         <input id="chart_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="结束日期" />
                         <input id="chart_end" class="input date-native" type="date" name="chart_end" value="{{ chart_range_end or '' }}" tabindex="-1" aria-hidden="true" />
@@ -1354,7 +414,7 @@
                     </div>
                   </div>
 
-                  <div class="toolbar-actions" aria-label="操作">
+	                  <div class="flex flex-wrap items-center justify-end gap-2 max-[980px]:justify-start" aria-label="操作">
                     <button class="btn btn-primary" type="submit">查询</button>
                     {% set density_reset_qs = "" %}
                     {% if exam_q %}{% set density_reset_qs = density_reset_qs ~ "exam_q=" ~ (exam_q|urlencode) %}{% endif %}
@@ -1370,44 +430,28 @@
                   </div>
                 </form>
               </div>
-              <div class="density-wrap">
-                <div id="log_density_plotly" class="density-plotly" aria-label="任务密度图（Plotly）"></div>
-                <div id="log_density_empty" class="density-empty" hidden>该时间范围暂无操作记录，可调整时间范围。</div>
+
+              <div class="bg-white/55 p-4 max-[980px]:p-1">
+                <div id="log_density_plotly" class="relative h-[400px] overflow-hidden rounded-md border border-slate-200/80 bg-white/80 max-[980px]:h-[236px] max-[980px]:border-0 max-[980px]:rounded-lg" aria-label="任务密度图（Plotly）"></div>
+                <div id="log_density_empty" class="grid min-h-[140px] place-items-center px-4 py-4 text-center text-[15px] font-medium text-slate-500" hidden>该时间范围暂无操作记录，可调整时间范围。</div>
                 <script id="log_density_data" type="application/json">{{ {"days": (chart_days or []), "counts": (chart_counts or [])}|tojson }}</script>
               </div>
-              <div class="legend-grid legend-grid--footer" aria-label="任务类型图例">
-                <div class="legend-item" title="candidate">
-                  <span class="legend-dot legend-dot--candidate"></span>
-                  <span>候选者操作</span>
-                  <span class="legend-cnt">{{ log_counts.candidate if log_counts else 0 }}</span>
-                </div>
-                <div class="legend-item" title="exam">
-                  <span class="legend-dot legend-dot--exam"></span>
-                  <span>试卷操作</span>
-                  <span class="legend-cnt">{{ log_counts.exam if log_counts else 0 }}</span>
-                </div>
-                <div class="legend-item" title="grading">
-                  <span class="legend-dot legend-dot--grading"></span>
-                  <span>判卷操作</span>
-                  <span class="legend-cnt">{{ log_counts.grading if log_counts else 0 }}</span>
-                </div>
-                <div class="legend-item" title="assignment">
-                  <span class="legend-dot legend-dot--assignment"></span>
-                  <span>答题邀约</span>
-                  <span class="legend-cnt">{{ log_counts.assignment if log_counts else 0 }}</span>
-                </div>
-                <div class="legend-item" title="system">
-                  <span class="legend-dot legend-dot--system"></span>
-                  <span>系统</span>
-                  <span class="legend-cnt">{{ log_counts.system if log_counts else 0 }}</span>
-                </div>
-              </div>
-            </div>
 
-            <div class="log-box" aria-label="任务详情列表">
-              <div class="log-box-title">任务详情列表</div>
-              <div class="table-scroll">
-                <table class="log-table" aria-label="日志表">
+              <div class="grid grid-cols-5 border-t border-slate-200/80 bg-white/60 max-[980px]:grid-cols-1" aria-label="任务类型图例">
+                <div class="flex min-h-[52px] items-center gap-2 px-4 py-3 text-[14px] font-black text-slate-700 max-[980px]:border-t max-[980px]:border-slate-200/80 max-[980px]:first:border-t-0 min-[981px]:border-l min-[981px]:border-slate-200/80 min-[981px]:first:border-l-0" title="candidate"><span class="legend-dot legend-dot--candidate"></span><span>候选者操作</span><span class="ml-auto text-[15px] text-slate-500">{{ log_counts.candidate if log_counts else 0 }}</span></div>
+                <div class="flex min-h-[52px] items-center gap-2 px-4 py-3 text-[14px] font-black text-slate-700 max-[980px]:border-t max-[980px]:border-slate-200/80 min-[981px]:border-l min-[981px]:border-slate-200/80 min-[981px]:first:border-l-0" title="exam"><span class="legend-dot legend-dot--exam"></span><span>试卷操作</span><span class="ml-auto text-[15px] text-slate-500">{{ log_counts.exam if log_counts else 0 }}</span></div>
+                <div class="flex min-h-[52px] items-center gap-2 px-4 py-3 text-[14px] font-black text-slate-700 max-[980px]:border-t max-[980px]:border-slate-200/80 min-[981px]:border-l min-[981px]:border-slate-200/80 min-[981px]:first:border-l-0" title="grading"><span class="legend-dot legend-dot--grading"></span><span>判卷操作</span><span class="ml-auto text-[15px] text-slate-500">{{ log_counts.grading if log_counts else 0 }}</span></div>
+                <div class="flex min-h-[52px] items-center gap-2 px-4 py-3 text-[14px] font-black text-slate-700 max-[980px]:border-t max-[980px]:border-slate-200/80 min-[981px]:border-l min-[981px]:border-slate-200/80 min-[981px]:first:border-l-0" title="assignment"><span class="legend-dot legend-dot--assignment"></span><span>答题邀约</span><span class="ml-auto text-[15px] text-slate-500">{{ log_counts.assignment if log_counts else 0 }}</span></div>
+                <div class="flex min-h-[52px] items-center gap-2 px-4 py-3 text-[14px] font-black text-slate-700 max-[980px]:border-t max-[980px]:border-slate-200/80 min-[981px]:border-l min-[981px]:border-slate-200/80 min-[981px]:first:border-l-0" title="system"><span class="legend-dot legend-dot--system"></span><span>系统</span><span class="ml-auto text-[15px] text-slate-500">{{ log_counts.system if log_counts else 0 }}</span></div>
+              </div>
+            </section>
+
+            <section class="overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]" aria-label="任务详情列表">
+              <div class="flex min-h-[52px] items-center border-b border-slate-200/80 bg-white/60 px-[18px] py-[10px] max-[980px]:px-4">
+                <h2 class="m-0 text-[20px] font-black leading-[1.15] text-blue-700">任务详情列表</h2>
+              </div>
+              <div class="table-scroll bg-white/55">
+                <table class="w-full min-w-[980px] table-fixed text-[15px]" aria-label="日志表">
                   <thead>
                     <tr>
                       <th class="col-w-56">ID</th>
@@ -1446,7 +490,7 @@
               {% if assign_candidate_id %}{% set log_qs_extra = log_qs_extra ~ "&assign_candidate_id=" ~ (assign_candidate_id|urlencode) %}{% endif %}
               {% if chart_range_start %}{% set log_qs_extra = log_qs_extra ~ "&chart_start=" ~ (chart_range_start|urlencode) %}{% endif %}
               {% if chart_range_end %}{% set log_qs_extra = log_qs_extra ~ "&chart_end=" ~ (chart_range_end|urlencode) %}{% endif %}
-              <div class="tri-pager" aria-label="日志分页">
+              <div class="tri-pager border-t border-slate-200/80 bg-white/55 px-[18px] py-[14px] max-[980px]:px-4" aria-label="日志分页">
                 <span class="page-info">第 {{ log_page or 1 }} / {{ total_log_pages_display }} 页（共 {{ total_logs }} 条）</span>
                 {% if log_page and log_page > 1 %}
                   <a class="tri-btn" href="/admin?log_page={{ log_page - 1 }}{{ log_qs_extra }}#tab-logs" aria-label="上一页" title="上一页">▲</a>
@@ -1459,67 +503,61 @@
                   <span class="tri-btn disabled" aria-hidden="true">▼</span>
                 {% endif %}
               </div>
-            </div>
+            </section>
           </div>
         </section>
 
-        <section id="tab-status" class="panel" role="tabpanel" aria-label="系统状态">
-          <div class="status-wrap">
-            <div id="status_head" class="status-head level-ok" aria-live="polite">
+        <section id="tab-status" class="panel pt-0 text-[15px]" role="tabpanel" aria-label="系统状态">
+          <div class="grid w-full content-start gap-4 pb-[18px]">
+            <div id="status_head" class="status-head level-ok rounded-lg border px-[18px] py-4 text-center text-[clamp(1.4rem,2vw,2rem)] font-black max-[980px]:text-[clamp(1.2rem,4.8vw,1.7rem)]" aria-live="polite">
               <div id="status_head_text">加载中…</div>
             </div>
 
-            <div class="assign-attempts" role="region" aria-label="系统状态内容">
-              <div class="log-box" aria-label="今日用量">
-                <div class="log-box-title">今日用量</div>
-                <div class="status-grid">
-                  <div class="kpi" aria-label="大模型 Token">
-                    <div class="k-title">大模型 Token</div>
-                    <div class="k-main"><span id="kpi_llm_used">—</span></div>
-                    <div class="k-sub">阈值：<span id="kpi_llm_limit">—</span>，占用：<span id="kpi_llm_ratio">—</span></div>
+            <div class="grid gap-4" role="region" aria-label="系统状态内容">
+              <section class="overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]" aria-label="今日用量">
+                <div class="flex min-h-[52px] items-center border-b border-slate-200/80 bg-white/60 px-[18px] py-[10px] max-[980px]:px-4">
+                  <h2 class="m-0 text-[20px] font-semibold leading-[1.15] text-slate-800">今日用量</h2>
+                </div>
+                <div class="grid grid-cols-2 divide-x divide-slate-200/80 bg-white/55 max-[980px]:grid-cols-1 max-[980px]:divide-x-0 max-[980px]:divide-y">
+                  <div class="px-[18px] py-4 max-[980px]:px-4" aria-label="大模型 Token">
+                    <div class="mb-1.5 font-black text-slate-600">大模型 Token</div>
+                    <div class="text-[clamp(2rem,3vw,2.8rem)] font-black tracking-[-0.02em] text-slate-900"><span id="kpi_llm_used">—</span></div>
+                    <div class="mt-1 text-[14px] font-black text-slate-500">阈值：<span id="kpi_llm_limit">—</span>，占用：<span id="kpi_llm_ratio">—</span></div>
                   </div>
-                  <div class="kpi" aria-label="短信认证消耗">
-                    <div class="k-title">短信认证消耗</div>
-                    <div class="k-main"><span id="kpi_sms_used">—</span></div>
-                    <div class="k-sub">阈值：<span id="kpi_sms_limit">—</span>，占用：<span id="kpi_sms_ratio">—</span></div>
+                  <div class="px-[18px] py-4 max-[980px]:px-4" aria-label="短信认证消耗">
+                    <div class="mb-1.5 font-black text-slate-600">短信认证消耗</div>
+                    <div class="text-[clamp(2rem,3vw,2.8rem)] font-black tracking-[-0.02em] text-slate-900"><span id="kpi_sms_used">—</span></div>
+                    <div class="mt-1 text-[14px] font-black text-slate-500">阈值：<span id="kpi_sms_limit">—</span>，占用：<span id="kpi_sms_ratio">—</span></div>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              <div class="log-box status-cfg-box" aria-label="阈值设置">
-                <div class="log-box-head">
-                  <div>
-                    <div class="log-box-title">阈值设置（按天）</div>
-                  </div>
-                  <div class="status-cfg-actions">
-                    <span id="status_cfg_msg" class="metric-form__message muted"></span>
-                    <button id="status_cfg_save" class="btn btn-primary" type="submit" form="status_cfg_form">保存</button>
-                  </div>
+              <section class="overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]" aria-label="阈值设置">
+                <div class="grid min-h-[52px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200/80 bg-white/60 px-[18px] py-[10px] max-[1100px]:px-4">
+                  <h2 class="m-0 min-w-0 truncate text-[20px] font-semibold leading-[1.15] text-slate-800">阈值设置（按天）</h2>
+                  <button id="status_cfg_save" class="btn btn-primary min-w-[112px]" type="submit" form="status_cfg_form">保存</button>
                 </div>
-                <div class="status-cfg-body">
-                  <form id="status_cfg_form" class="metric-form" autocomplete="off">
-                    <div class="metric-form__grid">
-                      <div class="field metric-form__field">
-                        <label for="llm_tokens_limit">大模型 Token 阈值</label>
-                        <input id="llm_tokens_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 200000" />
-                      </div>
-                      <div class="field metric-form__field">
-                        <label for="sms_calls_limit">短信认证阈值</label>
-                        <input id="sms_calls_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 1000" />
-                      </div>
+                <div class="grid gap-2.5 bg-white/55 px-[18px] py-4 max-[1100px]:px-4">
+                  <span id="status_cfg_msg" class="min-h-5 text-right text-[14px] text-slate-500 max-[1100px]:text-left" aria-live="polite"></span>
+                  <form id="status_cfg_form" class="grid grid-cols-2 gap-x-[18px] gap-y-3.5 max-[980px]:grid-cols-1" autocomplete="off">
+                    <div class="field">
+                      <label for="llm_tokens_limit">大模型 Token 阈值</label>
+                      <input id="llm_tokens_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 200000" />
+                    </div>
+                    <div class="field">
+                      <label for="sms_calls_limit">短信认证阈值</label>
+                      <input id="sms_calls_limit" class="input" type="number" inputmode="numeric" min="0" step="1" placeholder="例如 1000" />
                     </div>
                   </form>
                 </div>
-              </div>
+              </section>
 
-              <div class="log-box" aria-label="按天统计">
-                <div class="log-box-head">
-                  <div>
-                    <div class="log-box-title">系统统计（按天）</div>
-                  </div>
-                  <form id="status_range_form" class="density-filter toolbar-form toolbar-form--compact" aria-label="选择系统统计时间范围">
-                    <div class="range-group toolbar-range" aria-label="时间范围">
-                      <div class="field toolbar-field--date">
+              <section class="overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]" aria-label="按天统计">
+                <div class="grid min-h-[52px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200/80 bg-white/60 px-[18px] py-[10px] max-[1100px]:grid-cols-1 max-[1100px]:items-stretch max-[1100px]:px-4">
+                  <h2 class="m-0 min-w-0 truncate text-[20px] font-semibold leading-[1.15] text-slate-800">系统统计（按天）</h2>
+                  <form id="status_range_form" class="grid w-max max-w-full gap-2 justify-self-end max-[1100px]:w-full max-[1100px]:justify-self-stretch" aria-label="选择系统统计时间范围">
+                    <div class="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2" aria-label="时间范围">
+                      <div class="field toolbar-field--date !w-auto !min-w-0 !shrink !flex-none">
                         <div class="date-proxy">
                           <input id="status_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="开始日期" />
                           <input id="status_start" class="input date-native" type="date" aria-label="开始日期" tabindex="-1" aria-hidden="true" />
@@ -1528,8 +566,8 @@
                           </button>
                         </div>
                       </div>
-                      <div class="range-sep" aria-hidden="true">—</div>
-                      <div class="field toolbar-field--date">
+                      <div class="inline-flex h-10 items-center justify-center px-0.5 text-slate-400" aria-hidden="true">—</div>
+                      <div class="field toolbar-field--date !w-auto !min-w-0 !shrink !flex-none">
                         <div class="date-proxy">
                           <input id="status_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="结束日期" />
                           <input id="status_end" class="input date-native" type="date" aria-label="结束日期" tabindex="-1" aria-hidden="true" />
@@ -1538,16 +576,16 @@
                           </button>
                         </div>
                       </div>
-                      <div class="toolbar-actions">
-                        <button class="btn" type="submit">查询</button>
-                        <button class="btn" type="button" id="status_range_reset">重置</button>
-                      </div>
+                    </div>
+                    <div class="flex flex-wrap justify-end gap-2 max-[1100px]:justify-start">
+                      <button class="btn" type="submit">查询</button>
+                      <button class="btn" type="button" id="status_range_reset">重置</button>
                     </div>
                   </form>
                 </div>
 
-                <div class="table-scroll">
-                  <table class="status-table" aria-label="系统状态统计表（按天）">
+                <div class="table-scroll bg-white/55">
+                  <table class="w-full min-w-[980px] table-fixed text-[15px]" aria-label="系统状态统计表（按天）">
                     <colgroup>
                       <col class="col-w-120" />
                       <col class="col-w-110" />
@@ -1560,8 +598,8 @@
                       <tr>
                         <th>日期</th>
                         <th>新试卷</th>
-                        <th>新邀请</th>
-                        <th>新候选</th>
+                        <th>新邀约</th>
+                        <th>新候选人</th>
                         <th>大模型 Token</th>
                         <th>短信次数</th>
                       </tr>
@@ -1571,12 +609,12 @@
                     </tbody>
                   </table>
                 </div>
-                <div id="status_pager" class="tri-pager inline" hidden>
+                <div id="status_pager" class="tri-pager border-t border-slate-200/80 bg-white/55 px-[18px] py-[14px] max-[980px]:px-4" hidden>
                   <span id="status_page_info" class="page-info"></span>
                   <button id="status_page_prev" class="tri-btn" type="button" aria-label="上一页" title="上一页">▲</button>
                   <button id="status_page_next" class="tri-btn" type="button" aria-label="下一页" title="下一页">▼</button>
                 </div>
-              </div>
+              </section>
             </div>
           </div>
         </section>
@@ -1793,8 +831,12 @@
           const peakVal = Math.max(...yVals);
           const peakIdx = yVals.indexOf(peakVal);
           const markerSizes = yVals.map((v) => (v > 0 ? 7 : 3));
+          const isNarrowScreen = typeof window !== "undefined" && typeof window.matchMedia === "function"
+            ? window.matchMedia("(max-width: 980px)").matches
+            : false;
 
           if (window.Plotly && typeof window.Plotly.newPlot === "function") {
+            const plotHeight = Math.max(isNarrowScreen ? 236 : 400, plotlyEl.clientHeight || 0);
             const densityTrace = {
               x: xVals,
               y: yVals,
@@ -1845,31 +887,34 @@
               plotlyEl,
               [densityTrace, avgTrace, peakTrace],
               {
-                height: 400,
-                margin: { l: 56, r: 48, t: 22, b: 46 },
+                height: plotHeight,
+                margin: isNarrowScreen
+                  ? { l: 22, r: 6, t: 4, b: 22 }
+                  : { l: 56, r: 48, t: 22, b: 46 },
                 paper_bgcolor: "rgba(0,0,0,0)",
                 plot_bgcolor: "rgba(0,0,0,0)",
                 hovermode: "x unified",
                 dragmode: false,
                 xaxis: {
                   type: "date",
-                  nticks: 9,
+                  nticks: isNarrowScreen ? 5 : 9,
                   tickformat: "%-m月%-d日",
-                  tickfont: { size: 16, color: "rgba(51,65,85,0.88)" },
+                  tickfont: { size: isNarrowScreen ? 11 : 16, color: "rgba(51,65,85,0.88)" },
                   showgrid: true,
                   gridcolor: "rgba(148,163,184,0.12)",
                   fixedrange: true,
                   automargin: true,
                 },
                 yaxis: {
-                  title: { text: "操作数", standoff: 10, font: { size: 18, color: "rgba(15,23,42,0.86)" } },
+                  title: isNarrowScreen ? { text: "" } : { text: "操作数", standoff: 10, font: { size: 18, color: "rgba(15,23,42,0.86)" } },
                   rangemode: "tozero",
-                  tickfont: { size: 16, color: "rgba(51,65,85,0.88)" },
+                  tickfont: { size: isNarrowScreen ? 11 : 16, color: "rgba(51,65,85,0.88)" },
                   gridcolor: "rgba(148,163,184,0.18)",
                   zerolinecolor: "rgba(148,163,184,0.26)",
                   fixedrange: true,
                 },
                 legend: {
+                  visible: !isNarrowScreen,
                   orientation: "h",
                   x: 0,
                   y: 1.14,

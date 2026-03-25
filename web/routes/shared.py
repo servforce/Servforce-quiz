@@ -50,6 +50,14 @@ def register_shared_routes(app: Flask) -> None:
         content, mime = asset
         return send_file(BytesIO(content), mimetype=mime)
 
+    @app.get("/exams/versions/<int:version_id>/assets/<path:relpath>")
+    def public_exam_version_asset(version_id: int, relpath: str):
+        asset = _resolve_exam_asset_payload_by_version(version_id, relpath)
+        if not asset:
+            abort(404)
+        content, mime = asset
+        return send_file(BytesIO(content), mimetype=mime)
+
     @app.get("/")   # session 里是否已登录管理员，决定跳转到后台首页还是登录页
     def index():
         if session.get("admin_logged_in"):

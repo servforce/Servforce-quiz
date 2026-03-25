@@ -33,9 +33,13 @@ from markupsafe import Markup
 
 from config import ADMIN_PASSWORD, ADMIN_USERNAME, BASE_DIR, SECRET_KEY, STORAGE_DIR, logger
 from db import (
+    backfill_assignment_exam_version_id,
+    backfill_exam_archive_version_id,
+    backfill_exam_paper_version_id,
     cleanup_duplicate_system_alert_logs,
     create_candidate,
     create_exam_paper,
+    create_exam_version,
     delete_exam_assets,
     delete_exam_definition,
     count_candidates,
@@ -49,6 +53,9 @@ from db import (
     get_exam_definition,
     get_exam_key_by_public_invite_token,
     get_exam_public_invite,
+    get_current_exam_version,
+    get_exam_version,
+    get_exam_version_asset,
     delete_candidate,
     get_exam_paper_by_token,
     get_candidate,
@@ -58,9 +65,12 @@ from db import (
     init_db,
     list_candidates,
     list_assignment_tokens,
+    list_exam_archives_by_exam_key,
     list_exam_archives_for_phone,
     list_exam_definitions,
     list_exam_papers,
+    list_exam_versions,
+    list_exam_assets,
     list_estimated_sms_calls_daily_counts,
     list_operation_daily_counts,
     list_operation_logs,
@@ -76,9 +86,11 @@ from db import (
     rename_exam_definition,
     rename_exam_key,
     replace_exam_assets,
+    replace_exam_version_assets,
     save_assignment_record,
     save_exam_archive,
     save_exam_definition,
+    find_exam_version_by_hash,
     set_exam_public_invite,
     set_runtime_daily_metric_json,
     set_runtime_kv,
@@ -91,6 +103,8 @@ from db import (
     update_candidate_resume,
     update_candidate_resume_parsed,
     update_exam_paper_result,
+    update_exam_version_metadata,
+    update_exam_version_payload,
     verify_candidate,
 )
 import markdown as mdlib
@@ -104,6 +118,13 @@ from services.assignment_service import (
 )
 from services.aliyun_sms import send_sms_verify_code
 from services.audit_context import audit_context, get_audit_context
+from services.exam_repo_sync_service import (
+    EXAM_SYNC_JOB_KIND,
+    enqueue_exam_repo_sync,
+    migrate_legacy_exam_data,
+    perform_exam_repo_sync,
+    read_exam_repo_sync_state,
+)
 from services.grading_service import generate_candidate_remark, grade_attempt
 from services.exam_generation_service import check_exam_prompt_completeness, generate_exam_from_prompt
 from services.resume_service import (

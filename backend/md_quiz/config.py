@@ -9,8 +9,6 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BACKEND_ROOT = PROJECT_ROOT / "backend"
-STATIC_ROOT = PROJECT_ROOT / "static"
-UI_ROOT = PROJECT_ROOT / "ui"
 STORAGE_ROOT = PROJECT_ROOT / "storage"
 TMP_ROOT = PROJECT_ROOT / "tmp"
 
@@ -33,10 +31,6 @@ class EnvironmentSettings:
     database_url: str
     storage_dir: Path
     log_level: str
-    enable_legacy_bridge: bool
-    legacy_mount_path: str
-    enable_ui_dev_proxy: bool
-    ui_build_dir: Path
     worker_poll_seconds: float
     scheduler_poll_seconds: float
     scheduler_metrics_interval_seconds: int
@@ -68,10 +62,6 @@ def load_environment_settings() -> EnvironmentSettings:
         ),
         storage_dir=storage_dir,
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
-        enable_legacy_bridge=_env_bool("ENABLE_LEGACY_BRIDGE", True),
-        legacy_mount_path=os.getenv("LEGACY_MOUNT_PATH", "/legacy").rstrip("/") or "/legacy",
-        enable_ui_dev_proxy=_env_bool("ENABLE_UI_DEV_PROXY", False),
-        ui_build_dir=Path(os.getenv("UI_BUILD_DIR", str(STATIC_ROOT / "app"))).resolve(),
         worker_poll_seconds=float(os.getenv("WORKER_POLL_SECONDS", "2")),
         scheduler_poll_seconds=float(os.getenv("SCHEDULER_POLL_SECONDS", "5")),
         scheduler_metrics_interval_seconds=int(

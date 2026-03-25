@@ -382,6 +382,7 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
     candidate_id BIGINT NOT NULL REFERENCES candidate(id),
     phone TEXT NOT NULL,
     exam_key TEXT NOT NULL,
+    exam_version_id BIGINT NULL,
     token TEXT NOT NULL,
     invite_start_date DATE NULL,
     invite_end_date DATE NULL,
@@ -394,6 +395,7 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
  );
 
  ALTER TABLE exam_paper DROP COLUMN IF EXISTS duration_seconds;
+ ALTER TABLE exam_paper ADD COLUMN IF NOT EXISTS exam_version_id BIGINT NULL;
 
  DO $$
  BEGIN
@@ -406,8 +408,9 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
  END$$;
 
   CREATE INDEX IF NOT EXISTS idx_exam_paper_candidate_id ON exam_paper(candidate_id);
-  CREATE INDEX IF NOT EXISTS idx_exam_paper_phone ON exam_paper(phone);
+ CREATE INDEX IF NOT EXISTS idx_exam_paper_phone ON exam_paper(phone);
   CREATE INDEX IF NOT EXISTS idx_exam_paper_exam_key ON exam_paper(exam_key);
+  CREATE INDEX IF NOT EXISTS idx_exam_paper_exam_version_id ON exam_paper(exam_version_id);
   CREATE INDEX IF NOT EXISTS idx_exam_paper_status ON exam_paper(status);
   CREATE INDEX IF NOT EXISTS idx_exam_paper_created_at ON exam_paper(created_at);
   ALTER TABLE exam_paper ADD COLUMN IF NOT EXISTS invite_start_date DATE NULL;
@@ -417,13 +420,16 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
   CREATE TABLE IF NOT EXISTS assignment_record (
     token TEXT PRIMARY KEY,
     exam_key TEXT NOT NULL,
+    exam_version_id BIGINT NULL,
     candidate_id BIGINT NULL REFERENCES candidate(id) ON DELETE SET NULL,
     status TEXT NOT NULL,
     data JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+  ALTER TABLE assignment_record ADD COLUMN IF NOT EXISTS exam_version_id BIGINT NULL;
   CREATE INDEX IF NOT EXISTS idx_assignment_record_exam_key ON assignment_record(exam_key);
+  CREATE INDEX IF NOT EXISTS idx_assignment_record_exam_version_id ON assignment_record(exam_version_id);
   CREATE INDEX IF NOT EXISTS idx_assignment_record_candidate_id ON assignment_record(candidate_id);
   CREATE INDEX IF NOT EXISTS idx_assignment_record_status ON assignment_record(status);
   CREATE INDEX IF NOT EXISTS idx_assignment_record_created_at ON assignment_record(created_at);
@@ -448,6 +454,59 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
   END$$;
   CREATE INDEX IF NOT EXISTS idx_exam_asset_exam_key ON exam_asset(exam_key);
 
+  CREATE TABLE IF NOT EXISTS exam_version (
+    id BIGSERIAL PRIMARY KEY,
+    exam_key TEXT NOT NULL,
+    version_no INT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    source_path TEXT NULL,
+    git_repo_url TEXT NULL,
+    git_commit TEXT NULL,
+    content_hash TEXT NOT NULL,
+    source_md TEXT NOT NULL,
+    spec JSONB NOT NULL,
+    public_spec JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'exam_version_exam_key_version_no_key') THEN
+      BEGIN
+        ALTER TABLE exam_version ADD CONSTRAINT exam_version_exam_key_version_no_key UNIQUE (exam_key, version_no);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'exam_version_exam_key_content_hash_key') THEN
+      BEGIN
+        ALTER TABLE exam_version ADD CONSTRAINT exam_version_exam_key_content_hash_key UNIQUE (exam_key, content_hash);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+  END$$;
+  CREATE INDEX IF NOT EXISTS idx_exam_version_exam_key ON exam_version(exam_key);
+  CREATE INDEX IF NOT EXISTS idx_exam_version_created_at ON exam_version(created_at);
+
+  CREATE TABLE IF NOT EXISTS exam_version_asset (
+    id BIGSERIAL PRIMARY KEY,
+    exam_version_id BIGINT NOT NULL REFERENCES exam_version(id) ON DELETE CASCADE,
+    relpath TEXT NOT NULL,
+    content BYTEA NOT NULL,
+    mime TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+  DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'exam_version_asset_version_relpath_key') THEN
+      BEGIN
+        ALTER TABLE exam_version_asset ADD CONSTRAINT exam_version_asset_version_relpath_key UNIQUE (exam_version_id, relpath);
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+  END$$;
+  CREATE INDEX IF NOT EXISTS idx_exam_version_asset_version_id ON exam_version_asset(exam_version_id);
+
   CREATE TABLE IF NOT EXISTS exam_definition (
     exam_key TEXT PRIMARY KEY,
     title TEXT NOT NULL DEFAULT '',
@@ -459,24 +518,36 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS source_path TEXT NULL;
+  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS git_repo_url TEXT NULL;
+  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS current_version_id BIGINT NULL;
+  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS current_version_no INT NOT NULL DEFAULT 0;
+  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS last_synced_commit TEXT NULL;
+  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS last_sync_error TEXT NULL;
+  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMPTZ NULL;
   CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_definition_public_invite_token
     ON exam_definition(public_invite_token)
     WHERE public_invite_token IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_exam_definition_created_at ON exam_definition(created_at);
+  CREATE INDEX IF NOT EXISTS idx_exam_definition_status ON exam_definition(status);
 
   CREATE TABLE IF NOT EXISTS exam_archive (
     archive_name TEXT PRIMARY KEY,
     token TEXT NOT NULL,
     candidate_id BIGINT NULL REFERENCES candidate(id) ON DELETE SET NULL,
     exam_key TEXT NOT NULL,
+    exam_version_id BIGINT NULL,
     phone TEXT NOT NULL,
     archive JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
+  ALTER TABLE exam_archive ADD COLUMN IF NOT EXISTS exam_version_id BIGINT NULL;
   CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_archive_token ON exam_archive(token);
   CREATE INDEX IF NOT EXISTS idx_exam_archive_phone ON exam_archive(phone);
   CREATE INDEX IF NOT EXISTS idx_exam_archive_exam_key ON exam_archive(exam_key);
+  CREATE INDEX IF NOT EXISTS idx_exam_archive_exam_version_id ON exam_archive(exam_version_id);
 
   CREATE TABLE IF NOT EXISTS runtime_kv (
     key TEXT PRIMARY KEY,
@@ -793,6 +864,11 @@ def save_assignment_record(token: str, assignment: dict[str, Any]) -> None:
     except Exception:
         candidate_id = 0
     candidate_id_param = int(candidate_id) if candidate_id > 0 else None
+    try:
+        exam_version_id = int(assignment_obj.get("exam_version_id") or 0)
+    except Exception:
+        exam_version_id = 0
+    exam_version_id_param = int(exam_version_id) if exam_version_id > 0 else None
     status = str(assignment_obj.get("status") or "").strip() or "invited"
     created_at_raw = str(assignment_obj.get("created_at") or "").strip()
     created_at_param = None
@@ -803,11 +879,12 @@ def save_assignment_record(token: str, assignment: dict[str, Any]) -> None:
             created_at_param = None
     payload = psycopg2.extras.Json(assignment_obj, dumps=lambda x: json.dumps(x, ensure_ascii=False))
     sql = """
-INSERT INTO assignment_record(token, exam_key, candidate_id, status, data, created_at, updated_at)
-VALUES (%s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW())
+INSERT INTO assignment_record(token, exam_key, exam_version_id, candidate_id, status, data, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW())
 ON CONFLICT (token) DO UPDATE
 SET
   exam_key = EXCLUDED.exam_key,
+  exam_version_id = EXCLUDED.exam_version_id,
   candidate_id = EXCLUDED.candidate_id,
   status = EXCLUDED.status,
   data = EXCLUDED.data,
@@ -820,6 +897,7 @@ SET
                 (
                     token_str,
                     exam_key,
+                    exam_version_id_param,
                     candidate_id_param,
                     status,
                     payload,
@@ -841,6 +919,11 @@ def create_assignment_record(token: str, assignment: dict[str, Any]) -> bool:
     except Exception:
         candidate_id = 0
     candidate_id_param = int(candidate_id) if candidate_id > 0 else None
+    try:
+        exam_version_id = int(assignment_obj.get("exam_version_id") or 0)
+    except Exception:
+        exam_version_id = 0
+    exam_version_id_param = int(exam_version_id) if exam_version_id > 0 else None
     status = str(assignment_obj.get("status") or "").strip() or "invited"
     created_at_raw = str(assignment_obj.get("created_at") or "").strip()
     created_at_param = None
@@ -851,8 +934,8 @@ def create_assignment_record(token: str, assignment: dict[str, Any]) -> bool:
             created_at_param = None
     payload = psycopg2.extras.Json(assignment_obj, dumps=lambda x: json.dumps(x, ensure_ascii=False))
     sql = """
-INSERT INTO assignment_record(token, exam_key, candidate_id, status, data, created_at, updated_at)
-VALUES (%s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW())
+INSERT INTO assignment_record(token, exam_key, exam_version_id, candidate_id, status, data, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW())
 ON CONFLICT (token) DO NOTHING
 RETURNING token
 """
@@ -863,6 +946,7 @@ RETURNING token
                 (
                     token_str,
                     exam_key,
+                    exam_version_id_param,
                     candidate_id_param,
                     status,
                     payload,
@@ -911,6 +995,21 @@ WHERE exam_key=%s
             return int(cur.rowcount or 0)
 
 
+def backfill_assignment_exam_version_id(exam_key: str, exam_version_id: int) -> int:
+    sql = """
+UPDATE assignment_record
+SET
+  exam_version_id = %s,
+  data = jsonb_set(COALESCE(data, '{}'::jsonb), '{exam_version_id}', to_jsonb(%s::bigint), true),
+  updated_at = NOW()
+WHERE exam_key=%s AND exam_version_id IS NULL
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (int(exam_version_id), int(exam_version_id), str(exam_key or "").strip()))
+            return int(cur.rowcount or 0)
+
+
 def replace_exam_assets(exam_key: str, assets: dict[str, tuple[bytes, str]]) -> None:
     exam_key_str = str(exam_key or "").strip()
     if not exam_key_str:
@@ -945,6 +1044,21 @@ def get_exam_asset(exam_key: str, relpath: str) -> tuple[bytes, str] | None:
     return content, mime
 
 
+def list_exam_assets(exam_key: str) -> list[dict[str, Any]]:
+    sql = "SELECT relpath, content, mime FROM exam_asset WHERE exam_key=%s ORDER BY relpath ASC"
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(exam_key or "").strip(),))
+            rows = cur.fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows or []:
+        item = dict(row)
+        item["content"] = bytes(item.get("content") or b"")
+        item["mime"] = str(item.get("mime") or "application/octet-stream").strip() or "application/octet-stream"
+        out.append(item)
+    return out
+
+
 def rename_exam_assets(old_exam_key: str, new_exam_key: str) -> int:
     sql = "UPDATE exam_asset SET exam_key=%s, updated_at=NOW() WHERE exam_key=%s"
     with conn_scope() as conn:
@@ -968,16 +1082,64 @@ def save_exam_definition(
     source_md: str,
     spec: dict[str, Any],
     public_spec: dict[str, Any],
+    status: str | None = None,
+    source_path: str | None = None,
+    git_repo_url: str | None = None,
+    current_version_id: int | None = None,
+    current_version_no: int | None = None,
+    last_synced_commit: str | None = None,
+    last_sync_error: str | None = None,
+    last_sync_at=None,
 ) -> None:
     sql = """
-INSERT INTO exam_definition(exam_key, title, source_md, spec, public_spec, created_at, updated_at)
-VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
+INSERT INTO exam_definition(
+  exam_key,
+  title,
+  source_md,
+  spec,
+  public_spec,
+  status,
+  source_path,
+  git_repo_url,
+  current_version_id,
+  current_version_no,
+  last_synced_commit,
+  last_sync_error,
+  last_sync_at,
+  created_at,
+  updated_at
+)
+VALUES (
+  %s,
+  %s,
+  %s,
+  %s,
+  %s,
+  COALESCE(%s, 'active'),
+  %s,
+  %s,
+  %s,
+  COALESCE(%s, 0),
+  %s,
+  %s,
+  %s,
+  NOW(),
+  NOW()
+)
 ON CONFLICT (exam_key) DO UPDATE
 SET
   title = EXCLUDED.title,
   source_md = EXCLUDED.source_md,
   spec = EXCLUDED.spec,
   public_spec = EXCLUDED.public_spec,
+  status = COALESCE(EXCLUDED.status, exam_definition.status),
+  source_path = COALESCE(EXCLUDED.source_path, exam_definition.source_path),
+  git_repo_url = COALESCE(EXCLUDED.git_repo_url, exam_definition.git_repo_url),
+  current_version_id = COALESCE(EXCLUDED.current_version_id, exam_definition.current_version_id),
+  current_version_no = COALESCE(NULLIF(EXCLUDED.current_version_no, 0), exam_definition.current_version_no),
+  last_synced_commit = COALESCE(EXCLUDED.last_synced_commit, exam_definition.last_synced_commit),
+  last_sync_error = EXCLUDED.last_sync_error,
+  last_sync_at = COALESCE(EXCLUDED.last_sync_at, exam_definition.last_sync_at),
   updated_at = NOW()
 """
     with conn_scope() as conn:
@@ -990,6 +1152,14 @@ SET
                     str(source_md or ""),
                     _json_param(spec or {}),
                     _json_param(public_spec or {}),
+                    (str(status).strip() if status is not None else None),
+                    (str(source_path).strip() if source_path is not None else None),
+                    (str(git_repo_url).strip() if git_repo_url is not None else None),
+                    (int(current_version_id) if current_version_id else None),
+                    (int(current_version_no) if current_version_no else None),
+                    (str(last_synced_commit).strip() if last_synced_commit is not None else None),
+                    (str(last_sync_error) if last_sync_error is not None else None),
+                    last_sync_at,
                 ),
             )
 
@@ -1002,8 +1172,16 @@ SELECT
   source_md,
   spec::text,
   public_spec::text,
+  status,
+  source_path,
+  git_repo_url,
+  current_version_id,
+  current_version_no,
   public_invite_enabled,
   public_invite_token,
+  last_synced_commit,
+  last_sync_error,
+  last_sync_at,
   created_at,
   updated_at
 FROM exam_definition
@@ -1027,8 +1205,16 @@ SELECT
   exam_key,
   title,
   spec::text,
+  status,
+  source_path,
+  git_repo_url,
+  current_version_id,
+  current_version_no,
   public_invite_enabled,
   public_invite_token,
+  last_synced_commit,
+  last_sync_error,
+  last_sync_at,
   created_at,
   updated_at
 FROM exam_definition
@@ -1111,23 +1297,286 @@ LIMIT 1
     return str((row[0] if row else "") or "").strip()
 
 
+def create_exam_version(
+    *,
+    exam_key: str,
+    version_no: int,
+    title: str,
+    source_path: str | None,
+    git_repo_url: str | None,
+    git_commit: str | None,
+    content_hash: str,
+    source_md: str,
+    spec: dict[str, Any],
+    public_spec: dict[str, Any],
+) -> int:
+    sql = """
+INSERT INTO exam_version(
+  exam_key,
+  version_no,
+  title,
+  source_path,
+  git_repo_url,
+  git_commit,
+  content_hash,
+  source_md,
+  spec,
+  public_spec,
+  created_at,
+  updated_at
+)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+RETURNING id
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    str(exam_key or "").strip(),
+                    int(version_no),
+                    str(title or "").strip(),
+                    (str(source_path).strip() if source_path is not None else None),
+                    (str(git_repo_url).strip() if git_repo_url is not None else None),
+                    (str(git_commit).strip() if git_commit is not None else None),
+                    str(content_hash or "").strip(),
+                    str(source_md or ""),
+                    _json_param(spec or {}),
+                    _json_param(public_spec or {}),
+                ),
+            )
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
+
+
+def update_exam_version_metadata(
+    version_id: int,
+    *,
+    title: str | None = None,
+    source_path: str | None = None,
+    git_repo_url: str | None = None,
+    git_commit: str | None = None,
+) -> int:
+    sql = """
+UPDATE exam_version
+SET
+  title = COALESCE(%s, title),
+  source_path = COALESCE(%s, source_path),
+  git_repo_url = COALESCE(%s, git_repo_url),
+  git_commit = COALESCE(%s, git_commit),
+  updated_at = NOW()
+WHERE id=%s
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    (str(title).strip() if title is not None else None),
+                    (str(source_path).strip() if source_path is not None else None),
+                    (str(git_repo_url).strip() if git_repo_url is not None else None),
+                    (str(git_commit).strip() if git_commit is not None else None),
+                    int(version_id),
+                ),
+            )
+            return int(cur.rowcount or 0)
+
+
+def update_exam_version_payload(
+    version_id: int,
+    *,
+    title: str,
+    source_md: str,
+    spec: dict[str, Any],
+    public_spec: dict[str, Any],
+) -> int:
+    sql = """
+UPDATE exam_version
+SET
+  title=%s,
+  source_md=%s,
+  spec=%s,
+  public_spec=%s,
+  updated_at=NOW()
+WHERE id=%s
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (
+                    str(title or "").strip(),
+                    str(source_md or ""),
+                    _json_param(spec or {}),
+                    _json_param(public_spec or {}),
+                    int(version_id),
+                ),
+            )
+            return int(cur.rowcount or 0)
+
+
+def get_exam_version(version_id: int) -> dict[str, Any] | None:
+    sql = """
+SELECT
+  id,
+  exam_key,
+  version_no,
+  title,
+  source_path,
+  git_repo_url,
+  git_commit,
+  content_hash,
+  source_md,
+  spec::text,
+  public_spec::text,
+  created_at,
+  updated_at
+FROM exam_version
+WHERE id=%s
+LIMIT 1
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (int(version_id),))
+            row = cur.fetchone()
+    if not row:
+        return None
+    out = dict(row)
+    out["spec"] = _json_load(out.get("spec")) or {}
+    out["public_spec"] = _json_load(out.get("public_spec")) or {}
+    return out
+
+
+def get_current_exam_version(exam_key: str) -> dict[str, Any] | None:
+    sql = """
+SELECT ev.id
+FROM exam_definition ed
+JOIN exam_version ev ON ev.id = ed.current_version_id
+WHERE ed.exam_key=%s
+LIMIT 1
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(exam_key or "").strip(),))
+            row = cur.fetchone()
+    if not row:
+        return None
+    return get_exam_version(int(row[0]))
+
+
+def find_exam_version_by_hash(exam_key: str, content_hash: str) -> dict[str, Any] | None:
+    sql = """
+SELECT
+  id,
+  exam_key,
+  version_no,
+  title,
+  source_path,
+  git_repo_url,
+  git_commit,
+  content_hash,
+  source_md,
+  spec::text,
+  public_spec::text,
+  created_at,
+  updated_at
+FROM exam_version
+WHERE exam_key=%s AND content_hash=%s
+LIMIT 1
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute((sql), (str(exam_key or "").strip(), str(content_hash or "").strip()))
+            row = cur.fetchone()
+    if not row:
+        return None
+    out = dict(row)
+    out["spec"] = _json_load(out.get("spec")) or {}
+    out["public_spec"] = _json_load(out.get("public_spec")) or {}
+    return out
+
+
+def list_exam_versions(exam_key: str) -> list[dict[str, Any]]:
+    sql = """
+SELECT
+  id,
+  exam_key,
+  version_no,
+  title,
+  source_path,
+  git_repo_url,
+  git_commit,
+  content_hash,
+  source_md,
+  spec::text,
+  public_spec::text,
+  created_at,
+  updated_at
+FROM exam_version
+WHERE exam_key=%s
+ORDER BY version_no DESC, id DESC
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(exam_key or "").strip(),))
+            rows = cur.fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows or []:
+        item = dict(row)
+        item["spec"] = _json_load(item.get("spec")) or {}
+        item["public_spec"] = _json_load(item.get("public_spec")) or {}
+        out.append(item)
+    return out
+
+
+def replace_exam_version_assets(version_id: int, assets: dict[str, tuple[bytes, str]]) -> None:
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM exam_version_asset WHERE exam_version_id=%s", (int(version_id),))
+            for relpath, payload in dict(assets or {}).items():
+                rel = str(relpath or "").strip()
+                if not rel:
+                    continue
+                content, mime = payload
+                cur.execute(
+                    """
+INSERT INTO exam_version_asset(exam_version_id, relpath, content, mime, updated_at)
+VALUES (%s, %s, %s, %s, NOW())
+""",
+                    (int(version_id), rel, psycopg2.Binary(bytes(content or b"")), str(mime or "application/octet-stream")),
+                )
+
+
+def get_exam_version_asset(version_id: int, relpath: str) -> tuple[bytes, str] | None:
+    sql = "SELECT content, mime FROM exam_version_asset WHERE exam_version_id=%s AND relpath=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (int(version_id), str(relpath or "").strip()))
+            row = cur.fetchone()
+    if not row:
+        return None
+    return bytes(row[0] or b""), str(row[1] or "application/octet-stream").strip() or "application/octet-stream"
+
+
 def save_exam_archive(
     *,
     archive_name: str,
     token: str,
     candidate_id: int | None,
     exam_key: str,
+    exam_version_id: int | None = None,
     phone: str,
     archive: dict[str, Any],
 ) -> None:
     sql = """
-INSERT INTO exam_archive(archive_name, token, candidate_id, exam_key, phone, archive, created_at, updated_at)
-VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
+INSERT INTO exam_archive(archive_name, token, candidate_id, exam_key, exam_version_id, phone, archive, created_at, updated_at)
+VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
 ON CONFLICT (archive_name) DO UPDATE
 SET
   token = EXCLUDED.token,
   candidate_id = EXCLUDED.candidate_id,
   exam_key = EXCLUDED.exam_key,
+  exam_version_id = EXCLUDED.exam_version_id,
   phone = EXCLUDED.phone,
   archive = EXCLUDED.archive,
   updated_at = NOW()
@@ -1141,6 +1590,7 @@ SET
                     str(token or "").strip(),
                     (int(candidate_id) if candidate_id else None),
                     str(exam_key or "").strip(),
+                    (int(exam_version_id) if exam_version_id else None),
                     str(phone or "").strip(),
                     _json_param(archive or {}),
                 ),
@@ -1149,7 +1599,7 @@ SET
 
 def get_exam_archive_by_name(archive_name: str) -> dict[str, Any] | None:
     sql = """
-SELECT archive_name, token, candidate_id, exam_key, phone, archive::text, created_at, updated_at
+SELECT archive_name, token, candidate_id, exam_key, exam_version_id, phone, archive::text, created_at, updated_at
 FROM exam_archive
 WHERE archive_name=%s
 """
@@ -1166,7 +1616,7 @@ WHERE archive_name=%s
 
 def get_exam_archive_by_token(token: str) -> dict[str, Any] | None:
     sql = """
-SELECT archive_name, token, candidate_id, exam_key, phone, archive::text, created_at, updated_at
+SELECT archive_name, token, candidate_id, exam_key, exam_version_id, phone, archive::text, created_at, updated_at
 FROM exam_archive
 WHERE token=%s
 """
@@ -1183,7 +1633,7 @@ WHERE token=%s
 
 def list_exam_archives_for_phone(phone: str) -> list[dict[str, Any]]:
     sql = """
-SELECT archive_name, token, candidate_id, exam_key, phone, archive::text, created_at, updated_at
+SELECT archive_name, token, candidate_id, exam_key, exam_version_id, phone, archive::text, created_at, updated_at
 FROM exam_archive
 WHERE phone=%s
 ORDER BY updated_at DESC, archive_name DESC
@@ -1191,6 +1641,25 @@ ORDER BY updated_at DESC, archive_name DESC
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, (str(phone or "").strip(),))
+            rows = cur.fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows or []:
+        item = dict(row)
+        item["archive"] = _json_load(item.get("archive")) or {}
+        out.append(item)
+    return out
+
+
+def list_exam_archives_by_exam_key(exam_key: str) -> list[dict[str, Any]]:
+    sql = """
+SELECT archive_name, token, candidate_id, exam_key, exam_version_id, phone, archive::text, created_at, updated_at
+FROM exam_archive
+WHERE exam_key=%s
+ORDER BY updated_at DESC, archive_name DESC
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(exam_key or "").strip(),))
             rows = cur.fetchall()
     out: list[dict[str, Any]] = []
     for row in rows or []:
@@ -1212,6 +1681,21 @@ WHERE exam_key=%s
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (str(new_exam_key or ""), str(new_exam_key or ""), str(old_exam_key or "")))
+            return int(cur.rowcount or 0)
+
+
+def backfill_exam_archive_version_id(exam_key: str, exam_version_id: int) -> int:
+    sql = """
+UPDATE exam_archive
+SET
+  exam_version_id = %s,
+  archive = jsonb_set(COALESCE(archive, '{}'::jsonb), '{exam,exam_version_id}', to_jsonb(%s::bigint), true),
+  updated_at = NOW()
+WHERE exam_key=%s AND exam_version_id IS NULL
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (int(exam_version_id), int(exam_version_id), str(exam_key or "").strip()))
             return int(cur.rowcount or 0)
 
 
@@ -1368,14 +1852,15 @@ def create_exam_paper(
     candidate_id: int,
     phone: str,
     exam_key: str,
+    exam_version_id: int | None = None,
     token: str,
     invite_start_date: str | None = None,
     invite_end_date: str | None = None,
     status: str = "invited",
 ) -> int:
     sql = """
- INSERT INTO exam_paper(candidate_id, phone, exam_key, token, invite_start_date, invite_end_date, status)
- VALUES (%s, %s, %s, %s, %s::date, %s::date, %s::exam_paper_status)
+ INSERT INTO exam_paper(candidate_id, phone, exam_key, exam_version_id, token, invite_start_date, invite_end_date, status)
+ VALUES (%s, %s, %s, %s, %s, %s::date, %s::date, %s::exam_paper_status)
  RETURNING id
  """
     with conn_scope() as conn:
@@ -1386,6 +1871,7 @@ def create_exam_paper(
                     int(candidate_id),
                     str(phone or ""),
                     str(exam_key or ""),
+                    (int(exam_version_id) if exam_version_id else None),
                     str(token or ""),
                     (str(invite_start_date).strip() if invite_start_date else None),
                     (str(invite_end_date).strip() if invite_end_date else None),
@@ -1403,6 +1889,7 @@ def get_exam_paper_by_token(token: str) -> dict[str, Any] | None:
     candidate_id,
     phone,
     exam_key,
+    exam_version_id,
     token,
     invite_start_date,
     invite_end_date,
@@ -1515,6 +2002,20 @@ def update_exam_paper_result(
             )
 
 
+def backfill_exam_paper_version_id(exam_key: str, exam_version_id: int) -> int:
+    sql = """
+UPDATE exam_paper
+SET
+  exam_version_id=%s,
+  updated_at=NOW()
+WHERE exam_key=%s AND exam_version_id IS NULL
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (int(exam_version_id), str(exam_key or "").strip()))
+            return int(cur.rowcount or 0)
+
+
 def list_exam_papers(
     *,
     query: str | None = None,
@@ -1531,6 +2032,7 @@ def list_exam_papers(
      c.deleted_at AS candidate_deleted_at,
      ep.phone,
      ep.exam_key,
+     ep.exam_version_id,
      ep.token,
      ep.invite_start_date,
      ep.invite_end_date,

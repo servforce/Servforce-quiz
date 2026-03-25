@@ -9,7 +9,8 @@ browser
       -> /api/admin/*
       -> /api/public/*
       -> /static/*
-      -> /legacy/*  (bridge 到旧 Flask)
+      -> /legacy/*  (307 跳转到真实路径)
+      -> /*         (挂载旧 Flask 应用，包含 /admin/*)
 
 scheduler
   -> enqueue jobs
@@ -26,7 +27,9 @@ worker
 - 入口：`backend/md_quiz/main.py`
 - 装配：`backend/md_quiz/app.py`
 - 静态资源：`/static/*`
-- UI：`/` -> `static/app/index.html`
+- 默认后台入口：`/admin`
+- 根路径：挂载旧 Flask 应用
+- `/legacy/*`：兼容跳转到当前真实路径
 
 ### Worker
 

@@ -1,19 +1,17 @@
 # Markdown Quiz
 
-`md-quiz` 正在从旧的 `Flask + Jinja` 单体后台，重构到新的 `FastAPI + API / Worker / Scheduler + ui/` 工作区。
+`md-quiz` 当前保留旧的 `Flask + Jinja` 后台页面作为正式管理端入口，同时引入 `FastAPI + Worker + Scheduler` 来承接新的 API、任务与进程边界。
 
-当前仓库里两套实现并存：
+当前仓库的主实现分为两部分：
 
-- **新系统**：`backend/md_quiz/` + `ui/` + `scripts/dev/run-*.sh`
-- **旧系统**：`app.py` + `web/` + `templates/` + `static/`
-
-这次重构的目标不是继续在旧模板上修补，而是把后端边界、前端工作区、任务系统、脚本和文档全部拉直到新形态；同时通过 `legacy bridge` 暂时保留旧后台，避免功能瞬间中断。
+- `backend/md_quiz/`：FastAPI API、Worker、Scheduler、运行时配置与任务存储
+- `app.py` + `web/` + `templates/` + `static/`：正式使用中的后台与候选人端页面
 
 ## 新架构概览
 
 ### 进程形态
 
-- `API`：FastAPI 应用，负责 `/api/*`、会话、静态资源挂载、新 UI 壳层
+- `API`：FastAPI 应用，负责 `/api/*`、会话、静态资源挂载与旧 Flask 页面挂载
 - `Worker`：后台任务执行器，轮询 job store 并处理任务
 - `Scheduler`：定时任务投递器，负责自动投递指标同步等周期任务
 
@@ -30,35 +28,20 @@ backend/
     main.py            API 入口
     worker.py          Worker 入口
     scheduler.py       Scheduler 入口
-ui/
-  src/                 前端源码
-  templates/           前端入口模板
-  scripts/build-ui.cjs UI 构建脚本
-static/
-  app/                 ui/ 的构建产物
 web/
-  ...                  旧 Flask 单体实现（通过 legacy bridge 暂时保留）
+  ...                  旧 Flask 管理端与候选人端实现
 ```
 
-### Legacy Bridge
+### 后台入口
 
-新 API 默认会把旧 Flask 应用挂到 `/legacy`：
+- 默认入口：`http://127.0.0.1:8000/admin`
+- 根路径：`http://127.0.0.1:8000/` 由旧 Flask 应用按登录态跳转到后台首页或登录页
+- 兼容跳转：`http://127.0.0.1:8000/legacy/admin` 会重定向到 `http://127.0.0.1:8000/admin`
 
-- 新 UI：`http://127.0.0.1:8000/`
-- 旧后台：`http://127.0.0.1:8000/legacy/admin`
+## 前端约束
 
-这样做的原因很简单：
-
-- 新骨架可以独立启动
-- 旧功能还能继续访问
-- 后续可以按领域逐页迁走，而不是一次性大爆炸迁移
-
-## 主题与前端约束
-
+- 当前管理端与候选人端继续使用 `templates/` + `static/`
 - 当前前端基础配色 **保留**：蓝色 + 绿色，不照搬参考项目 `raelyn` 的深色主题
-- 新 UI 源码位于 `ui/`
-- 构建产物输出到 `static/app/`
-- 运行时不依赖 Node，只读取已构建好的静态文件
 
 ## 本地启动
 
@@ -83,7 +66,6 @@ scripts/dev/devctl.sh stop
 scripts/dev/devctl.sh restart
 scripts/dev/devctl.sh status
 scripts/dev/devctl.sh logs
-scripts/dev/devctl.sh build-ui
 ```
 
 也可以分别启动：
@@ -96,22 +78,10 @@ scripts/dev/run-scheduler.sh
 
 默认地址：
 
-- 新 UI：`http://127.0.0.1:8000/`
+- 默认后台入口：`http://127.0.0.1:8000/admin`
+- 根路径：`http://127.0.0.1:8000/`
 - 系统健康检查：`http://127.0.0.1:8000/api/system/health`
-- 旧后台桥接：`http://127.0.0.1:8000/legacy/admin`
-
-### 3. 构建 UI
-
-```bash
-scripts/dev/build-ui.sh
-```
-
-构建完成后会生成：
-
-- `static/app/index.html`
-- `static/app/assets/app.css`
-- `static/app/assets/app.js`
-- `static/app/views/*.html`
+- 兼容跳转：`http://127.0.0.1:8000/legacy/admin`
 
 ## 当前阶段说明
 
@@ -120,17 +90,16 @@ scripts/dev/build-ui.sh
 - 新 FastAPI API 入口
 - Worker / Scheduler 入口
 - 运行时配置与任务系统的轻量存储边界
-- `ui/` 工作区与构建脚本
 - 统一开发脚本
 - 新文档骨架与最小测试
 
 这轮**还没有**完全迁完的是：
 
 - 试卷、候选人、邀约、答题、判卷、归档的真实业务 API
-- 旧后台页面到新 UI 的整页迁移
-- 旧 `web/` / `templates/` / `static/` 的彻底删除
+- 旧后台内部代码结构的进一步收敛
+- 旧 `web/`、`templates/`、`static/` 与新后端服务边界的继续整理
 
-也就是说，仓库已经进入“新系统可运行，旧系统可桥接，后续按领域迁移”的状态。
+也就是说，仓库当前是“旧后台继续承载业务，新后端负责 API / 任务 / 进程边界”的状态。
 
 ## 测试
 
@@ -147,4 +116,3 @@ scripts/dev/test.sh -q
 - [配置项说明](docs/reference/configuration.md)
 - [REST API 约定](docs/reference/api.md)
 - [UI 主题覆盖](docs/ui/theme.md)
-- [前端工作区说明](docs/ui/frontend-workspace.md)

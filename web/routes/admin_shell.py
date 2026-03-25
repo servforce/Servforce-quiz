@@ -124,6 +124,10 @@ def register_admin_shell_routes(app: Flask) -> None:
 
     def _build_admin_exams_context(args) -> dict[str, Any]:
         exams_all = _list_exams()   # 获取考试列表
+        try:
+            sync_state = read_exam_repo_sync_state()
+        except Exception:
+            sync_state = {}
         exam_q = (request.args.get("exam_q") or "").strip()
         ai_notice = (args.get("ai_notice") or "").strip()
         ai_notice_level = (args.get("ai_notice_level") or "").strip().lower()
@@ -189,6 +193,8 @@ def register_admin_shell_routes(app: Flask) -> None:
             "ai_exam_include_diagrams": False,
             "ai_notice": ai_notice,
             "ai_notice_level": ai_notice_level,
+            "exam_sync_state": sync_state,
+            "exam_repo_url": str(sync_state.get("repo_url") or "").strip(),
         }
 
     def _build_assignment_attempts_context(args) -> dict[str, Any]:
@@ -206,6 +212,7 @@ def register_admin_shell_routes(app: Flask) -> None:
             return cached
 
         exams_all = _list_exams()
+        active_exams = [e for e in exams_all if str(e.get("status") or "") == "active" and int(e.get("current_version_id") or 0) > 0]
         candidates = list_candidates(limit=200)
         exam_q = (args.get("exam_q") or "").strip()
         attempt_q = (args.get("attempt_q") or "").strip()
@@ -225,6 +232,7 @@ def register_admin_shell_routes(app: Flask) -> None:
                 or (digits and ql in str(e.get("id") or ""))
             ]
         exams_all.sort(key=lambda x: float(x.get("_mtime") or 0), reverse=True)
+        active_exams.sort(key=lambda x: float(x.get("_mtime") or 0), reverse=True)
 
         attempt_per_page = 20
         try:
@@ -334,6 +342,12 @@ def register_admin_shell_routes(app: Flask) -> None:
                         recovered_exam_key = ""
                 exam_key = recovered_exam_key if recovered_exam_key else "历史试卷"
             exam_exists = bool(exam_key and get_exam_definition(exam_key))
+            exam_version_id = int(r.get("exam_version_id") or 0)
+            exam_href = None
+            if exam_version_id > 0:
+                exam_href = url_for("admin_exam_version_detail", version_id=exam_version_id)
+            elif exam_exists and exam_key:
+                exam_href = url_for("admin_exam_detail", exam_key=exam_key)
 
             attempt_href = None
             attempt_msg = None
@@ -351,7 +365,9 @@ def register_admin_shell_routes(app: Flask) -> None:
                     "name": name,
                     "phone": str(r.get("phone") or ""),
                     "exam_key": exam_key,
+                    "exam_version_id": exam_version_id,
                     "exam_exists": exam_exists,
+                    "exam_href": exam_href,
                     "token": token,
                     "status": status,
                     "status_label": _admin_status_label(status),
@@ -364,7 +380,7 @@ def register_admin_shell_routes(app: Flask) -> None:
             )
 
         result = {
-            "exams_all": exams_all,
+            "exams_all": active_exams,
             "assign_exam_key": assign_exam_key,
             "assign_candidate_id": assign_candidate_id,
             "candidates": candidates,

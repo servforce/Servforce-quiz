@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script>
       document.documentElement.classList.add("js");
+      try {
+        const prefersCollapsed = window.localStorage.getItem("admin.sidebar.collapsed") === "1";
+        const autoCollapsed = window.matchMedia("(max-width: 980px)").matches;
+        if (prefersCollapsed || autoCollapsed) {
+          document.documentElement.classList.add("admin-sidebar-collapsed");
+        }
+      } catch (_) {}
     </script>
     <title>{% block title %}{{ admin_page_title or "管理后台" }}{% endblock %}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo.png') }}" />
@@ -37,23 +44,33 @@
 
         <nav class="admin-nav" aria-label="主导航">
           <a class="admin-nav__link{% if _active == 'exams' %} active{% endif %}" href="/admin/exams" data-admin-nav="exams" data-admin-page-title="试卷管理" title="试卷管理" {% if _active == 'exams' %}aria-current="page"{% endif %}>
-            <span class="material-symbols-rounded nav-ico" aria-hidden="true">description</span>
+            <span class="admin-nav__icon" aria-hidden="true">
+              <span class="material-symbols-rounded nav-ico">description</span>
+            </span>
             <span class="admin-nav__label">试卷管理</span>
           </a>
           <a class="admin-nav__link{% if _active == 'candidates' %} active{% endif %}" href="/admin/candidates" data-admin-nav="candidates" data-admin-page-title="候选人管理" title="候选人管理" {% if _active == 'candidates' %}aria-current="page"{% endif %}>
-            <span class="material-symbols-rounded nav-ico" aria-hidden="true">groups</span>
+            <span class="admin-nav__icon" aria-hidden="true">
+              <span class="material-symbols-rounded nav-ico">groups</span>
+            </span>
             <span class="admin-nav__label">候选人管理</span>
           </a>
           <a class="admin-nav__link{% if _active == 'assign' %} active{% endif %}" href="/admin/assignments" data-admin-nav="assign" data-admin-page-title="答题邀请" title="答题邀请" {% if _active == 'assign' %}aria-current="page"{% endif %}>
-            <span class="material-symbols-rounded nav-ico" aria-hidden="true">edit_square</span>
+            <span class="admin-nav__icon" aria-hidden="true">
+              <span class="material-symbols-rounded nav-ico">edit_square</span>
+            </span>
             <span class="admin-nav__label">答题邀请</span>
           </a>
           <a class="admin-nav__link{% if _active == 'logs' %} active{% endif %}" href="/admin/logs" data-admin-nav="logs" data-admin-page-title="系统日志" title="系统日志" {% if _active == 'logs' %}aria-current="page"{% endif %}>
-            <span class="material-symbols-rounded nav-ico" aria-hidden="true">article</span>
+            <span class="admin-nav__icon" aria-hidden="true">
+              <span class="material-symbols-rounded nav-ico">article</span>
+            </span>
             <span class="admin-nav__label">系统日志</span>
           </a>
           <a class="admin-nav__link{% if _active == 'status' %} active{% endif %}" href="/admin/status" data-admin-nav="status" data-admin-page-title="系统状态" title="系统状态" {% if _active == 'status' %}aria-current="page"{% endif %}>
-            <span class="material-symbols-rounded nav-ico" aria-hidden="true">monitor_heart</span>
+            <span class="admin-nav__icon" aria-hidden="true">
+              <span class="material-symbols-rounded nav-ico">monitor_heart</span>
+            </span>
             <span class="admin-nav__label">
               系统状态
               <span class="status-badge level-{{ _lvl }}" data-system-status-badge>{{ _badge }}</span>
@@ -67,30 +84,43 @@
       <div class="admin-main">
         <header class="admin-topbar">
           <div class="admin-topbar__left">
-            <a class="brand brand--sidebar brand--topbar" href="/admin/exams" aria-label="MD Quiz 管理后台">
-              <span class="brand-badge" aria-hidden="true"></span>
-              <span class="brand-text">
+            <div class="brand brand--sidebar brand--topbar">
+              <button
+                class="brand-badge brand-badge--toggle"
+                type="button"
+                @click="$store.adminUI.toggleSidebar()"
+                :aria-expanded="String(!$store.adminUI.isSidebarCollapsed)"
+                :aria-label="$store.adminUI.isSidebarCollapsed ? '展开左侧菜单' : '折叠左侧菜单'"
+                :title="$store.adminUI.isSidebarCollapsed ? '展开左侧菜单' : '折叠左侧菜单'"
+              ></button>
+              <a class="brand-link" href="/admin/exams" aria-label="MD Quiz 管理后台">
+                <span class="brand-text">
                 <strong>MD Quiz</strong>
-              </span>
-            </a>
+                </span>
+              </a>
+            </div>
           </div>
 
           <div class="admin-topbar__right admin-toolbar" aria-label="系统资源状态与用户信息">
-            <div class="status-chip status-chip--summary">
-              <span class="status-chip__dot level-{{ _lvl }}"></span>
-              <span data-system-status-text>{{ '运行正常' if _lvl == 'ok' else '资源告警' }}</span>
+            <div class="admin-topbar__metrics">
+              <div class="status-chip status-chip--summary">
+                <span class="status-chip__dot level-{{ _lvl }}"></span>
+                <span data-system-status-text>{{ '运行正常' if _lvl == 'ok' else '资源告警' }}</span>
+              </div>
+              <div class="status-chip">
+                <span class="status-chip__label">LLM</span>
+                <strong data-system-status-resource="llm">{{ _pct_llm }}%</strong>
+              </div>
+              <div class="status-chip">
+                <span class="status-chip__label">SMS</span>
+                <strong data-system-status-resource="sms">{{ _pct_sms }}%</strong>
+              </div>
             </div>
-            <div class="status-chip">
-              <span class="status-chip__label">LLM</span>
-              <strong data-system-status-resource="llm">{{ _pct_llm }}%</strong>
+            <div class="admin-topbar__actions">
+              <form method="post" action="/admin/logout" class="form-reset">
+                <button class="btn btn-danger" type="submit">退出</button>
+              </form>
             </div>
-            <div class="status-chip">
-              <span class="status-chip__label">SMS</span>
-              <strong data-system-status-resource="sms">{{ _pct_sms }}%</strong>
-            </div>
-            <form method="post" action="/admin/logout" class="form-reset">
-              <button class="btn btn-danger" type="submit">退出</button>
-            </form>
           </div>
         </header>
 

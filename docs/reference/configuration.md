@@ -14,13 +14,6 @@
 - `STORAGE_DIR`
 - `LOG_LEVEL`
 
-### 新系统切换
-
-- `ENABLE_LEGACY_BRIDGE`
-- `LEGACY_MOUNT_PATH`
-- `UI_BUILD_DIR`
-- `ENABLE_UI_DEV_PROXY`
-
 ### Worker / Scheduler
 
 - `WORKER_POLL_SECONDS`
@@ -57,4 +50,4 @@
 - `OPENAI_MODEL`
 - 阿里云短信相关配置
 
-这些变量目前仍保留，以支撑 `/legacy` 下的旧能力。
+这些变量目前仍保留，以支撑当前挂载在根路径下的旧后台与候选人端能力。

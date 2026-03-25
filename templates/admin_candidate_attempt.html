@@ -2,6 +2,7 @@
 {% set admin_active = "assign" %}
 {% set admin_page_title = "Attempt Review" %}
 {% set admin_page_subtitle = "Candidate answers and score details" %}
+{% block body_class %}review-page page-admin-candidate-attempt{% endblock %}
 {% block head_extra %}
     <script>
       window.MathJax = {
@@ -13,129 +14,7 @@
       };
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <style>
-      .md { white-space: normal; }
-      .md img {
-        width: min(100%, 1600px);
-        max-width: 100%;
-        height: auto;
-        border-radius: var(--radius-sm);
-        display: block;
-        margin: 12px auto;
-        padding: 10px;
-        background: #ffffff;
-        border: 1px solid rgba(15, 23, 42, 0.10);
-        box-shadow: 0 8px 20px rgba(2, 6, 23, 0.06);
-      }
-
-      /* Review cards: visually align with the exam question cards in ui.css. */
-      .q {
-        position: relative;
-        border: 0;
-        border-radius: var(--radius-lg);
-        background: rgba(255, 255, 255, 0.92);
-        box-shadow: none;
-        overflow: hidden;
-        padding: 14px 14px 16px;
-        margin: 14px 0;
-      }
-      .q::before {
-        content: "";
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 4px;
-        background: rgba(37, 99, 235, 0.55);
-      }
-      .q > .flex {
-        padding-bottom: 12px;
-        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-      }
-      .q .md { margin-top: 12px !important; line-height: 1.75; }
-      .q > div[style*="display:grid"] { gap: 10px !important; }
-
-      .q code {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 999px;
-        border: 0;
-        background: rgba(37, 99, 235, 0.10);
-        color: #1d4ed8;
-        font-weight: 900;
-        font-size: var(--admin-font-size-control);
-      }
-
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-weight: 900;
-        font-size: var(--admin-font-size-control);
-        border: 0;
-        background: rgba(255, 255, 255, 0.92);
-        white-space: nowrap;
-      }
-      .pill.ok { color: #166534; background: rgba(22, 163, 74, 0.10); }
-      .pill.bad { color: #991b1b; background: rgba(220, 38, 38, 0.08); }
-
-      .opt {
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-        padding: 12px 14px;
-        border-radius: var(--radius-lg);
-        border: 0;
-        background: rgba(255, 255, 255, 0.92);
-      }
-      .opt.ok { background: rgba(22, 163, 74, 0.06); }
-      .opt.bad { background: rgba(220, 38, 38, 0.05); }
-      .opt > div:first-child b {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 34px;
-        height: 26px;
-        border-radius: var(--radius-sm);
-        border: 0;
-        background: rgba(15, 23, 42, 0.03);
-        font-weight: 950;
-        color: rgba(15, 23, 42, 0.86);
-      }
-
-      .ans {
-        margin-top: 14px;
-        border: 0;
-        border-radius: var(--radius-lg);
-        padding: 12px 14px;
-        background: rgba(255, 255, 255, 0.92);
-      }
-      pre.code { white-space: pre-wrap; margin: 0; line-height: 1.7; }
-
-      /* Font scale for review page (especially the header area). */
-      .review-page { font-size: var(--admin-font-size-base); }
-      .review-page .section-head .title { font-size: var(--admin-font-size-title-lg); }
-      .review-page .section-head .sub { font-size: var(--admin-font-size-small); }
-      .review-page .section-head .sub code { font-size: var(--admin-font-size-control); padding: 4px 10px; }
-
-      .review-page .q { font-size: var(--admin-font-size-base); }
-      .review-page .q .md { font-size: var(--admin-font-size-base); }
-      .review-page .opt { font-size: var(--admin-font-size-base); }
-      .review-page .pill { font-size: var(--admin-font-size-pill); padding: 6px 12px; }
-      .review-page .q code { font-size: var(--admin-font-size-pill); padding: 5px 12px; }
-
-      .review-page .section-head .btn {
-        font-size: var(--admin-font-size-control);
-        padding: 12px 18px;
-        border-radius: var(--radius-md);
-      }
-    </style>
 {% endblock %}
-{% block body_class %}review-page{% endblock %}
 {% block content %}
       {% for m in get_flashed_messages() %}
       {% if m and (m|string)|trim %}

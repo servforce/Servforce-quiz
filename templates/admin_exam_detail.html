@@ -2,6 +2,7 @@
 {% set admin_active = "exams" %}
 {% set admin_page_title = "Exam Detail" %}
 {% set admin_page_subtitle = "Preview, metrics, and public invite controls" %}
+{% block body_class %}page-admin-exam-detail{% endblock %}
 {% block head_extra %}
     <script>
       window.MathJax = {
@@ -13,242 +14,6 @@
       };
     </script>
     <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <style>
-      body { font-size: var(--admin-font-size-base); }
-      pre { white-space: pre-wrap; margin: 8px 0 0; }
-      .md { white-space: normal; }
-      .md img { max-width: 100%; height: auto; border-radius: var(--radius-sm); display:block; margin: 10px 0; }
-      .exam-tabs {
-        display: inline-flex;
-        gap: 6px;
-        padding: 0;
-        border: 0;
-        background: transparent;
-      }
-      .exam-tabs a {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 16px;
-        border-radius: var(--radius-md);
-        font-weight: 700;
-        font-size: var(--admin-font-size-control);
-        color: var(--text);
-        text-decoration: none;
-        border: 1px solid transparent;
-        background: transparent;
-      }
-      .exam-tabs .ico { font-size: 21px; line-height: 1; opacity: 0.9; }
-      .exam-tabs a.active {
-        background: rgba(37, 99, 235, 0.10);
-        border-color: rgba(37, 99, 235, 0.22);
-        color: #1d4ed8;
-      }
-      .exam-tabs a:hover { background: rgba(15, 23, 42, 0.04); text-decoration: none; }
-
-      .exam-head {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        align-items: center;
-        gap: 12px;
-        width: 100%;
-      }
-      .exam-head .left { min-width: 0; }
-      .exam-head .center { justify-self: center; }
-      .exam-head .right { justify-self: end; }
-      .head-actions { display: inline-flex; align-items: center; gap: 10px; }
-      .head-actions .btn-eq {
-        min-width: 120px;
-        height: 46px;
-        padding: 0 18px;
-        text-align: center;
-        justify-content: center;
-        border-radius: var(--radius-lg);
-        font-weight: 900;
-      }
-      .head-actions .public-invite-btn {
-        background: #eab308 !important;
-        border-color: #d97706 !important;
-        color: #422006 !important;
-      }
-      .head-actions .public-invite-btn:hover {
-        background: #d97706 !important;
-        border-color: #b45309 !important;
-      }
-      .head-actions .public-invite-btn[aria-pressed="true"] {
-        background: #b45309 !important;
-        border-color: #92400e !important;
-        color: #422006 !important;
-      }
-      .head-actions .invite-create-btn {
-        background: #16a34a;
-        border-color: #16a34a;
-        color: #fff;
-      }
-      .head-actions .invite-create-btn:hover {
-        background: #15803d;
-        border-color: #15803d;
-      }
-      .head-actions .back-btn {
-        background: #fff;
-        border-color: rgba(15, 23, 42, 0.14);
-        color: rgba(15, 23, 42, 0.86);
-      }
-      .head-actions .back-btn:hover {
-        background: rgba(248, 250, 252, 0.96);
-      }
-
-      .section.compact { padding-bottom: 8px; }
-      .section.compact .section-head { margin-bottom: 0; }
-
-      .exam-meta-title { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-      .exam-meta-title h2 { margin: 0; font-size: var(--admin-font-size-title-lg); font-weight: 950; letter-spacing: -0.02em; line-height: 1.12; }
-      .exam-meta-desc { margin: 6px 0 0; color: var(--muted); font-size: var(--admin-font-size-small); line-height: 1.6; }
-      .exam-meta { text-align: center; }
-      .exam-meta-title { justify-content: center; }
-      .exam-meta-desc { max-width: 920px; margin: 6px auto 0; }
-      .exam-meta-stats { margin-top: 10px; display:flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-      .pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 10px;
-        border-radius: 999px;
-        border: 0;
-        background: rgba(255, 255, 255, 0.86);
-        font-weight: 800;
-        font-size: var(--admin-font-size-pill);
-        color: rgba(15, 23, 42, 0.86);
-        white-space: nowrap;
-      }
-      .exam-tag { border: 0; }
-      .exam-tag.type {
-        border: 0;
-        background: rgba(37, 99, 235, 0.12);
-      }
-      .exam-tag.points {
-        border: 0;
-        background: rgba(15, 23, 42, 0.05);
-      }
-      /* Floating public invite card (like candidate exam countdown). */
-      .floating-invite-card {
-        position: fixed;
-        top: 190px; /* avoid overlapping top-right action buttons */
-        /* Stick to the viewport right edge (outer right side). */
-        right: 16px;
-        z-index: 12;
-        width: 240px;
-        max-width: calc(100vw - 36px);
-        padding: 12px;
-        border-radius: var(--radius-lg);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(255, 255, 255, 0.94);
-        box-shadow: 0 22px 56px rgba(2, 6, 23, 0.18);
-        backdrop-filter: blur(10px);
-        display: grid;
-        gap: 10px;
-      }
-      .floating-invite-title {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-      }
-      .floating-invite-title .t { font-weight: 950; font-size: var(--admin-font-size-control); color: rgba(15, 23, 42, 0.86); }
-      .floating-invite-title .tag {
-        font-size: var(--admin-font-size-control);
-        font-weight: 950;
-        padding: 4px 8px;
-        border-radius: 999px;
-        border: 1px solid rgba(34, 197, 94, 0.25);
-        background: rgba(34, 197, 94, 0.10);
-        color: rgba(21, 128, 61, 0.95);
-        white-space: nowrap;
-      }
-      .floating-invite-qr {
-        width: 160px;
-        height: 160px;
-        margin: 0 auto;
-        padding: 8px;
-        border-radius: var(--radius-lg);
-        border: 1px solid rgba(15, 23, 42, 0.10);
-        background: #fff;
-      }
-      .floating-invite-qr img { width: 100%; height: 100%; object-fit: contain; display: block; }
-      .floating-invite-link { display: grid; gap: 8px; }
-      .floating-invite-url {
-        width: 100%;
-        height: 34px;
-        padding: 6px 10px;
-        border-radius: var(--radius-md);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(248, 250, 252, 0.92);
-        color: rgba(15, 23, 42, 0.86);
-        font-size: var(--admin-font-size-control);
-        line-height: 22px;
-        outline: none;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .floating-invite-link .btn {
-        height: 34px;
-        padding: 0 12px;
-        border-radius: var(--radius-md);
-        font-size: var(--admin-font-size-control);
-        font-weight: 950;
-        white-space: nowrap;
-        width: fit-content;
-        min-width: 56px;
-        justify-self: center;
-      }
-      .floating-invite-hint { display: none; }
-      .exam-q {
-        border: 0;
-        box-shadow: none;
-      }
-      .exam-q:hover { border-color: transparent; }
-      .exam-q::before { display: none; }
-      .exam-opt__box { align-items: center; }
-      .exam-opt__key {
-        min-width: 40px;
-        height: 40px;
-        border-radius: var(--radius-md);
-        border: 0;
-        background: transparent;
-        box-shadow: none;
-      }
-      .exam-tag {
-        border: 0;
-        box-shadow: none;
-      }
-      .exam-opt__box,
-      .exam-opt__box:hover,
-      .exam-opt > input:checked + .exam-opt__box {
-        border: 0;
-        box-shadow: none;
-      }
-      .exam-opt__box.correct {
-        border: 0;
-      }
-      .exam-opt__mark {
-        border: 0;
-        box-shadow: none;
-      }
-      .exam-rubric {
-        border: 0;
-      }
-      .exam-opt__mark { align-self: center; }
-      @media (max-width: 860px) {
-        .floating-invite-card {
-          right: 12px;
-          left: auto;
-          width: min(240px, calc(100vw - 24px));
-          max-width: calc(100vw - 24px);
-        }
-      }
-    </style>
 {% endblock %}
 {% block content %}
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
@@ -257,24 +22,75 @@
           <div class="section-head">
             <div class="exam-head">
               <div class="left"></div>
-              <div class="center">
-                <div class="exam-tabs" aria-label="试卷页签">
-                  <a class="active" href="/admin/exams/{{ exam_href_id }}"><span class="ico" aria-hidden="true">👁</span>预览</a>
-                  <a href="/admin/exams/{{ exam_href_id }}/paper"><span class="ico" aria-hidden="true">👥</span>候选者视图</a>
-                  <a href="/admin/exams/{{ exam_href_id }}/edit"><span class="ico" aria-hidden="true">✎</span>编辑</a>
-                </div>
-              </div>
+              <div class="center"></div>
               <div class="right">
                 <div class="head-actions">
-                  <button
-                    type="button"
-                    class="btn btn-eq btn-warning public-invite-btn"
-                    data-exam-key="{{ exam_key }}"
-                    data-enabled="{{ 'true' if public_invite_enabled else 'false' }}"
-                    aria-pressed="{{ 'true' if public_invite_enabled else 'false' }}"
-                  >公开邀约</button>
-                  <a class="btn btn-primary btn-eq invite-create-btn" href="/admin/assignments?assign_exam_key={{ exam_key }}" title="创建邀约" aria-label="创建邀约">创建邀约</a>
-                  <a class="btn btn-eq back-btn" data-admin-back="exam-list" href="/admin/exams">返回</a>
+                  <div class="action-menu__bar" aria-label="试卷顶部操作">
+                    <a class="action-menu__tab back-tab" data-admin-back="exam-list" href="/admin/exams" aria-label="返回列表" title="返回列表">
+                      <span class="action-menu__tab-ico" aria-hidden="true">←</span>
+                      <span>返回</span>
+                    </a>
+                    <a class="action-menu__tab is-active" href="/admin/exams/{{ exam_href_id }}">
+                      <span class="action-menu__tab-ico" aria-hidden="true">👁</span>
+                      <span>预览</span>
+                    </a>
+                  </div>
+                  <details class="action-menu" data-action-menu>
+                    <summary class="action-menu__toggle" aria-label="打开操作菜单">
+                      <span class="action-menu__label">更多</span>
+                      <span class="action-menu__chev" aria-hidden="true">⌄</span>
+                    </summary>
+                    <div class="action-menu__panel" role="menu" aria-label="试卷操作菜单">
+                      <div class="action-menu__group">
+                        <button
+                          type="button"
+                          class="public-invite-btn"
+                          data-exam-key="{{ exam_key }}"
+                          data-enabled="{{ 'true' if public_invite_enabled else 'false' }}"
+                          aria-pressed="{{ 'true' if public_invite_enabled else 'false' }}"
+                          {% if not can_create_invite %}disabled{% endif %}
+                        >
+                          <span class="public-invite-btn__label">公开邀约</span>
+                          <span class="public-invite-btn__state">{% if public_invite_enabled %}已启用{% else %}未启用{% endif %}</span>
+                        </button>
+                        <p class="action-menu__hint">
+                          {% if can_create_invite %}
+                            启用后会生成公开链接与二维码，可直接分享给候选人。
+                          {% else %}
+                            当前试卷不是可发布状态，公开邀约已禁用。
+                          {% endif %}
+                        </p>
+                      </div>
+
+                      {% if public_invite_enabled and public_invite_url and public_invite_qr_url %}
+                        <div class="action-menu__group">
+                          <div class="action-menu__qr">
+                            <img src="{{ public_invite_qr_url }}" alt="公开邀约二维码" />
+                          </div>
+                          <div class="action-menu__copyrow">
+                            <input class="action-menu__url" type="text" value="{{ public_invite_url }}" readonly title="{{ public_invite_url }}" />
+                            <button type="button" class="public-invite-copy" data-url="{{ public_invite_url }}">复制</button>
+                          </div>
+                        </div>
+                      {% else %}
+                        <p class="action-menu__empty">当前未启用公开邀约。启用后这里会显示二维码与可复制链接。</p>
+                      {% endif %}
+
+                      <div class="action-menu__links">
+                        {% if can_create_invite %}
+                          <a class="action-menu__link create" href="/admin/assignments?assign_exam_key={{ exam_key }}" title="创建邀约" aria-label="创建邀约">
+                            <span>创建邀约</span>
+                            <span aria-hidden="true">↗</span>
+                          </a>
+                        {% else %}
+                          <span class="action-menu__link disabled">
+                            <span>不可邀约</span>
+                            <span aria-hidden="true">↗</span>
+                          </span>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </details>
                 </div>
               </div>
             </div>
@@ -282,81 +98,104 @@
         </section>
 
         <section class="section">
-          <div class="exam-meta">
-          <div class="exam-meta-title">
-            <h2>{{ spec.title | title_clean }}</h2>
-          </div>
-            {% if spec.description %}
-              <div class="exam-meta-desc">{{ spec.description }}</div>
+          <div class="exam-preview-shell">
+            <div class="exam-preview-hero">
+              <div class="exam-meta">
+                <div class="exam-meta-title">
+                  <h2>{{ spec.title | title_clean }}</h2>
+                </div>
+                {% if spec.description %}
+                  <div class="exam-meta-desc">{{ spec.description }}</div>
+                {% endif %}
+                <div class="exam-meta-stats" aria-label="试卷统计">
+                  <span class="pill">状态：{{ exam_status_label }}</span>
+                  {% if exam_current_version_no %}
+                    <span class="pill">当前版本：v{{ exam_current_version_no }}</span>
+                  {% endif %}
+                  {% if selected_version_no %}
+                    <span class="pill">查看版本：v{{ selected_version_no }}</span>
+                  {% endif %}
+                  <span class="pill">题目数：{{ (exam_stats or {}).get('total_questions', 0) }}</span>
+                  <span class="pill">总分：{{ (exam_stats or {}).get('total_points', 0) }} 分</span>
+                  {% set type_name = {'single':'单选','multiple':'多选','short':'简答','unknown':'其他'} %}
+                  {% for t, c in ((exam_stats or {}).get('counts_by_type', {}) or {}).items() %}
+                    {% set pts = ((exam_stats or {}).get('points_by_type', {}) or {}).get(t, 0) %}
+                    <span class="pill">{{ type_name.get(t, t) }}：{{ c }} 题 / {{ pts }} 分</span>
+                  {% endfor %}
+                </div>
+                <div class="state-note{% if exam_sync_error %} error{% endif %}">
+                  {% if exam_source_path %}<div>来源文件：<span class="mono">{{ exam_source_path }}</span></div>{% endif %}
+                  {% if selected_version.git_commit %}<div>版本 Commit：<span class="mono">{{ selected_version.git_commit }}</span></div>{% endif %}
+                  {% if exam_last_synced_commit and (not selected_version.git_commit or selected_version.git_commit != exam_last_synced_commit) %}<div>最近同步 Commit：<span class="mono">{{ exam_last_synced_commit }}</span></div>{% endif %}
+                  {% if exam_status == 'retired' %}<div>仓库中已不存在该试卷文件，当前仅保留历史版本和历史邀约查看。</div>{% endif %}
+                  {% if exam_status == 'sync_error' %}<div>最近一次同步失败：{{ exam_sync_error or '未知错误' }}</div>{% endif %}
+                  {% if not can_create_invite %}<div>当前版本只读，不可创建新邀约；已发出的旧邀约仍按绑定版本继续作答和回看。</div>{% endif %}
+                </div>
+              </div>
+            </div>
+
+            {% if version_history %}
+              <div class="version-panel" aria-label="版本历史">
+                {% for item in version_history %}
+                  <a class="version-item{% if item.is_selected %} is-selected{% endif %}" href="{{ item.href }}">
+                    <div>
+                      <strong>v{{ item.version_no }}</strong>
+                      {% if item.is_current %}<span class="pill">当前</span>{% endif %}
+                    </div>
+                    <div class="version-item__meta">
+                      {% if item.source_path %}<div>文件：<span class="mono">{{ item.source_path }}</span></div>{% endif %}
+                      {% if item.git_commit %}<div>Commit：<span class="mono">{{ item.git_commit }}</span></div>{% endif %}
+                      {% if item.created_at %}<div>创建时间：{{ item.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</div>{% endif %}
+                    </div>
+                  </a>
+                {% endfor %}
+              </div>
             {% endif %}
-            <div class="exam-meta-stats" aria-label="试卷统计">
-              <span class="pill">题目数：{{ (exam_stats or {}).get('total_questions', 0) }}</span>
-              <span class="pill">总分：{{ (exam_stats or {}).get('total_points', 0) }} 分</span>
-              {% set type_name = {'single':'单选','multiple':'多选','short':'简答','unknown':'其他'} %}
-              {% for t, c in ((exam_stats or {}).get('counts_by_type', {}) or {}).items() %}
-                {% set pts = ((exam_stats or {}).get('points_by_type', {}) or {}).get(t, 0) %}
-                <span class="pill">{{ type_name.get(t, t) }}：{{ c }} 题 / {{ pts }} 分</span>
+
+            {% set type_label_map = {'single':'单选','multiple':'多选','short':'简答','unknown':'其他'} %}
+            <div class="mt-2.5 w-full divide-y divide-dashed divide-slate-300">
+              {% for q in spec.questions %}
+                <div class="py-3.5" data-qid="{{ q.qid }}">
+                  <div class="px-2">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="inline-flex min-w-0 items-center gap-2 whitespace-nowrap">
+                        <span class="text-[15px] leading-[1.2] font-extrabold text-slate-900">{{ q.label or q.qid }}</span>
+                        <span class="inline-flex items-center rounded-full border border-blue-500/24 bg-blue-500/10 px-2 py-[3px] text-[15px] leading-[1.2] font-normal text-blue-700">{{ type_label_map.get(q.type, q.type) }}</span>
+                        <span class="inline-flex items-center rounded-full border border-slate-900/12 bg-slate-900/[0.03] px-2 py-[3px] text-[15px] leading-[1.2] font-normal text-slate-700">{{ q.max_points }}分</span>
+                      </div>
+                    </div>
+
+                    <div class="pt-2.5">
+                      <div class="md text-[16px] leading-[1.75] text-slate-900 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">{{ q.stem_md | md }}</div>
+
+                      {% if q.options %}
+                        <ul class="mt-2.5 grid gap-1" aria-label="选项">
+                          {% for o in q.options %}
+                            <li class="flex items-center gap-2 text-[15px] leading-[1.5] text-slate-800">
+                              <span class="inline-flex h-7 min-w-7 shrink-0 items-center justify-center rounded-md border border-blue-500/12 bg-blue-500/6 px-1.5 text-[13px] leading-none font-medium text-blue-700">{{ o.key }}</span>
+                              <span class="min-w-0 flex-1 leading-[1.5]">
+                                <span>{{ o.text }}</span>
+                                {% if o.correct %}<span class="ml-2 inline align-middle text-[12px] leading-[1.5] font-medium whitespace-nowrap text-green-700">正确</span>{% endif %}
+                              </span>
+                            </li>
+                          {% endfor %}
+                        </ul>
+                      {% endif %}
+
+                      {% if q.rubric %}
+                        <details class="mt-2 pl-1">
+                          <summary class="cursor-pointer text-[13px] leading-6 font-medium text-slate-700">评分标准</summary>
+                          <pre class="mt-1 pl-3 text-[12px] leading-[1.55] text-slate-700">{{ q.rubric }}</pre>
+                        </details>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
               {% endfor %}
             </div>
           </div>
-
-          <h3 class="title section-subtitle">题目</h3>
-          {% set type_label_map = {'single':'单选','multiple':'多选','short':'简答','unknown':'其他'} %}
-          <div class="exam-question-list">
-            {% for q in spec.questions %}
-              <div class="exam-q" data-qid="{{ q.qid }}">
-                <div class="exam-q__inner">
-                  <div class="exam-q__head">
-                    <div class="exam-q__head-left">
-                      <span class="exam-q__qid">{{ q.label or q.qid }}</span>
-                      <span class="exam-tag type">{{ type_label_map.get(q.type, q.type) }}</span>
-                    </div>
-                    <span class="exam-tag points">{{ q.max_points }}分</span>
-                  </div>
-
-                  <div class="exam-q__body">
-                    <div class="md">{{ q.stem_md | md }}</div>
-                    {% if q.options %}
-                      <div class="exam-options" aria-label="选项">
-                        {% for o in q.options %}
-                          <div class="exam-opt__box {% if o.correct %}correct{% endif %}">
-                            <div class="exam-opt__key">{{ o.key }}</div>
-                            <div class="exam-opt__text">{{ o.text }}</div>
-                            {% if o.correct %}<div class="exam-opt__mark">正确</div>{% endif %}
-                          </div>
-                        {% endfor %}
-                      </div>
-                    {% endif %}
-                    {% if q.rubric %}
-                      <details class="exam-rubric">
-                        <summary>评分标准</summary>
-                        <pre>{{ q.rubric }}</pre>
-                      </details>
-                    {% endif %}
-                  </div>
-                </div>
-              </div>
-            {% endfor %}
-          </div>
         </section>
       </div>
-{% endblock %}
-{% block outside_shell %}
-    {% if public_invite_enabled and public_invite_url and public_invite_qr_url %}
-      <div class="floating-invite-card" role="region" aria-label="公开邀约浮窗">
-        <div class="floating-invite-title">
-          <span class="t">公开邀约</span>
-          <span class="tag">已启用</span>
-        </div>
-        <div class="floating-invite-qr">
-          <img src="{{ public_invite_qr_url }}" alt="公开邀约二维码" />
-        </div>
-        <div class="floating-invite-link">
-          <input class="floating-invite-url" type="text" value="{{ public_invite_url }}" readonly title="{{ public_invite_url }}" />
-          <button type="button" class="btn btn-primary public-invite-copy" data-url="{{ public_invite_url }}">复制</button>
-        </div>
-      </div>
-    {% endif %}
 {% endblock %}
 {% block scripts %}
     <script>
@@ -424,6 +263,22 @@
           }
           window.location.href = fallback;
         };
+
+        document.addEventListener("click", (ev) => {
+          const menus = document.querySelectorAll("[data-action-menu][open]");
+          if (!menus.length) return;
+          menus.forEach((menu) => {
+            if (menu.contains(ev.target)) return;
+            menu.removeAttribute("open");
+          });
+        });
+
+        document.addEventListener("keydown", (ev) => {
+          if (ev.key !== "Escape") return;
+          document.querySelectorAll("[data-action-menu][open]").forEach((menu) => {
+            menu.removeAttribute("open");
+          });
+        });
 
         document.addEventListener("click", async (ev) => {
           const backBtn = ev.target && ev.target.closest ? ev.target.closest("[data-admin-back='exam-list']") : null;

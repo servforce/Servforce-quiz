@@ -13,8 +13,9 @@
 - FastAPI 装配
 - SessionMiddleware
 - API 路由注册
-- 静态资源与 UI fallback
-- legacy bridge 挂载
+- 静态资源挂载
+- 根路径下的 Flask 应用挂载
+- `/legacy/*` 兼容跳转
 
 ### `backend/md_quiz/api/`
 
@@ -49,4 +50,4 @@
 - `services/`
 - `db.py`
 
-当前不再作为新架构推荐入口，但仍通过 `/legacy` 暂时提供兼容访问。
+当前正式页面能力仍由这里提供，并通过 FastAPI 挂到根路径。

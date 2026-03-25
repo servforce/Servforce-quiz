@@ -59,18 +59,17 @@ def session(request: Request):
 @router.get("/bootstrap")
 def bootstrap(request: Request, container=Depends(get_container)):
     _require_admin(request)
-    settings = container.settings
     return {
         "brand": {"name": "MD Quiz", "theme": "blue-green"},
         "navigation": [
-            {"key": "overview", "label": "新控制台概览", "href": "#/admin/overview"},
-            {"key": "jobs", "label": "任务系统", "href": "#/admin/jobs"},
-            {"key": "legacy", "label": "旧后台桥接", "href": f"{settings.legacy_mount_path}/admin"},
+            {"key": "admin", "label": "后台首页", "href": "/admin"},
+            {"key": "status", "label": "系统状态", "href": "/admin/status"},
+            {"key": "jobs", "label": "任务 API", "href": "/api/admin/jobs"},
         ],
         "cards": [
             {"label": "后端架构", "value": "FastAPI + Worker + Scheduler"},
-            {"label": "UI 工作区", "value": "ui/ -> static/app"},
-            {"label": "兼容模式", "value": "legacy bridge 已启用" if settings.enable_legacy_bridge else "disabled"},
+            {"label": "后台入口", "value": "/admin"},
+            {"label": "兼容跳转", "value": "/legacy/* -> /*"},
         ],
     }
 

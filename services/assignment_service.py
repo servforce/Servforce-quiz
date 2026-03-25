@@ -89,6 +89,7 @@ def create_assignment(
     exam_key: str,
     candidate_id: int,
     base_url: str,
+    exam_version_id: int | None = None,
     phone: str | None = None,
     invite_start_date: str | None = None,
     invite_end_date: str | None = None,
@@ -107,6 +108,7 @@ def create_assignment(
         assignment = {
             "token": token,
             "exam_key": exam_key,
+            "exam_version_id": (int(exam_version_id) if exam_version_id else None),
             "candidate_id": candidate_id,
             "created_at": now,
             "status": "invited",  # invited -> verified -> in_exam -> grading -> graded

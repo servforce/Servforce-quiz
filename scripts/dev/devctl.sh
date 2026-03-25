@@ -20,6 +20,13 @@ SCHED_LOG_FILE="${LOG_DIR}/scheduler.log"
 
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
+build_admin_css() {
+  if [[ -f "${ROOT_DIR}/static/package.json" ]]; then
+    echo "[ui] building admin css"
+    (cd "${ROOT_DIR}/static" && npm run build:admin-css)
+  fi
+}
+
 usage() {
   cat <<'EOF'
 Usage: ./scripts/dev/devctl.sh <command>
@@ -30,7 +37,6 @@ Commands:
   restart
   status
   logs
-  build-ui
 EOF
 }
 
@@ -98,7 +104,7 @@ stop_one() {
 }
 
 do_start() {
-  bash scripts/dev/build-ui.sh
+  build_admin_css
   start_one api "$API_PID_FILE" "$API_LOG_FILE" bash scripts/dev/run-api.sh
   start_one worker "$WORKER_PID_FILE" "$WORKER_LOG_FILE" bash scripts/dev/run-worker.sh
   start_one scheduler "$SCHED_PID_FILE" "$SCHED_LOG_FILE" bash scripts/dev/run-scheduler.sh
@@ -142,6 +148,5 @@ case "${1:-}" in
   restart) do_stop; do_start ;;
   status) do_status ;;
   logs) do_logs ;;
-  build-ui) bash scripts/dev/build-ui.sh ;;
   *) usage; exit 1 ;;
 esac

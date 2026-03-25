@@ -137,8 +137,8 @@ def register_public_exam_routes(app: Flask) -> None:
                 return redirect(url_for("public_done", token=token))
 
             exam_key = assignment["exam_key"]
-            exam = get_exam_definition(exam_key) or {}
-            public_spec = exam.get("public_spec") if isinstance(exam.get("public_spec"), dict) else None
+            exam_snapshot = get_exam_snapshot_for_assignment(assignment) or {}
+            public_spec = exam_snapshot.get("public_spec") if isinstance(exam_snapshot.get("public_spec"), dict) else None
             if not public_spec:
                 abort(404)
             exam_stats = _compute_exam_stats(public_spec)

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -35,11 +34,15 @@ def _build_container() -> AppContainer:
     )
     job_service = JobService(JsonJobStore(runtime_root / "jobs.json"))
     return AppContainer(settings=settings, runtime_service=runtime_service, job_service=job_service)
-def _resolve_ui_index(ui_build_dir: Path) -> Path | None:
-    index_path = ui_build_dir / "index.html"
-    if index_path.exists():
-        return index_path
-    return None
+
+
+def _redirect_target(full_path: str, request: Request) -> str:
+    normalized = str(full_path or "").lstrip("/")
+    target = f"/{normalized}" if normalized else "/admin"
+    query = str(request.url.query or "").strip()
+    if query:
+        return f"{target}?{query}"
+    return target
 
 
 def create_app() -> FastAPI:
@@ -60,7 +63,11 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
     )
     app.state.container = container
-    app.add_middleware(SessionMiddleware, secret_key=settings.app_secret_key)
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.app_secret_key,
+        session_cookie="api_session",
+    )
 
     app.include_router(system_router)
     app.include_router(admin_router)
@@ -70,25 +77,26 @@ def create_app() -> FastAPI:
     if static_root.exists():
         app.mount("/static", StaticFiles(directory=static_root), name="static")
 
-    if settings.enable_legacy_bridge:
-        app.mount(settings.legacy_mount_path, build_legacy_bridge())
-        @app.get("/legacy", include_in_schema=False)
-        def _legacy_root():
-            return RedirectResponse(url=f"{settings.legacy_mount_path}/admin")
-
     @app.get("/healthz", include_in_schema=False)
     def _healthz():
         return {"ok": True}
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    def _spa_fallback(full_path: str = ""):
-        index_path = _resolve_ui_index(settings.ui_build_dir)
-        if index_path is None:
-            return {
-                "message": "UI 尚未构建，请先执行 scripts/dev/build-ui.sh",
-                "ui_build_dir": str(settings.ui_build_dir),
-                "legacy_url": f"{settings.legacy_mount_path}/admin" if settings.enable_legacy_bridge else None,
-            }
-        return FileResponse(index_path)
+    @app.api_route(
+        "/legacy",
+        methods=["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"],
+        include_in_schema=False,
+    )
+    def _legacy_root(request: Request):
+        return RedirectResponse(url=_redirect_target("", request), status_code=307)
+
+    @app.api_route(
+        "/legacy/{full_path:path}",
+        methods=["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"],
+        include_in_schema=False,
+    )
+    def _legacy_path(full_path: str, request: Request):
+        return RedirectResponse(url=_redirect_target(full_path, request), status_code=307)
+
+    app.mount("/", build_legacy_bridge(), name="legacy-root")
 
     return app

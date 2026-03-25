@@ -24,7 +24,9 @@ def register_admin_assignment_routes(app: Flask) -> None:
         pass_threshold = int(request.form.get("pass_threshold") or "60")
         verify_max_attempts = int(request.form.get("verify_max_attempts") or "3")
 
-        if not get_exam_definition(exam_key):
+        exam = get_exam_definition(exam_key)
+        exam_version_id = resolve_exam_version_id_for_new_assignment(exam_key)
+        if not exam or not exam_version_id:
             flash("操作失败，请稍后重试")
             return redirect(url_for("admin_assignments"))
 
@@ -63,6 +65,7 @@ def register_admin_assignment_routes(app: Flask) -> None:
         result = create_assignment(
             exam_key=exam_key,
             candidate_id=candidate_id,
+            exam_version_id=exam_version_id,
             base_url=base_url,
             phone=str(c.get("phone") or ""),
             invite_start_date=(sd.isoformat() if sd else None),
@@ -77,6 +80,7 @@ def register_admin_assignment_routes(app: Flask) -> None:
                 candidate_id=candidate_id,
                 phone=str(c.get("phone") or ""),
                 exam_key=exam_key,
+                exam_version_id=exam_version_id,
                 token=str(result.get("token") or ""),
                 invite_start_date=(sd.isoformat() if sd else None),
                 invite_end_date=(ed.isoformat() if ed else None),
@@ -98,6 +102,7 @@ def register_admin_assignment_routes(app: Flask) -> None:
         return render_template(
             "admin_assignment_created.html",
             exam_key=exam_key,
+            exam_version_id=exam_version_id,
             candidate_id=candidate_id,
             token=result["token"],
             url=result["url"],

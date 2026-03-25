@@ -12,7 +12,7 @@
 
 ### `GET /api/system/bootstrap`
 
-返回品牌信息、UI 入口、运行时配置。
+返回品牌信息、后台入口、运行时配置。
 
 ## Admin
 
@@ -34,7 +34,7 @@
 
 ### `GET /api/admin/bootstrap`
 
-返回后台导航与概览卡片。
+返回后台入口导航与概览卡片。
 
 ### `GET /api/admin/config`
 

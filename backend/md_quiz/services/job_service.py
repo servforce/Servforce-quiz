@@ -23,6 +23,13 @@ class JobService:
         # 第一阶段只实现可验证的演示处理器；
         # 后续迁移真实业务时，再把旧 services/ 逐步接进来。
         match job.kind:
+            case "git_sync_exams":
+                from services.exam_repo_sync_service import perform_exam_repo_sync
+
+                repo_url = str((job.payload or {}).get("repo_url") or "").strip()
+                if not repo_url:
+                    return self.store.fail(job.id, "缺少 repo_url")
+                result = perform_exam_repo_sync(repo_url, job_id=job.id)
             case "scan_exams":
                 result = {"message": "试卷扫描任务已完成", "count": 0}
             case "resume_parse":

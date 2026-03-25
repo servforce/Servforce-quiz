@@ -5,8 +5,10 @@ from contextlib import nullcontext
 import pytest
 
 import web.app_factory as app_factory
+import web.routes.admin_exams as admin_exams
 import web.routes.admin_shell as admin_shell
 import web.routes.public_verify as public_verify
+import web.runtime_setup as runtime_setup
 from web.app_factory import create_app
 from web.runtime_setup import RuntimeBootstrapError
 
@@ -14,6 +16,7 @@ from web.runtime_setup import RuntimeBootstrapError
 def _build_smoke_app(monkeypatch):
     monkeypatch.setattr(app_factory, "bootstrap_runtime", lambda app: None)
     monkeypatch.setattr(admin_shell, "_list_exams", lambda: [])
+    monkeypatch.setattr(admin_exams, "_sort_id_from_exam_key", lambda exam_key: None)
     monkeypatch.setattr(admin_shell, "_peek_cached_system_status_summary", lambda: {})
     monkeypatch.setattr(public_verify, "assignment_locked", lambda token: nullcontext())
     monkeypatch.setattr(
@@ -69,6 +72,19 @@ def test_admin_routes_smoke(monkeypatch):
     assert exams_response.status_code == 200
 
 
+def test_exam_paper_route_redirects_to_preview(monkeypatch):
+    app = _build_smoke_app(monkeypatch)
+    client = app.test_client()
+
+    with client.session_transaction() as session:
+        session["admin_logged_in"] = True
+
+    response = client.get("/admin/exams/demo/paper")
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/admin/exams/demo")
+
+
 def test_public_verify_route_smoke(monkeypatch):
     app = _build_smoke_app(monkeypatch)
     client = app.test_client()
@@ -76,3 +92,27 @@ def test_public_verify_route_smoke(monkeypatch):
     response = client.get("/t/demo-token")
 
     assert response.status_code == 200
+
+
+def test_inline_job_worker_thread_starts(monkeypatch):
+    started: dict[str, object] = {}
+
+    class _DummyThread:
+        def __init__(self, *, target=None, daemon=None, name=None):
+            started["target"] = target
+            started["daemon"] = daemon
+            started["name"] = name
+
+        def start(self):
+            started["started"] = True
+
+    monkeypatch.setenv("ENABLE_INLINE_JOB_WORKER", "1")
+    monkeypatch.delenv("WERKZEUG_RUN_MAIN", raising=False)
+    monkeypatch.setattr(runtime_setup.threading, "Thread", _DummyThread)
+
+    app = type("App", (), {"debug": False})()
+    runtime_setup._start_inline_job_worker_thread(app)
+
+    assert started["started"] is True
+    assert started["daemon"] is True
+    assert started["name"] == "legacy-inline-job-worker"

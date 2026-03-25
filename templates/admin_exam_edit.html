@@ -2,117 +2,9 @@
 {% set admin_active = "exams" %}
 {% set admin_page_title = "Edit Exam" %}
 {% set admin_page_subtitle = "Markdown editing and reparsing" %}
+{% block body_class %}page-admin-exam-edit{% endblock %}
 {% block head_extra %}
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/codemirror/lib/codemirror.css') }}" />
-    <style>
-      body { font-size: var(--admin-font-size-base); }
-      /* Show textarea only when CodeMirror is not ready (fallback). */
-      body.cm-ready textarea.editor { display: none; }
-      textarea.editor {
-        width: 100%;
-        flex: 1 1 auto;
-        min-height: 0;
-        resize: none;
-        padding: 12px 14px;
-        border-radius: var(--radius-md);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(255, 255, 255, 0.92);
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: var(--admin-font-size-control);
-        line-height: 1.12;
-      }
-      .editor-form { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-      .editor-area { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-      .editor-area .CodeMirror {
-        flex: 1 1 auto;
-        min-height: 0;
-        height: auto;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: var(--admin-font-size-control);
-        color: var(--text);
-        border-radius: var(--radius-md);
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        background: rgba(255, 255, 255, 0.92);
-      }
-      .editor-area .CodeMirror pre { line-height: 1.12; font-family: inherit; }
-      .editor-area .CodeMirror-lines { padding: 0; }
-      .editor-area .CodeMirror-gutters {
-        border-right: 1px solid rgba(15, 23, 42, 0.10);
-        background: rgba(15, 23, 42, 0.02);
-      }
-      .editor-area .CodeMirror-linenumber { color: rgba(100, 116, 139, 0.9); }
-      .editor-area .CodeMirror-activeline-background { background: rgba(37, 99, 235, 0.06); }
-      /* Make question headings stand out in the editor (e.g. "## Q1 ..."). */
-      .editor-area .CodeMirror .cm-header { color: #dc2626; }
-      /* Color rubric blocks ([rubric]...[/rubric]) in light green. */
-      .editor-area .CodeMirror .cm-rubric { color: #86efac !important; }
-      .editor-area .CodeMirror .cm-rubric-tag { color: #86efac !important; }
-      .exam-tabs {
-        display: inline-flex;
-        gap: 6px;
-        padding: 0;
-        border: 0;
-        background: transparent;
-      }
-      .exam-tabs a {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 12px 16px;
-        border-radius: var(--radius-md);
-        font-weight: 700;
-        font-size: var(--admin-font-size-control);
-        color: var(--text);
-        text-decoration: none;
-        border: 1px solid transparent;
-        background: transparent;
-      }
-      .exam-tabs .ico { font-size: 21px; line-height: 1; opacity: 0.9; }
-      .exam-tabs a:hover { background: rgba(15, 23, 42, 0.04); text-decoration: none; }
-      .exam-tabs a.active { background: rgba(37, 99, 235, 0.10); border-color: rgba(37, 99, 235, 0.22); color: #1d4ed8; }
-
-      .exam-head {
-        display: grid;
-        grid-template-columns: 1fr auto 1fr;
-        align-items: center;
-        gap: 12px;
-        width: 100%;
-      }
-      .exam-head .left { min-width: 0; }
-      .exam-head .center { justify-self: center; }
-      .exam-head .right { justify-self: end; }
-
-      .section.compact { padding-bottom: 8px; }
-      .section.compact .section-head { margin-bottom: 0; }
-      .head-actions { display: inline-flex; align-items: center; gap: 10px; }
-      .head-actions .btn-eq {
-        min-width: 120px;
-        height: 46px;
-        padding: 0 18px;
-        text-align: center;
-        justify-content: center;
-        border-radius: var(--radius-lg);
-        font-weight: 900;
-      }
-      .head-actions .save-btn {
-        background: #eab308 !important;
-        border-color: #d97706 !important;
-        color: #422006 !important;
-      }
-      .head-actions .save-btn:hover {
-        background: #d97706 !important;
-        border-color: #b45309 !important;
-        color: #422006 !important;
-      }
-      .head-actions .back-btn {
-        background: #fff;
-        border-color: rgba(15, 23, 42, 0.14);
-        color: rgba(15, 23, 42, 0.86);
-      }
-      .head-actions .back-btn:hover {
-        background: rgba(248, 250, 252, 0.96);
-      }
-    </style>
 {% endblock %}
 {% block content %}
       {% set exam_href_id = exam_sort_id|default(exam_key, true) %}
@@ -130,7 +22,6 @@
               <div class="center">
                 <div class="exam-tabs" aria-label="试卷页签">
                   <a href="/admin/exams/{{ exam_href_id }}"><span class="ico" aria-hidden="true">👁</span>预览</a>
-                  <a href="/admin/exams/{{ exam_href_id }}/paper"><span class="ico" aria-hidden="true">👥</span>候选者视图</a>
                   <a class="active" href="/admin/exams/{{ exam_href_id }}/edit"><span class="ico" aria-hidden="true">✎</span>编辑</a>
                 </div>
               </div>

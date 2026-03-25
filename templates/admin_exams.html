@@ -1,298 +1,115 @@
 {% extends "admin_base.html" %}
 {% set admin_active = "exams" %}
 {% set admin_page_title = "试卷管理" %}
-{% set admin_page_subtitle = "上传、搜索与维护试卷" %}
-{% block head_extra %}
-    <style>
-      .admin-surface { font-size: var(--admin-font-size-base); min-height: 0; }
-      .admin-surface > .section {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-      }
-      .admin-surface > .section:last-child {
-        flex: 1 1 auto;
-      }
-      .exam-toolbar {
-        margin: 0;
-        padding: 0;
-        display: grid;
-        grid-template-columns: minmax(320px, 1fr) auto;
-        align-items: center;
-        gap: 12px;
-        width: 100%;
-      }
-      .exam-search-wrap {
-        min-width: 0;
-      }
-      .exam-search {
-        margin: 0;
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        width: 100%;
-      }
-      .exam-search .field { margin: 0; flex: 1 1 auto; }
-      .upload-row {
-        display: inline-flex;
-        gap: 10px;
-        align-items: center;
-        justify-content: flex-end;
-        flex-wrap: nowrap;
-        justify-self: end;
-      }
-      .exam-toolbar .input,
-      .exam-toolbar .btn {
-        height: 40px;
-        padding-top: 0;
-        padding-bottom: 0;
-        line-height: 1;
-      }
-      .exam-toolbar .btn {
-        padding-left: 16px;
-        padding-right: 16px;
-        white-space: nowrap;
-        font-size: var(--admin-font-size-control);
-      }
-      .upload-row .btn {
-        font-weight: 900;
-      }
-      .field-file-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-      .admin-surface .table-scroll {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-x: hidden;
-      }
-      table.exam-table {
-        width: 100%;
-        table-layout: fixed;
-        font-size: var(--admin-font-size-table-body);
-      }
-      table.exam-table th {
-        font-size: var(--admin-font-size-table-head);
-        color: rgba(71, 85, 105, 0.96);
-        padding: 12px 16px;
-        line-height: 1.2;
-      }
-      table.exam-table td {
-        padding: 18px 22px;
-        vertical-align: middle;
-        text-align: left;
-      }
-      table.exam-table th:first-child {
-        padding-left: 10px;
-        padding-right: 12px;
-      }
-      table.exam-table td:first-child {
-        padding-left: 10px;
-        padding-right: 16px;
-      }
-      table.exam-table th:nth-child(2) {
-        padding-left: 34px;
-      }
-      table.exam-table td:nth-child(2) {
-        padding-left: 68px;
-      }
-      table.exam-table th:nth-child(3),
-      table.exam-table th:nth-child(4) {
-        padding-left: 18px;
-      }
-      table.exam-table td:nth-child(3),
-      table.exam-table td:nth-child(4) {
-        padding-left: 28px;
-      }
-      table.exam-table th:nth-child(5) {
-        padding-left: 18px;
-        padding-right: 18px;
-      }
-      table.exam-table td:nth-child(5) {
-        padding-left: 24px;
-        padding-right: 24px;
-      }
-      table.exam-table th:last-child {
-        padding-left: 12px;
-        padding-right: 10px;
-      }
-      table.exam-table td:last-child {
-        padding-left: 16px;
-        padding-right: 10px;
-      }
-      table.exam-table th { white-space: nowrap; }
-      th.col-id,
-      td.col-id,
-      th.col-count,
-      td.col-count,
-      th.col-updated,
-      td.col-updated {
-        white-space: nowrap;
-      }
-      td.col-key .exam-key {
-        display: block;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      }
-      td.col-title {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      th.col-actions,
-      td.col-actions {
-        text-align: right;
-      }
-      .exam-actions {
-        display: inline-flex;
-        align-items: center;
-        justify-content: flex-end;
-        width: 100%;
-        white-space: nowrap;
-      }
-      .exam-actions .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        height: 42px;
-        padding: 0 14px;
-        font-size: var(--admin-font-size-control);
-        font-weight: 900;
-        line-height: 1;
-        border-radius: var(--radius-lg);
-      }
-      .admin-surface .tri-pager {
-        margin-top: auto;
-        justify-content: flex-end;
-        padding-top: 12px;
-      }
-      tr.row-link { cursor: pointer; }
-      tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
-      .ai-gen-modal { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 20px; background: radial-gradient(circle at top left, rgba(37, 99, 235, 0.14), transparent 30%), radial-gradient(circle at top right, rgba(34, 197, 94, 0.14), transparent 34%), rgba(15, 23, 42, 0.36); }
-      .ai-gen-modal[hidden] { display: none; }
-      .ai-gen-panel { width: min(1060px, 96vw); max-height: min(96vh, 1800px); overflow: auto; padding: 16px; border: 1px solid var(--border-strong); border-radius: var(--radius-xl); background: rgba(255, 255, 255, 0.97); box-shadow: 0 24px 60px rgba(37, 99, 235, 0.18); }
-      .ai-gen-panel-head { margin-bottom: 8px; display: flex; justify-content: flex-end; gap: 10px; }
-      .ai-check-result { margin: 8px 0 10px; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid rgba(37, 99, 235, 0.14); background: rgba(37, 99, 235, 0.05); color: var(--text); }
-      .ai-check-result.ok { border-color: rgba(22, 163, 74, 0.30); background: rgba(22, 163, 74, 0.08); color: #166534; }
-      .ai-check-result.warn { border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.10); color: #92400e; }
-      .ai-prompt-input { min-height: 420px; resize: vertical; white-space: pre-wrap; width: 100%; }
-      .chk-inline { display: inline-flex; align-items: center; gap: 8px; }
-      .ai-gen-loading { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; background: rgba(15, 23, 42, 0.38); }
-      .ai-gen-loading[hidden] { display: none; }
-      .ai-gen-loading-box { display: inline-flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius-md); border: 1px solid var(--border); background: rgba(255, 255, 255, 0.96); box-shadow: var(--shadow-soft); }
-      .ai-gen-spinner { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(37, 99, 235, 0.14); border-top-color: var(--brand2); animation: ai-spin 0.8s linear infinite; }
-      @keyframes ai-spin { to { transform: rotate(360deg); } }
-      .confirm-modal { position: fixed; inset: 0; z-index: 3200; display: grid; place-items: center; padding: 16px; background: radial-gradient(circle at top left, rgba(37, 99, 235, 0.14), transparent 30%), radial-gradient(circle at top right, rgba(34, 197, 94, 0.14), transparent 34%), rgba(15, 23, 42, 0.40); }
-      .confirm-modal[hidden] { display: none; }
-      .confirm-card { width: min(440px, 94vw); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: rgba(255, 255, 255, 0.98); box-shadow: 0 22px 48px rgba(37, 99, 235, 0.18); padding: 18px; }
-      .confirm-actions { margin-top: 12px; display: flex; justify-content: flex-end; gap: 10px; }
-      @media (max-width: 980px) {
-        .exam-toolbar {
-          grid-template-columns: 1fr;
-          align-items: stretch;
-          gap: 10px;
-        }
-        .exam-search-wrap {
-          max-width: 100%;
-          min-width: 0;
-        }
-        .upload-row {
-          width: 100%;
-          justify-self: start;
-          justify-content: flex-start;
-          flex-wrap: wrap;
-        }
-      }
-    </style>
-{% endblock %}
+{% set admin_page_subtitle = "Git 仓库同步与版本快照" %}
+{% block body_class %}page-admin-exams{% endblock %}
 {% block content %}
       <div class="surface admin-surface" role="region" aria-label="试卷管理">
         <section class="section">
-          <div class="section-head">
-            <div class="exam-toolbar">
-              <div class="exam-search-wrap">
-                <form class="exam-search" method="get" action="{{ url_for('admin_exams') }}">
-                  <div class="field">
-                    <input id="exam_q" class="input" name="exam_q" value="{{ exam_q or '' }}" placeholder="ID/exam_key/标题" autocomplete="off" aria-label="搜索试卷" />
-                  </div>
-                </form>
-              </div>
-              <form id="examUploadForm" class="upload-row" method="post" action="/admin/exams/upload" enctype="multipart/form-data">
-                <div class="field field-file-hidden" aria-hidden="true">
-                  <label for="file">选择文件</label>
-                  <input id="file" class="file-input" type="file" name="file" accept=".md,.zip,text/markdown,application/zip" required />
+          <div class="section-head sync-head">
+            <div class="sync-toolbar">
+              <form class="sync-search-form" method="get" action="{{ url_for('admin_exams') }}">
+                <div class="field">
+                  <label for="exam_q">搜索</label>
+                  <input id="exam_q" class="input" name="exam_q" value="{{ exam_q or '' }}" placeholder="搜索 ID/exam_key/标题" autocomplete="off" aria-label="搜索试卷" />
                 </div>
-                <button id="examUploadTrigger" class="btn btn-primary" type="button">上传解析</button>
-                <button id="ai_gen_toggle" class="btn btn-primary" type="button" aria-controls="ai_gen_modal" aria-expanded="false">大模型自动生成试卷</button>
               </form>
+
+              <form id="repo_url_form" class="sync-repo-form" method="post" action="{{ url_for('admin_exams_sync') }}">
+                <div class="field">
+                  <label for="repo_url">Git 仓库地址</label>
+                  <input id="repo_url" class="input" name="repo_url" value="{{ exam_repo_url or '' }}" placeholder="https://example.com/repo.git" autocomplete="off" required />
+                </div>
+              </form>
+
+              <div class="sync-card">
+                <div class="k">仓库地址</div>
+                <div class="v mono">{{ (exam_sync_state or {}).get('repo_url') or '未配置' }}</div>
+              </div>
+              <div class="sync-card">
+                <div class="k">最近状态</div>
+                <div class="v">
+                  {% set sync_status = (exam_sync_state or {}).get('status') or 'idle' %}
+                  <span class="status-pill {{ sync_status }}">{{ sync_status }}</span>
+                </div>
+              </div>
+              <div class="sync-card">
+                <div class="k">最近 Commit</div>
+                <div class="v mono">{{ (exam_sync_state or {}).get('last_commit') or '-' }}</div>
+              </div>
+              <div class="sync-card">
+                <div class="k">最近完成时间</div>
+                <div class="v">{{ (exam_sync_state or {}).get('finished_at') or '-' }}</div>
+              </div>
+
+              <div class="sync-submit">
+                <button class="btn btn-primary" type="submit" form="repo_url_form">立即同步</button>
+              </div>
+            </div>
+
+            <div class="sync-notes">
+              <p class="sync-hint">只支持公共只读 HTTPS 仓库。同步会扫描仓库根目录第一层的 Markdown。</p>
+              {% if (exam_sync_state or {}).get('last_error') %}
+                <p class="sync-hint">最近错误：{{ (exam_sync_state or {}).get('last_error') }}</p>
+              {% endif %}
+              {% if (exam_sync_state or {}).get('last_result') %}
+                {% set sync_result = (exam_sync_state or {}).get('last_result') or {} %}
+                <p class="sync-hint">最近一次同步：扫描 {{ sync_result.get('scanned_md', 0) }} 个 Markdown，新增 {{ sync_result.get('created_versions', 0) }}，更新 {{ sync_result.get('updated_versions', 0) }}，未变化 {{ sync_result.get('unchanged_versions', 0) }}，退役 {{ sync_result.get('retired_exams', 0) }}，异常 {{ sync_result.get('error_count', 0) }}。</p>
+              {% endif %}
             </div>
           </div>
+
           <div class="table-scroll">
             <table class="exam-table" aria-label="试卷列表">
-              <colgroup>
-                <col class="col-w-7p" />
-                <col class="col-w-25p" />
-                <col class="col-w-30p" />
-                <col class="col-w-10p" />
-                <col class="col-w-18p" />
-                <col class="col-w-10p" />
-              </colgroup>
-              <thead><tr><th class="col-id">ID</th><th class="col-exam-key">EXAM_KEY</th><th>标题</th><th class="col-count">题数</th><th class="col-updated">更新时间</th><th class="col-actions"></th></tr></thead>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>EXAM_KEY</th>
+                  <th>标题</th>
+                  <th>状态</th>
+                  <th>当前版本</th>
+                  <th>来源文件</th>
+                  <th>更新时间</th>
+                </tr>
+              </thead>
               <tbody>
                 {% for e in exams_page %}
                 <tr class="row-link" data-href="/admin/exams/{{ e.id }}">
-                  <td class="col-id">{{ e.id }}</td>
-                  <td class="col-key"><span class="exam-key">{{ e.exam_key }}</span></td>
-                  <td class="col-title">{{ e.title | title_clean }}</td>
-                  <td class="col-count">{{ e.count }}</td>
-                  <td class="col-updated">{{ e.updated_at.strftime("%Y-%m-%d %H:%M:%S") if e.updated_at else "" }}</td>
-                  <td class="col-actions">
-                    <div class="exam-actions">
-                      <form method="post" action="/admin/exams/{{ e.exam_key }}/delete" class="inline-form" data-exam-delete-form><button class="btn btn-danger" type="submit">删除</button></form>
-                    </div>
+                  <td>{{ e.id }}</td>
+                  <td class="mono">{{ e.exam_key }}</td>
+                  <td>
+                    <div>{{ e.title | title_clean }}</div>
+                    {% if e.last_sync_error %}
+                      <div class="cell-sub">{{ e.last_sync_error }}</div>
+                    {% endif %}
                   </td>
+                  <td><span class="status-pill {{ e.status }}">{{ e.status }}</span></td>
+                  <td>{% if e.current_version_no %}v{{ e.current_version_no }}{% else %}-{% endif %}</td>
+                  <td class="mono">{{ e.source_path or '-' }}</td>
+                  <td>{{ e.updated_at.strftime("%Y-%m-%d %H:%M:%S") if e.updated_at else "" }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-          {% set exams_qs_extra = "" %}{% if exam_q %}{% set exams_qs_extra = exams_qs_extra ~ "&exam_q=" ~ (exam_q|urlencode) %}{% endif %}
+
+          {% set exams_qs_extra = "" %}
+          {% if exam_q %}{% set exams_qs_extra = exams_qs_extra ~ "&exam_q=" ~ (exam_q|urlencode) %}{% endif %}
           {% set total_exam_pages_display = total_exam_pages if total_exam_pages and total_exam_pages > 0 else 1 %}
           <div class="tri-pager" aria-label="试卷分页">
             <span class="page-info">第 {{ exam_page }} / {{ total_exam_pages_display }} 页（共 {{ total_exams }} 条）</span>
-            {% if exam_page > 1 %}<a class="tri-btn" href="{{ url_for('admin_exams') }}?exam_page={{ exam_page - 1 }}{{ exams_qs_extra }}" aria-label="上一页" title="上一页">▲</a>{% else %}<span class="tri-btn disabled" aria-hidden="true">▲</span>{% endif %}
-            {% if exam_page < total_exam_pages_display %}<a class="tri-btn" href="{{ url_for('admin_exams') }}?exam_page={{ exam_page + 1 }}{{ exams_qs_extra }}" aria-label="下一页" title="下一页">▼</a>{% else %}<span class="tri-btn disabled" aria-hidden="true">▼</span>{% endif %}
+            {% if exam_page > 1 %}
+              <a class="tri-btn" href="/admin/exams?exam_page={{ exam_page - 1 }}{{ exams_qs_extra }}" aria-label="上一页" title="上一页">▲</a>
+            {% else %}
+              <span class="tri-btn disabled" aria-hidden="true">▲</span>
+            {% endif %}
+            {% if exam_page < total_exam_pages_display %}
+              <a class="tri-btn" href="/admin/exams?exam_page={{ exam_page + 1 }}{{ exams_qs_extra }}" aria-label="下一页" title="下一页">▼</a>
+            {% else %}
+              <span class="tri-btn disabled" aria-hidden="true">▼</span>
+            {% endif %}
           </div>
         </section>
-      </div>
-{% endblock %}
-{% block outside_shell %}
-      <div id="ai_gen_modal" class="ai-gen-modal modal-shell" hidden>
-        <form id="ai_gen_panel" class="ai-gen-panel modal-card modal-card--wide" method="post" action="/admin/exams/ai" role="dialog" aria-modal="true" aria-label="AI exam generation">
-          <div class="ai-gen-panel-head">
-            <button id="ai_check_btn" class="btn btn-primary" type="button">检查提示词</button>
-            <button id="ai_generate_btn" class="btn btn-primary" type="submit" name="op" value="generate" disabled>自动生成试卷</button>
-            <button id="ai_gen_close" class="btn" type="button">关闭</button>
-          </div>
-          <div id="ai_check_result" class="ai-check-result" hidden></div>
-          {% if ai_notice %}<div id="ai_server_notice" data-level="{{ ai_notice_level or 'error' }}" data-text="{{ ai_notice }}" hidden></div>{% endif %}
-          <div class="field">
-            <div class="form-check-row">
-              <label class="chk-inline" for="ai_include_diagrams"><input id="ai_include_diagrams" type="checkbox" name="ai_include_diagrams" value="1" {% if ai_exam_include_diagrams %}checked{% endif %} />生成示意图</label>
-              <label class="chk-inline" for="ai_use_sample_prompt"><input id="ai_use_sample_prompt" type="checkbox" value="1" />使用提示词示例</label>
-            </div>
-            <textarea id="ai_exam_prompt" class="input ai-prompt-input" name="ai_exam_prompt" placeholder="描述岗位、题型、题量、难度、评分要求等...">{{ ai_exam_prompt or '' }}</textarea>
-          </div>
-          <div id="ai_gen_loading" class="ai-gen-loading" hidden><div class="ai-gen-loading-box"><span class="ai-gen-spinner" aria-hidden="true"></span><span>正在生成试卷，请稍候...</span></div></div>
-        </form>
-      </div>
-      <div id="delete_exam_confirm_modal" class="confirm-modal modal-shell" hidden>
-        <div class="confirm-card modal-card" role="dialog" aria-modal="true" aria-label="删除试卷确认">
-          <h3 class="confirm-title">是否确认删除试卷？</h3>
-          <div class="confirm-actions">
-            <button id="delete_exam_confirm_ok" class="btn btn-primary" type="button">确定</button>
-            <button id="delete_exam_confirm_cancel" class="btn" type="button">取消</button>
-          </div>
-        </div>
       </div>
 {% endblock %}
 {% block scripts %}

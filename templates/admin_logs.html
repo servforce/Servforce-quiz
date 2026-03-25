@@ -2,256 +2,92 @@
 {% set admin_active = "logs" %}
 {% set admin_page_title = "系统日志" %}
 {% set admin_page_subtitle = "查看日志密度与操作明细" %}
-{% block head_extra %}
-    <style>
-      .admin-surface {
-        font-size: var(--admin-font-size-base);
-        min-height: 0;
-        display: grid;
-        gap: 16px;
-        align-content: start;
-        padding: 16px;
-      }
-      .log-box {
-        margin: 0;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-lg);
-        background: rgba(247, 250, 255, 0.76);
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-      }
-      .log-box-title {
-        margin: 0;
-        font-size: var(--admin-font-size-title);
-        font-weight: 950;
-        line-height: 1.15;
-        color: var(--text);
-      }
-      .log-box > .log-box-title {
-        display: flex;
-        align-items: center;
-        min-height: var(--admin-panel-head-min-height);
-        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
-        border-bottom: 1px solid rgba(37, 99, 235, 0.10);
-        background: rgba(255, 255, 255, 0.52);
-      }
-      .log-box-head {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: center;
-        min-height: var(--admin-panel-head-min-height);
-        gap: var(--admin-panel-head-gap);
-        padding: var(--admin-panel-head-pad-y) var(--admin-panel-head-pad-x);
-        border-bottom: 1px solid rgba(37, 99, 235, 0.10);
-        background: rgba(255, 255, 255, 0.52);
-      }
-      .legend-grid {
-        display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-        gap: 10px;
-        padding: 16px 18px 18px;
-      }
-      .legend-grid.legend-grid--footer {
-        border-top: 1px solid rgba(37, 99, 235, 0.10);
-        gap: 0;
-        padding: 0;
-        background: rgba(255, 255, 255, 0.52);
-      }
-      .legend-grid.legend-grid--footer .legend-item {
-        min-height: 0;
-        padding: 14px 16px;
-        border: 0;
-        border-radius: 0;
-        background: transparent;
-        font-size: 14px;
-      }
-      .legend-grid.legend-grid--footer .legend-item + .legend-item {
-        border-left: 1px solid rgba(37, 99, 235, 0.10);
-      }
-      .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        min-height: 48px;
-        padding: 10px 12px;
-        border: 1px solid rgba(37, 99, 235, 0.10);
-        border-radius: var(--radius-md);
-        background: rgba(255, 255, 255, 0.88);
-      }
-      .legend-dot { width: 10px; height: 10px; border-radius: 999px; }
-      .legend-cnt { margin-left:auto; font-size: 15px; font-weight: 900; }
-      .density-filter { margin: 0 0 0 auto; }
-      .field { margin: 0; }
-      .range-sep { padding: 0 2px; height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 900; }
-      .density-wrap {
-        padding: 18px;
-        background: rgba(255, 255, 255, 0.48);
-      }
-      .density-plotly { min-height: 240px; }
-      .density-empty {
-        min-height: 140px;
-        display: grid;
-        place-items: center;
-        padding: 16px;
-        border: 1px dashed rgba(37, 99, 235, 0.16);
-        border-radius: var(--radius-md);
-        background: rgba(255, 255, 255, 0.82);
-        color: var(--muted-strong);
-        font-weight: 500;
-        text-align: center;
-      }
-      .table-scroll {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-x: auto;
-        border-top: 1px solid rgba(37, 99, 235, 0.10);
-        background: rgba(255, 255, 255, 0.48);
-      }
-      .log-table { width: 100%; min-width: 980px; table-layout: fixed; font-size: var(--admin-font-size-table-body); }
-      .log-table th,
-      .log-table td {
-        padding: 14px 18px;
-        vertical-align: middle;
-        line-height: 1.3;
-      }
-      .log-table th {
-        white-space: nowrap;
-        font-size: var(--admin-font-size-table-head);
-        font-weight: 800;
-        text-transform: none;
-        letter-spacing: 0;
-        line-height: 1.2;
-      }
-      .log-table td { font-variant-numeric: tabular-nums; }
-      .log-table td.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .log-table .type-pill {
-        display: inline-flex;
-        align-items: center;
-        min-height: 28px;
-        padding: 0 10px;
-        border: 1px solid transparent;
-        border-radius: var(--radius-pill);
-        font-size: 12px;
-        font-weight: 900;
-        white-space: nowrap;
-      }
-      .log-table .type-pill.cat-candidate { border-color: rgba(22, 163, 74, 0.28); background: rgba(22, 163, 74, 0.10); color: #166534; }
-      .log-table .type-pill.cat-exam { border-color: rgba(124, 58, 237, 0.28); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
-      .log-table .type-pill.cat-grading { border-color: rgba(245, 158, 11, 0.32); background: rgba(245, 158, 11, 0.12); color: #92400e; }
-      .log-table .type-pill.cat-assignment { border-color: rgba(37, 99, 235, 0.28); background: rgba(37, 99, 235, 0.10); color: #1d4ed8; }
-      .log-table .type-pill.cat-ui { border-color: rgba(100, 116, 139, 0.28); background: rgba(100, 116, 139, 0.10); color: #334155; }
-      .log-table .type-pill.cat-system { border-color: rgba(17, 24, 39, 0.20); background: rgba(17, 24, 39, 0.06); color: rgba(15, 23, 42, 0.86); }
-      .empty-row td {
-        padding: 14px 18px;
-        color: var(--muted);
-        font-weight: 500;
-      }
-      .tri-pager {
-        position: static;
-        bottom: auto;
-        width: 100%;
-        max-width: none;
-        margin-top: auto;
-        margin-left: 0;
-        justify-content: flex-end;
-        padding: 6px 18px 8px;
-        border-top: 1px solid rgba(37, 99, 235, 0.10);
-        background: rgba(255, 255, 255, 0.48);
-      }
-      .tri-pager .page-info {
-        margin-right: auto;
-        font-size: 13px;
-        line-height: 1.2;
-      }
-      .tri-pager .tri-btn {
-        width: 38px;
-        height: 32px;
-      }
-      @media (max-width: 980px) {
-        .admin-surface { padding: 16px; }
-        .legend-grid { grid-template-columns: 1fr; }
-        .legend-grid.legend-grid--footer .legend-item + .legend-item {
-          border-left: 0;
-          border-top: 1px solid rgba(37, 99, 235, 0.10);
-        }
-        .density-filter {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: stretch;
-          width: 100%;
-          margin-left: 0;
-        }
-        .toolbar-range {
-          width: 100%;
-          flex-wrap: wrap;
-        }
-        .toolbar-field--date {
-          width: 100%;
-          flex: 1 1 100%;
-        }
-        .density-wrap,
-        .legend-grid,
-        .log-box > .log-box-title,
-        .log-box-head,
-        .tri-pager {
-          padding-left: 16px;
-          padding-right: 16px;
-        }
-        .log-table th,
-        .log-table td {
-          padding: 14px 16px;
-        }
-      }
-    </style>
-{% endblock %}
 {% block content %}
-      <div class="surface admin-surface" role="region" aria-label="系统日志">
-        <div class="log-box">
-          <div class="log-box-head">
-            <div class="log-box-title">任务密度图</div>
-            <form class="density-filter toolbar-form toolbar-form--compact" method="get" action="{{ url_for('admin_logs') }}">
-              <div class="range-group toolbar-range">
-                <div class="field toolbar-field--date"><div class="date-proxy"><input id="chart_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="chart_start" class="input date-native" type="date" name="chart_start" value="{{ chart_range_start or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="chart_start" aria-label="选择开始日期"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
-                <div class="range-sep" aria-hidden="true">-</div>
-                <div class="field toolbar-field--date"><div class="date-proxy"><input id="chart_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="chart_end" class="input date-native" type="date" name="chart_end" value="{{ chart_range_end or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="chart_end" aria-label="选择结束日期"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
-              </div>
-              <div class="toolbar-actions"><button class="btn btn-primary" type="submit">查询</button><a class="btn" href="{{ url_for('admin_logs') }}">重置</a></div>
-            </form>
-          </div>
-          <div class="density-wrap">
-            <div id="log_density_plotly" class="density-plotly" aria-label="任务密度图（Plotly）"></div>
-            <div id="log_density_empty" class="density-empty" hidden>该时间范围暂无操作记录。</div>
-            <script id="log_density_data" type="application/json">{{ {"days": (chart_days or []), "counts": (chart_counts or [])}|tojson }}</script>
-          </div>
-          <div class="legend-grid legend-grid--footer" aria-label="任务类型图例">
-            <div class="legend-item"><span class="legend-dot legend-dot--candidate"></span><span>候选者操作</span><span class="legend-cnt">{{ log_counts.candidate if log_counts else 0 }}</span></div>
-            <div class="legend-item"><span class="legend-dot legend-dot--exam"></span><span>试卷操作</span><span class="legend-cnt">{{ log_counts.exam if log_counts else 0 }}</span></div>
-            <div class="legend-item"><span class="legend-dot legend-dot--grading"></span><span>判卷操作</span><span class="legend-cnt">{{ log_counts.grading if log_counts else 0 }}</span></div>
-            <div class="legend-item"><span class="legend-dot legend-dot--assignment"></span><span>答题邀约</span><span class="legend-cnt">{{ log_counts.assignment if log_counts else 0 }}</span></div>
-            <div class="legend-item"><span class="legend-dot legend-dot--system"></span><span>系统</span><span class="legend-cnt">{{ log_counts.system if log_counts else 0 }}</span></div>
-          </div>
-        </div>
-        <div class="log-box">
-          <div class="log-box-title">任务详情列表</div>
-          <div class="table-scroll">
-            <table class="log-table" aria-label="日志表">
-              <thead><tr><th class="col-w-56">ID</th><th class="col-w-170">时间</th><th class="col-w-160">类型</th><th>详情</th></tr></thead>
-              <tbody id="logs_table_body">
-                {% for it in (logs or []) %}
-                <tr><td>{{ it.id }}</td><td class="nowrap">{{ it.at.strftime("%Y-%m-%d %H:%M:%S") if it.at else "" }}</td><td><span class="type-pill cat-{{ it.type_key or 'system' }}">{{ it.type_label or "" }}</span></td><td class="ellipsis">{{ it.detail_text or "" }}</td></tr>
-                {% endfor %}
-                {% if not logs %}<tr class="empty-row"><td colspan="4">暂无系统日志</td></tr>{% endif %}
-              </tbody>
-            </table>
-          </div>
-          {% set total_log_pages_display = total_log_pages if total_log_pages and total_log_pages > 0 else 1 %}
-          {% set log_qs_extra = "" %}{% if chart_range_start %}{% set log_qs_extra = log_qs_extra ~ "&chart_start=" ~ (chart_range_start|urlencode) %}{% endif %}{% if chart_range_end %}{% set log_qs_extra = log_qs_extra ~ "&chart_end=" ~ (chart_range_end|urlencode) %}{% endif %}
-          <div class="tri-pager" aria-label="日志分页">
-            <span class="page-info">第 {{ log_page or 1 }} / {{ total_log_pages_display }} 页（共 {{ total_logs }} 条）</span>
-            {% if log_page and log_page > 1 %}<a class="tri-btn" href="{{ url_for('admin_logs') }}?log_page={{ log_page - 1 }}{{ log_qs_extra }}" aria-label="上一页" title="上一页">▲</a>{% else %}<span class="tri-btn disabled" aria-hidden="true">▲</span>{% endif %}
-            {% if log_page and (log_page < total_log_pages_display) %}<a class="tri-btn" href="{{ url_for('admin_logs') }}?log_page={{ log_page + 1 }}{{ log_qs_extra }}" aria-label="下一页" title="下一页">▼</a>{% else %}<span class="tri-btn disabled" aria-hidden="true">▼</span>{% endif %}
-          </div>
+      <div class="surface admin-surface p-4 text-[15px]" role="region" aria-label="系统日志">
+        <div class="grid w-full content-start gap-4">
+          <section class="overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+            <div class="grid min-h-[52px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200/80 bg-white/60 px-[18px] py-[10px] max-[980px]:grid-cols-1 max-[980px]:items-stretch max-[980px]:gap-2 max-[980px]:px-4 max-[980px]:py-2.5">
+              <h2 class="m-0 text-[20px] font-black leading-[1.15] text-blue-700">任务密度图</h2>
+              <form class="grid w-full max-w-[860px] grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3 gap-y-2 justify-self-end max-[980px]:grid-cols-1 max-[980px]:justify-self-stretch" method="get" action="{{ url_for('admin_logs') }}" aria-label="选择任务密度时间范围">
+                <div class="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2" aria-label="时间范围">
+                  <div class="field toolbar-field--date !w-auto !min-w-0 !shrink !flex-none">
+                    <div class="date-proxy">
+                      <input id="chart_start_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="开始日期" />
+                      <input id="chart_start" class="input date-native" type="date" name="chart_start" value="{{ chart_range_start or '' }}" tabindex="-1" aria-hidden="true" />
+                      <button class="date-btn" type="button" data-for="chart_start" aria-label="选择开始日期">
+                        <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="inline-flex h-10 items-center justify-center px-0.5 text-slate-400" aria-hidden="true">-</div>
+                  <div class="field toolbar-field--date !w-auto !min-w-0 !shrink !flex-none">
+                    <div class="date-proxy">
+                      <input id="chart_end_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly aria-label="结束日期" />
+                      <input id="chart_end" class="input date-native" type="date" name="chart_end" value="{{ chart_range_end or '' }}" tabindex="-1" aria-hidden="true" />
+                      <button class="date-btn" type="button" data-for="chart_end" aria-label="选择结束日期">
+                        <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="flex flex-wrap items-center justify-end gap-2 max-[980px]:justify-start">
+                  <button class="btn btn-primary" type="submit">查询</button>
+                  <a class="btn" href="{{ url_for('admin_logs') }}">重置</a>
+                </div>
+              </form>
+            </div>
+
+            <div class="bg-white/55 p-4 max-[980px]:p-1">
+              <div id="log_density_plotly" class="relative h-[400px] overflow-hidden rounded-md border border-slate-200/80 bg-white/80 max-[980px]:h-[236px] max-[980px]:border-0 max-[980px]:rounded-lg" aria-label="任务密度图（Plotly）"></div>
+              <div id="log_density_empty" class="grid min-h-[140px] place-items-center px-4 py-4 text-center text-[15px] font-medium text-slate-500" hidden>该时间范围暂无操作记录。</div>
+              <script id="log_density_data" type="application/json">{{ {"days": (chart_days or []), "counts": (chart_counts or [])}|tojson }}</script>
+            </div>
+
+            <div class="grid grid-cols-5 border-t border-slate-200/80 bg-white/60 max-[980px]:grid-cols-1" aria-label="任务类型图例">
+              <div class="flex min-h-[52px] items-center gap-2 px-4 py-3 text-[14px] font-black text-slate-700 max-[980px]:border-t max-[980px]:border-slate-200/80 max-[980px]:first:border-t-0 min-[981px]:border-l min-[981px]:border-slate-200/80 min-[981px]:first:border-l-0"><span class="legend-dot legend-dot--candidate"></span><span>候选者操作</span><span class="ml-auto text-[15px] text-slate-500">{{ log_counts.candidate if log_counts else 0 }}</span></div>
+              <div class="flex min-h-[52px] items-center gap-2 px-4 py-3 text-[14px] font-black text-slate-700 max-[980px]:border-t max-[980px]:border-slate-200/80 min-[981px]:border-l min-[981px]:border-slate-200/80 min-[981px]:first:border-l-0"><span class="legend-dot legend-dot--exam"></span><span>试卷操作</span><span class="ml-auto text-[15px] text-slate-500">{{ log_counts.exam if log_counts else 0 }}</span></div>
+              <div class="flex min-h-[52px] items-center gap-2 px-4 py-3 text-[14px] font-black text-slate-700 max-[980px]:border-t max-[980px]:border-slate-200/80 min-[981px]:border-l min-[981px]:border-slate-200/80 min-[981px]:first:border-l-0"><span class="legend-dot legend-dot--grading"></span><span>判卷操作</span><span class="ml-auto text-[15px] text-slate-500">{{ log_counts.grading if log_counts else 0 }}</span></div>
+              <div class="flex min-h-[52px] items-center gap-2 px-4 py-3 text-[14px] font-black text-slate-700 max-[980px]:border-t max-[980px]:border-slate-200/80 min-[981px]:border-l min-[981px]:border-slate-200/80 min-[981px]:first:border-l-0"><span class="legend-dot legend-dot--assignment"></span><span>答题邀约</span><span class="ml-auto text-[15px] text-slate-500">{{ log_counts.assignment if log_counts else 0 }}</span></div>
+              <div class="flex min-h-[52px] items-center gap-2 px-4 py-3 text-[14px] font-black text-slate-700 max-[980px]:border-t max-[980px]:border-slate-200/80 min-[981px]:border-l min-[981px]:border-slate-200/80 min-[981px]:first:border-l-0"><span class="legend-dot legend-dot--system"></span><span>系统</span><span class="ml-auto text-[15px] text-slate-500">{{ log_counts.system if log_counts else 0 }}</span></div>
+            </div>
+          </section>
+
+          <section class="overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+            <div class="flex min-h-[52px] items-center border-b border-slate-200/80 bg-white/60 px-[18px] py-[10px] max-[980px]:px-4">
+              <h2 class="m-0 text-[20px] font-black leading-[1.15] text-blue-700">任务详情列表</h2>
+            </div>
+            <div class="table-scroll bg-white/55">
+              <table class="w-full min-w-[980px] table-fixed text-[15px]" aria-label="日志表">
+                <thead>
+                  <tr>
+                    <th class="col-w-56">ID</th>
+                    <th class="col-w-170">时间</th>
+                    <th class="col-w-160">类型</th>
+                    <th>详情</th>
+                  </tr>
+                </thead>
+                <tbody id="logs_table_body">
+                  {% for it in (logs or []) %}
+                  <tr>
+                    <td>{{ it.id }}</td>
+                    <td class="nowrap">{{ it.at.strftime("%Y-%m-%d %H:%M:%S") if it.at else "" }}</td>
+                    <td><span class="type-pill cat-{{ it.type_key or 'system' }}">{{ it.type_label or "" }}</span></td>
+                    <td class="ellipsis">{{ it.detail_text or "" }}</td>
+                  </tr>
+                  {% endfor %}
+                  {% if not logs %}<tr><td colspan="4" class="table-empty-cell">暂无系统日志</td></tr>{% endif %}
+                </tbody>
+              </table>
+            </div>
+
+            {% set total_log_pages_display = total_log_pages if total_log_pages and total_log_pages > 0 else 1 %}
+            {% set log_qs_extra = "" %}{% if chart_range_start %}{% set log_qs_extra = log_qs_extra ~ "&chart_start=" ~ (chart_range_start|urlencode) %}{% endif %}{% if chart_range_end %}{% set log_qs_extra = log_qs_extra ~ "&chart_end=" ~ (chart_range_end|urlencode) %}{% endif %}
+            <div class="tri-pager border-t border-slate-200/80 bg-white/55 px-[18px] py-[14px] max-[980px]:px-4" aria-label="日志分页">
+              <span class="page-info">第 {{ log_page or 1 }} / {{ total_log_pages_display }} 页（共 {{ total_logs }} 条）</span>
+              {% if log_page and log_page > 1 %}<a class="tri-btn" href="{{ url_for('admin_logs') }}?log_page={{ log_page - 1 }}{{ log_qs_extra }}" aria-label="上一页" title="上一页">▲</a>{% else %}<span class="tri-btn disabled" aria-hidden="true">▲</span>{% endif %}
+              {% if log_page and (log_page < total_log_pages_display) %}<a class="tri-btn" href="{{ url_for('admin_logs') }}?log_page={{ log_page + 1 }}{{ log_qs_extra }}" aria-label="下一页" title="下一页">▼</a>{% else %}<span class="tri-btn disabled" aria-hidden="true">▼</span>{% endif %}
+            </div>
+          </section>
         </div>
       </div>
 {% endblock %}

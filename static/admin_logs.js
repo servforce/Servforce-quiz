@@ -26,6 +26,10 @@
     } else {
       plotlyEl.hidden = false;
       emptyEl.hidden = true;
+      const isNarrowScreen = typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia("(max-width: 980px)").matches
+        : false;
+      const plotHeight = Math.max(isNarrowScreen ? 236 : 400, plotlyEl.clientHeight || 0);
       window.Plotly.newPlot(plotlyEl, [{
         x: xVals,
         y: yVals,
@@ -38,8 +42,10 @@
         hovertemplate: "%{x}<br>操作数：%{y}<extra></extra>",
         name: "每日操作数",
       }], {
-        height: 400,
-        margin: { l: 56, r: 48, t: 22, b: 46 },
+        height: plotHeight,
+        margin: isNarrowScreen
+          ? { l: 22, r: 6, t: 4, b: 22 }
+          : { l: 56, r: 48, t: 22, b: 46 },
         paper_bgcolor: "rgba(0,0,0,0)",
         plot_bgcolor: "rgba(0,0,0,0)",
         hovermode: "x unified",

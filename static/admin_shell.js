@@ -1,12 +1,44 @@
 (() => {
   const modalSelector = ".modal-shell";
+  const sidebarCollapsedClass = "admin-sidebar-collapsed";
+  const sidebarStorageKey = "admin.sidebar.collapsed";
+  const sidebarAutoCollapseQuery = "(max-width: 980px)";
   const modalState = new WeakMap();
   let modalSeq = 0;
   let listenersBound = false;
+  let sidebarMediaQuery = null;
 
   const getBody = () => document.body;
   const getRoot = () => document.documentElement;
   const getStore = () => (window.Alpine ? window.Alpine.store("adminUI") : null);
+
+  const readSidebarPreference = () => {
+    try {
+      return window.localStorage.getItem(sidebarStorageKey) === "1";
+    } catch (_) {
+      return getRoot()?.classList.contains(sidebarCollapsedClass) || false;
+    }
+  };
+
+  const writeSidebarPreference = (collapsed) => {
+    try {
+      window.localStorage.setItem(sidebarStorageKey, collapsed ? "1" : "0");
+    } catch (_) {}
+  };
+
+  const applySidebarCollapsed = (collapsed) => {
+    getRoot()?.classList.toggle(sidebarCollapsedClass, collapsed);
+    getBody()?.classList.toggle(sidebarCollapsedClass, collapsed);
+  };
+
+  const bindSidebarViewport = (callback) => {
+    if (typeof window.matchMedia !== "function") return null;
+    const media = window.matchMedia(sidebarAutoCollapseQuery);
+    const listener = () => callback(Boolean(media.matches));
+    if (typeof media.addEventListener === "function") media.addEventListener("change", listener);
+    else if (typeof media.addListener === "function") media.addListener(listener);
+    return { media, listener };
+  };
 
   const findFocusable = (el) => {
     if (!el) return [];
@@ -43,6 +75,13 @@
     Alpine.store("adminUI", {
       activeNav: "exams",
       shellReady: false,
+      sidebarCollapsed: false,
+      sidebarAutoCollapsed: false,
+      sidebarNarrowOverride: null,
+      get isSidebarCollapsed() {
+        if (!this.sidebarAutoCollapsed) return this.sidebarCollapsed;
+        return this.sidebarNarrowOverride === null ? true : this.sidebarNarrowOverride;
+      },
       initShell() {
         const body = getBody();
         if (!body || !body.classList.contains("admin-app")) return;
@@ -64,7 +103,33 @@
           });
         }
         getRoot()?.classList.add("admin-shell-ready");
+        this.initSidebar();
         this.shellReady = true;
+      },
+      initSidebar() {
+        this.sidebarCollapsed = readSidebarPreference();
+        if (!sidebarMediaQuery) {
+          sidebarMediaQuery = bindSidebarViewport((matches) => this.syncSidebarViewport(matches));
+        }
+        this.syncSidebarViewport(Boolean(sidebarMediaQuery?.media?.matches));
+      },
+      syncSidebarViewport(matches) {
+        const nextMatches = Boolean(matches);
+        if (this.sidebarAutoCollapsed !== nextMatches) {
+          this.sidebarNarrowOverride = null;
+        }
+        this.sidebarAutoCollapsed = nextMatches;
+        applySidebarCollapsed(this.isSidebarCollapsed);
+      },
+      toggleSidebar() {
+        if (this.sidebarAutoCollapsed) {
+          this.sidebarNarrowOverride = !this.isSidebarCollapsed;
+          applySidebarCollapsed(this.isSidebarCollapsed);
+          return;
+        }
+        this.sidebarCollapsed = !this.sidebarCollapsed;
+        applySidebarCollapsed(this.isSidebarCollapsed);
+        writeSidebarPreference(this.sidebarCollapsed);
       },
       syncActiveNav() {
         this.activeNav = deriveActiveNav();

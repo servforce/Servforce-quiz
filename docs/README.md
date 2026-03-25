@@ -25,7 +25,6 @@
 ## UI
 
 - [UI 主题覆盖](ui/theme.md)
-- [前端工作区说明](ui/frontend-workspace.md)
 
 ## 建议阅读顺序
 
@@ -36,9 +35,9 @@
 5. [后端模块分工](architecture/backend-modules.md)
 6. [数据模型与存储](architecture/data-model.md)
 7. [REST API 约定](reference/api.md)
-8. [前端工作区说明](ui/frontend-workspace.md)
+8. [UI 主题覆盖](ui/theme.md)
 
 ## 说明
 
-- `docs/architecture/` 记录目标形态和稳定边界，不再把旧 Flask 单体实现当作唯一事实来源。
-- 旧系统仍通过 `legacy bridge` 暂时保留，但文档默认面向新架构。
+- `docs/architecture/` 记录当前稳定边界与后续整理方向。
+- 当前正式后台入口仍是 `web/` + `templates/` + `static/`。

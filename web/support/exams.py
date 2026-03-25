@@ -49,11 +49,13 @@ _PUBLIC_INVITE_GUARD = threading.Lock()
 
 
 def get_public_invite_config(exam_key: str) -> dict[str, object]:
-    row = get_exam_public_invite(str(exam_key or "").strip()) or {}
-    if not row:
+    exam = get_exam_definition(str(exam_key or "").strip()) or {}
+    if not exam:
         return {"enabled": False, "token": ""}
-    enabled = bool(row.get("public_invite_enabled"))
-    token = str(row.get("public_invite_token") or "").strip()
+    enabled = bool(exam.get("public_invite_enabled"))
+    token = str(exam.get("public_invite_token") or "").strip()
+    if str(exam.get("status") or "").strip() != "active" or int(exam.get("current_version_id") or 0) <= 0:
+        enabled = False
     return {"enabled": enabled, "token": token}
 
 def _hash_token_base64url(seed: str, *, length: int = 10) -> str:
@@ -97,6 +99,11 @@ def set_public_invite_enabled(exam_key: str, enabled: bool) -> dict[str, object]
     exam = get_exam_definition(ek)
     if not exam:
         return {"enabled": False, "token": ""}
+    if enabled:
+        if str(exam.get("status") or "").strip() != "active":
+            return {"enabled": False, "token": ""}
+        if int(exam.get("current_version_id") or 0) <= 0:
+            return {"enabled": False, "token": ""}
 
     with _PUBLIC_INVITE_GUARD:
         token0 = str(exam.get("public_invite_token") or "").strip()
@@ -236,12 +243,87 @@ def _asset_url(exam_key: str, relpath: str) -> str:
     return f"/exams/{exam_key}/assets/{_safe_relpath(relpath)}"
 
 
+def _version_asset_url(version_id: int, relpath: str) -> str:
+    return f"/exams/versions/{int(version_id)}/assets/{_safe_relpath(relpath)}"
+
+
+def get_exam_version_snapshot(version_id: int) -> dict[str, Any] | None:
+    try:
+        version = get_exam_version(int(version_id))
+    except Exception:
+        version = None
+    if not version:
+        return None
+    out = dict(version)
+    out["exam_version_id"] = int(version.get("id") or 0)
+    out["exam_key"] = str(version.get("exam_key") or "").strip()
+    return out
+
+
+def resolve_exam_version_id_for_new_assignment(exam_key: str) -> int | None:
+    exam = get_exam_definition(str(exam_key or "").strip()) or {}
+    if not exam:
+        return None
+    if str(exam.get("status") or "").strip() != "active":
+        return None
+    try:
+        version_id = int(exam.get("current_version_id") or 0)
+    except Exception:
+        version_id = 0
+    return version_id or None
+
+
+def get_exam_snapshot_for_assignment(assignment: dict[str, Any]) -> dict[str, Any] | None:
+    a = assignment or {}
+    try:
+        version_id = int(a.get("exam_version_id") or 0)
+    except Exception:
+        version_id = 0
+    if version_id > 0:
+        snap = get_exam_version_snapshot(version_id)
+        if snap:
+            return snap
+    exam_key = str(a.get("exam_key") or "").strip()
+    if not exam_key:
+        return None
+    exam = get_exam_definition(exam_key) or {}
+    if not exam:
+        return None
+    current_version_id = int(exam.get("current_version_id") or 0)
+    if current_version_id > 0:
+        snap = get_exam_version_snapshot(current_version_id)
+        if snap:
+            return snap
+    return exam
+
+
+def _resolve_exam_asset_payload_by_version(version_id: int, relpath: str) -> tuple[bytes, str] | None:
+    rp = _safe_relpath(relpath)
+    if not rp:
+        return None
+    if any(part == ".." for part in Path(rp).parts):
+        return None
+    try:
+        return get_exam_version_asset(int(version_id), rp)
+    except Exception:
+        return None
+
+
 def _resolve_exam_asset_payload(exam_key: str, relpath: str) -> tuple[bytes, str] | None:
     rp = _safe_relpath(relpath)
     if not rp:
         return None
     if any(part == ".." for part in Path(rp).parts):
         return None
+    exam = get_exam_definition(str(exam_key or "").strip()) or {}
+    try:
+        version_id = int(exam.get("current_version_id") or 0)
+    except Exception:
+        version_id = 0
+    if version_id > 0:
+        payload = _resolve_exam_asset_payload_by_version(version_id, rp)
+        if payload:
+            return payload
     try:
         return get_exam_asset(str(exam_key or "").strip(), rp)
     except Exception:
@@ -277,61 +359,12 @@ def _write_exam_to_storage(
     assets: dict[str, bytes] | None = None,
     ensure_unique_key: bool = False,
 ) -> str:
-    spec, public_spec = parse_qml_markdown(exam_text)
-    exam_key = spec["id"]
-    if ensure_unique_key and get_exam_definition(exam_key):
-        base = str(exam_key or "").strip()[:52] or "exam-ai"
-        stamp = datetime.now().strftime("%m%d%H%M%S")
-        new_key = f"{base}-{stamp}"
-        n = 1
-        while get_exam_definition(new_key):
-            n += 1
-            new_key = f"{base}-{stamp}-{n}"
-        exam_key = new_key[:64]
-        spec["id"] = exam_key
-        try:
-            public_spec["id"] = exam_key
-        except Exception:
-            pass
-        # 保持 source_md 中的试卷 id 与最终入库的 exam_key 一致。
-        exam_text = re.sub(r"(?mi)^id:\s*.+$", f"id: {exam_key}", str(exam_text or ""), count=1)
-
-    if assets is not None:
-        assets_to_save: dict[str, tuple[bytes, str]] = {}
-        for rel, content in assets.items():
-            rel2 = _safe_relpath(rel)
-            if not rel2:
-                continue
-            mime = mimetypes.guess_type(rel2)[0] or "application/octet-stream"
-            assets_to_save[rel2] = (bytes(content or b""), mime)
-        replace_exam_assets(exam_key, assets_to_save)
-
-    _rewrite_exam_asset_paths(exam_key, spec, public_spec)
-    save_exam_definition(
-        exam_key=exam_key,
-        title=str(spec.get("title") or "").strip(),
-        source_md=exam_text,
-        spec=spec,
-        public_spec=public_spec,
-    )
-    return exam_key
+    raise RuntimeError("试卷上传/生成入口已下线，请改用 Git 仓库同步")
 
 
 # 覆写已有试卷目录（用于编辑保存）。
 def _rewrite_exam_in_dir(exam_key: str, exam_text: str) -> None:
-    spec, public_spec = parse_qml_markdown(exam_text)
-    parsed_key = str(spec.get("id") or "")
-    if parsed_key != str(exam_key or ""):
-        raise ValueError("exam_key mismatch after parse")
-
-    _rewrite_exam_asset_paths(exam_key, spec, public_spec)
-    save_exam_definition(
-        exam_key=str(exam_key or "").strip(),
-        title=str(spec.get("title") or "").strip(),
-        source_md=exam_text,
-        spec=spec,
-        public_spec=public_spec,
-    )
+    raise RuntimeError("试卷在线编辑入口已下线，请改用外部 Git 仓库")
 
 
 def _migrate_assignment_exam_key(old_exam_key: str, new_exam_key: str) -> int:
@@ -354,35 +387,7 @@ def _migrate_archives_exam_key(old_exam_key: str, new_exam_key: str) -> int:
 
 # 管理端更新试卷：必要时先改目录/关联键，再重写 spec/public。
 def _admin_update_exam_from_source(old_exam_key: str, new_source_md: str) -> str:
-    spec_tmp, _public_tmp = parse_qml_markdown(new_source_md)
-    new_exam_key = str(spec_tmp.get("id") or "").strip()
-    if not new_exam_key:
-        raise ValueError("missing exam id")
-
-    old_exam_key = str(old_exam_key or "").strip()
-    if new_exam_key != old_exam_key:
-        if get_exam_definition(new_exam_key):
-            raise FileExistsError(f"target exam id already exists: {new_exam_key}")
-        if not get_exam_definition(old_exam_key):
-            raise FileNotFoundError("exam not found")
-
-        try:
-            rename_exam_key(old_exam_key, new_exam_key)
-        except Exception:
-            logger.exception("Failed to migrate candidate.exam_key: %s -> %s", old_exam_key, new_exam_key)
-        try:
-            rename_exam_definition(old_exam_key, new_exam_key)
-        except Exception:
-            logger.exception("Failed to migrate exam definition: %s -> %s", old_exam_key, new_exam_key)
-        try:
-            rename_exam_assets(old_exam_key, new_exam_key)
-        except Exception:
-            logger.exception("Failed to migrate exam assets: %s -> %s", old_exam_key, new_exam_key)
-        _migrate_assignment_exam_key(old_exam_key, new_exam_key)
-        _migrate_archives_exam_key(old_exam_key, new_exam_key)
-
-    _rewrite_exam_in_dir(new_exam_key, new_source_md)
-    return new_exam_key
+    raise RuntimeError("试卷在线编辑入口已下线，请改用外部 Git 仓库")
 
 
 # Flask 应用工厂：注册路由并初始化存储、数据库与后台任务。
@@ -391,7 +396,7 @@ def _list_exams():
     out = []
     for row in list_exam_definitions():
         spec = row.get("spec") or {}
-        updated_at = row.get("updated_at") or row.get("created_at")
+        updated_at = row.get("last_sync_at") or row.get("updated_at") or row.get("created_at")
         mtime = 0.0
         try:
             if updated_at:
@@ -403,6 +408,11 @@ def _list_exams():
                 "exam_key": str(row.get("exam_key") or "").strip(),
                 "title": spec.get("title", ""),
                 "count": len(spec.get("questions", [])),
+                "status": str(row.get("status") or "").strip() or "active",
+                "current_version_id": int(row.get("current_version_id") or 0),
+                "current_version_no": int(row.get("current_version_no") or 0),
+                "source_path": str(row.get("source_path") or "").strip(),
+                "last_sync_error": str(row.get("last_sync_error") or ""),
                 "_mtime": mtime,
             }
         )
