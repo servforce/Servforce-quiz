@@ -3,11 +3,11 @@ from __future__ import annotations
 from time import sleep
 
 from backend.md_quiz.models import JobRecord
-from backend.md_quiz.storage import JsonJobStore
+from backend.md_quiz.storage import JobStore
 
 
 class JobService:
-    def __init__(self, store: JsonJobStore):
+    def __init__(self, store: JobStore):
         self.store = store
 
     def list_jobs(self) -> list[JobRecord]:
@@ -24,7 +24,7 @@ class JobService:
         # 后续迁移真实业务时，再把旧 services/ 逐步接进来。
         match job.kind:
             case "git_sync_exams":
-                from services.exam_repo_sync_service import perform_exam_repo_sync
+                from backend.md_quiz.services.exam_repo_sync_service import perform_exam_repo_sync
 
                 repo_url = str((job.payload or {}).get("repo_url") or "").strip()
                 if not repo_url:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.exam_repo_sync_service import (
+from backend.md_quiz.services.exam_repo_sync_service import (
     ExamRepoSyncError,
     _load_assets,
     _rewrite_archive_asset_urls,
@@ -94,20 +94,20 @@ def test_perform_exam_repo_sync_marks_invalid_existing_source_as_sync_error(monk
         "public_invite_token": "",
     }
 
-    monkeypatch.setattr("services.exam_repo_sync_service._clone_repo", _fake_clone)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._clone_repo", _fake_clone)
     monkeypatch.setattr(
-        "services.exam_repo_sync_service._build_exam_candidate",
+        "backend.md_quiz.services.exam_repo_sync_service._build_exam_candidate",
         lambda *args, **kwargs: (_ for _ in ()).throw(ExamRepoSyncError("Front matter 缺少 id")),
     )
-    monkeypatch.setattr("services.exam_repo_sync_service._write_git_sync_state", lambda **kwargs: kwargs)
-    monkeypatch.setattr("services.exam_repo_sync_service.list_exam_definitions", lambda: [existing_exam])
-    monkeypatch.setattr("services.exam_repo_sync_service.get_exam_definition", lambda exam_key: dict(existing_exam) if exam_key == "demo" else None)
-    monkeypatch.setattr("services.exam_repo_sync_service.set_exam_public_invite", lambda *args, **kwargs: None)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._write_git_sync_state", lambda **kwargs: kwargs)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_exam_definitions", lambda: [existing_exam])
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.get_exam_definition", lambda exam_key: dict(existing_exam) if exam_key == "demo" else None)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.set_exam_public_invite", lambda *args, **kwargs: None)
 
     def _record_save(**kwargs):
         saved_statuses.append(str(kwargs.get("status") or ""))
 
-    monkeypatch.setattr("services.exam_repo_sync_service.save_exam_definition", _record_save)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.save_exam_definition", _record_save)
 
     result = perform_exam_repo_sync("https://example.com/repo.git")
 

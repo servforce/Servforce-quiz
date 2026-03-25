@@ -1,19 +1,21 @@
 # Markdown Quiz
 
-`md-quiz` 当前保留旧的 `Flask + Jinja` 后台页面作为正式管理端入口，同时引入 `FastAPI + Worker + Scheduler` 来承接新的 API、任务与进程边界。
+`md-quiz` 已收敛为 `FastAPI + Worker + Scheduler` 单栈服务：
 
-当前仓库的主实现分为两部分：
+- 管理端：`/admin*` Alpine SPA
+- 候选人端：`/p/*`、`/t/*`、`/resume/*`、`/exam/*`、`/done/*`、`/a/*` Alpine SPA
+- 数据接口：统一走 `/api/admin/*`、`/api/public/*`、`/api/system/*`
+- Python 应用代码：统一放在 `backend/md_quiz/`
 
-- `backend/md_quiz/`：FastAPI API、Worker、Scheduler、运行时配置与任务存储
-- `app.py` + `web/` + `templates/` + `static/`：正式使用中的后台与候选人端页面
+旧 Flask、Jinja 页面和 `a2wsgi` 桥接不再是运行时依赖；`/legacy/*` 仅保留 307 跳转兼容面。
 
-## 新架构概览
+## 架构概览
 
-### 进程形态
+### 进程
 
-- `API`：FastAPI 应用，负责 `/api/*`、会话、静态资源挂载与旧 Flask 页面挂载
-- `Worker`：后台任务执行器，轮询 job store 并处理任务
-- `Scheduler`：定时任务投递器，负责自动投递指标同步等周期任务
+- `API`：FastAPI，负责会话、SPA 入口、业务 API、静态资源与试卷资源路由
+- `Worker`：后台任务执行器，处理试卷同步、判卷等异步任务
+- `Scheduler`：周期任务投递器，负责指标同步等定时工作
 
 ### 目录
 
@@ -21,27 +23,19 @@
 backend/
   md_quiz/
     api/               FastAPI 路由层
-    services/          业务编排
-    storage/           轻量存储层（第一阶段先落 JSON store）
+    services/          业务编排与运行时 helper
+    storage/           PostgreSQL 持久化边界
+    parsers/           QML 等解析器
     models/            Pydantic 模型
-    app.py             FastAPI 装配
+    app.py             FastAPI 装配入口
     main.py            API 入口
     worker.py          Worker 入口
     scheduler.py       Scheduler 入口
-web/
-  ...                  旧 Flask 管理端与候选人端实现
+static/
+  admin/              管理端 SPA 壳
+  public/             候选人端 SPA 壳
+  assets/css/         Tailwind v4 输入源
 ```
-
-### 后台入口
-
-- 默认入口：`http://127.0.0.1:8000/admin`
-- 根路径：`http://127.0.0.1:8000/` 由旧 Flask 应用按登录态跳转到后台首页或登录页
-- 兼容跳转：`http://127.0.0.1:8000/legacy/admin` 会重定向到 `http://127.0.0.1:8000/admin`
-
-## 前端约束
-
-- 当前管理端与候选人端继续使用 `templates/` + `static/`
-- 当前前端基础配色 **保留**：蓝色 + 绿色，不照搬参考项目 `raelyn` 的深色主题
 
 ## 本地启动
 
@@ -52,7 +46,27 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt pytest
 ```
 
-### 2. 启动新系统
+推荐本地数据库连接串：
+
+```text
+postgresql+psycopg2://postgres:admin@127.0.0.1:5433/markdown_quiz
+```
+
+复制环境变量模板：
+
+```bash
+cp .env.example .env
+```
+
+### 2. 前端静态资源构建
+
+```bash
+cd static
+npm install
+npm run build:css
+```
+
+### 3. 启动服务
 
 ```bash
 scripts/dev/devctl.sh start
@@ -78,28 +92,11 @@ scripts/dev/run-scheduler.sh
 
 默认地址：
 
-- 默认后台入口：`http://127.0.0.1:8000/admin`
+- 管理端：`http://127.0.0.1:8000/admin`
 - 根路径：`http://127.0.0.1:8000/`
+- 候选人端公开邀约：`http://127.0.0.1:8000/p/<token>`
 - 系统健康检查：`http://127.0.0.1:8000/api/system/health`
 - 兼容跳转：`http://127.0.0.1:8000/legacy/admin`
-
-## 当前阶段说明
-
-这轮已经完成的是：
-
-- 新 FastAPI API 入口
-- Worker / Scheduler 入口
-- 运行时配置与任务系统的轻量存储边界
-- 统一开发脚本
-- 新文档骨架与最小测试
-
-这轮**还没有**完全迁完的是：
-
-- 试卷、候选人、邀约、答题、判卷、归档的真实业务 API
-- 旧后台内部代码结构的进一步收敛
-- 旧 `web/`、`templates/`、`static/` 与新后端服务边界的继续整理
-
-也就是说，仓库当前是“旧后台继续承载业务，新后端负责 API / 任务 / 进程边界”的状态。
 
 ## 测试
 

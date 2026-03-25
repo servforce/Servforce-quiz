@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+BASE_DIR = PROJECT_ROOT
 BACKEND_ROOT = PROJECT_ROOT / "backend"
-STORAGE_ROOT = PROJECT_ROOT / "storage"
-TMP_ROOT = PROJECT_ROOT / "tmp"
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -18,6 +19,54 @@ def _env_bool(name: str, default: bool) -> bool:
     if not raw:
         return default
     return raw in {"1", "true", "yes", "on"}
+
+
+def build_logger(level: str) -> logging.Logger:
+    logger = logging.getLogger("markdown_quiz")
+    if not logger.handlers:
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+        )
+    else:
+        logger.setLevel(level)
+    return logger
+
+
+def _normalize_database_url(raw: str, *, logger: logging.Logger) -> str:
+    default_url = "postgresql://postgres:admin@127.0.0.1:5433/markdown_quiz"
+    value = (raw or "").strip()
+    if not value:
+        return default_url
+    if value.startswith("postgresql+psycopg2://"):
+        value = "postgresql://" + value[len("postgresql+psycopg2://") :]
+    try:
+        parsed = urlsplit(value)
+    except Exception:
+        logger.warning("Invalid DATABASE_URL, fallback to default: %r", raw)
+        return default_url
+    if parsed.scheme != "postgresql":
+        logger.warning("Unsupported DATABASE_URL scheme, fallback to default: %r", raw)
+        return default_url
+    if (parsed.hostname or "").lower() != "host":
+        return urlunsplit(parsed)
+    logger.warning('DATABASE_URL host is "host" (placeholder). Using 127.0.0.1 instead.')
+    netloc = parsed.netloc
+    if "@" in netloc:
+        userinfo, hostport = netloc.rsplit("@", 1)
+        if ":" in hostport:
+            _host, port = hostport.split(":", 1)
+            hostport = f"127.0.0.1:{port}"
+        else:
+            hostport = "127.0.0.1"
+        netloc = f"{userinfo}@{hostport}"
+    else:
+        if ":" in netloc:
+            _host, port = netloc.split(":", 1)
+            netloc = f"127.0.0.1:{port}"
+        else:
+            netloc = "127.0.0.1"
+    return urlunsplit(parsed._replace(netloc=netloc))
 
 
 @dataclass(frozen=True)
@@ -29,11 +78,13 @@ class EnvironmentSettings:
     admin_username: str
     admin_password: str
     database_url: str
-    storage_dir: Path
     log_level: str
     worker_poll_seconds: float
     scheduler_poll_seconds: float
     scheduler_metrics_interval_seconds: int
+    openai_api_key: str
+    openai_base_url: str
+    openai_model: str
 
 
 @dataclass(frozen=True)
@@ -48,7 +99,8 @@ class RuntimeConfigDefaults:
 
 def load_environment_settings() -> EnvironmentSettings:
     load_dotenv()
-    storage_dir = Path(os.getenv("STORAGE_DIR", str(STORAGE_ROOT))).resolve()
+    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    app_logger = build_logger(log_level)
     return EnvironmentSettings(
         app_env=os.getenv("APP_ENV", "development"),
         app_host=os.getenv("APP_HOST", "0.0.0.0"),
@@ -56,17 +108,18 @@ def load_environment_settings() -> EnvironmentSettings:
         app_secret_key=os.getenv("APP_SECRET_KEY", os.getenv("SECRET_KEY", "dev-secret-key")),
         admin_username=os.getenv("ADMIN_USERNAME", "admin"),
         admin_password=os.getenv("ADMIN_PASSWORD", "password"),
-        database_url=os.getenv(
-            "DATABASE_URL",
-            "postgresql+psycopg2://postgres:admin@127.0.0.1:5433/markdown_quiz",
-        ),
-        storage_dir=storage_dir,
-        log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        database_url=_normalize_database_url(os.getenv("DATABASE_URL", ""), logger=app_logger),
+        log_level=log_level,
         worker_poll_seconds=float(os.getenv("WORKER_POLL_SECONDS", "2")),
         scheduler_poll_seconds=float(os.getenv("SCHEDULER_POLL_SECONDS", "5")),
         scheduler_metrics_interval_seconds=int(
             os.getenv("SCHEDULER_METRICS_INTERVAL_SECONDS", "300")
         ),
+        openai_api_key=os.getenv("OPENAI_API_KEY", ""),
+        openai_base_url=os.getenv(
+            "OPENAI_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"
+        ).rstrip("/"),
+        openai_model=os.getenv("OPENAI_MODEL", ""),
     )
 
 
@@ -79,3 +132,38 @@ def load_runtime_defaults() -> RuntimeConfigDefaults:
         min_submit_seconds=int(os.getenv("RUNTIME_MIN_SUBMIT_SECONDS", "60")),
         ui_theme_name=os.getenv("RUNTIME_UI_THEME_NAME", "blue-green"),
     )
+
+
+settings = load_environment_settings()
+logger = build_logger(settings.log_level)
+
+LOG_LEVEL = settings.log_level
+SECRET_KEY = settings.app_secret_key
+ADMIN_USERNAME = settings.admin_username
+ADMIN_PASSWORD = settings.admin_password
+DATABASE_URL = settings.database_url
+OPENAI_API_KEY = settings.openai_api_key
+OPENAI_BASE_URL = settings.openai_base_url
+OPENAI_MODEL = settings.openai_model
+
+
+__all__ = [
+    "ADMIN_PASSWORD",
+    "ADMIN_USERNAME",
+    "BACKEND_ROOT",
+    "BASE_DIR",
+    "DATABASE_URL",
+    "EnvironmentSettings",
+    "LOG_LEVEL",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "OPENAI_MODEL",
+    "PROJECT_ROOT",
+    "RuntimeConfigDefaults",
+    "SECRET_KEY",
+    "build_logger",
+    "load_environment_settings",
+    "load_runtime_defaults",
+    "logger",
+    "settings",
+]

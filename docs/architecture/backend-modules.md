@@ -1,39 +1,42 @@
 # 后端模块分工
 
-## 新后端
-
 ### `backend/md_quiz/config.py`
 
 - 环境变量读取
 - 路径与目录定义
-- 运行时默认值
+- 运行时默认值与单栈配置事实来源
 
 ### `backend/md_quiz/app.py`
 
 - FastAPI 装配
 - SessionMiddleware
 - API 路由注册
-- 静态资源挂载
-- 根路径下的 Flask 应用挂载
+- SPA 入口路由
+- 静态资源与试卷资源路由
 - `/legacy/*` 兼容跳转
 
 ### `backend/md_quiz/api/`
 
-- `system.py`：健康检查、进程状态、bootstrap
-- `admin.py`：后台会话、runtime config、jobs
-- `public.py`：候选人端 bootstrap
+- `system.py`：健康检查、进程状态、系统 bootstrap
+- `admin.py`：后台会话、试卷、候选人、邀约、日志、系统状态
+- `public.py`：公开邀约、短信验证、简历上传、答题保存、提交、完成态
 
 ### `backend/md_quiz/services/`
 
 - `runtime_service.py`：runtime config 与进程心跳
 - `job_service.py`：job 投递、领取与处理
+- `exam_helpers.py` / `runtime_jobs.py`：试卷资源、答题状态机与归档
+- `resume_service.py` / `grading_service.py`：简历解析与判卷
+- `exam_repo_sync_service.py`：试卷仓库同步
+- `runtime_bootstrap.py`：运行时启动准备
 
 ### `backend/md_quiz/storage/`
 
-- `runtime_config.py`：运行时配置存储
-- `job_store.py`：任务队列存储
-- `process_store.py`：进程心跳存储
-- `json_store.py`：原子 JSON 读写基类
+- `db.py`：PostgreSQL 表结构与业务读写事实来源
+- `runtime_config.py`：运行时配置数据库存储
+- `job_store.py`：任务队列数据库存储
+- `process_store.py`：进程心跳数据库存储
+- `fs.py`：业务存储目录准备
 
 ### 入口
 
@@ -41,13 +44,6 @@
 - `worker.py`：Worker
 - `scheduler.py`：Scheduler
 
-## 旧后端
+### `backend/md_quiz/parsers/`
 
-旧实现仍位于：
-
-- `app.py`
-- `web/`
-- `services/`
-- `db.py`
-
-当前正式页面能力仍由这里提供，并通过 FastAPI 挂到根路径。
+- `qml.py`：QML 试卷格式解析

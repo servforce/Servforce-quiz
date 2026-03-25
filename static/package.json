@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "sync:runtime-assets": "node scripts/sync-runtime-assets.cjs",
-    "build:admin-css": "node scripts/build-admin-css.cjs && npm run sync:runtime-assets"
+    "build:css": "node scripts/build-admin-css.cjs && npm run sync:runtime-assets",
+    "build:admin-css": "npm run build:css"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.18",

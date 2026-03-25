@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-import core.settings as settings_module
-import web.runtime_setup as runtime_setup
+import backend.md_quiz.config as settings_module
+import backend.md_quiz.services.runtime_bootstrap as runtime_bootstrap
 
 
 def test_readme_and_env_example_share_recommended_database_contract():
@@ -23,20 +23,16 @@ def test_load_settings_default_database_matches_documented_local_contract(monkey
     monkeypatch.setattr(settings_module, "load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.delenv("DATABASE_URL", raising=False)
 
-    settings = settings_module.load_settings()
+    settings = settings_module.load_environment_settings()
 
     assert settings.database_url == "postgresql://postgres:admin@127.0.0.1:5433/markdown_quiz"
 
 
 def test_bootstrap_runtime_wraps_database_errors(monkeypatch):
-    monkeypatch.setattr(runtime_setup, "ensure_dirs", lambda: None)
-
     def _boom():
         raise RuntimeError("cannot connect to postgres")
 
-    monkeypatch.setattr(runtime_setup, "init_db", _boom)
+    monkeypatch.setattr(runtime_bootstrap, "init_db", _boom)
 
-    app = type("DummyApp", (), {"debug": False})()
-
-    with pytest.raises(runtime_setup.RuntimeBootstrapError, match="cannot connect to postgres"):
-        runtime_setup.bootstrap_runtime(app)
+    with pytest.raises(runtime_bootstrap.RuntimeBootstrapError, match="cannot connect to postgres"):
+        runtime_bootstrap.bootstrap_runtime()

@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MD Quiz Admin</title>
+    <link href="/static/assets/css/material-symbols.css" rel="stylesheet" />
+    <link href="/static/admin.css" rel="stylesheet" />
+    <script defer src="/static/vendor/lightweight-charts/lightweight-charts.standalone.production.js"></script>
+    <script defer src="/static/admin/app.js"></script>
+    <script defer src="/static/assets/js/alpine.min.js"></script>
+  </head>
+  <body x-data="adminApp()" x-init="init()" class="min-h-screen bg-transparent text-slate-900">
+    <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      <div class="absolute -left-28 top-0 h-72 w-72 rounded-full bg-blue-500/18 blur-3xl"></div>
+      <div class="absolute right-0 top-12 h-80 w-80 rounded-full bg-emerald-500/16 blur-3xl"></div>
+      <div class="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-sky-300/18 blur-3xl"></div>
+    </div>
+
+    <div
+      x-cloak
+      x-show="booting"
+      class="fixed inset-0 z-50 grid place-items-center bg-white/55 backdrop-blur-sm"
+    >
+      <div class="rounded-3xl border border-white/70 bg-white/85 px-6 py-4 shadow-[var(--admin-shadow)]">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-rounded animate-spin text-blue-600">progress_activity</span>
+          <span class="text-sm font-medium text-slate-700">后台正在加载</span>
+        </div>
+      </div>
+    </div>
+
+    <main class="min-h-screen p-4 sm:p-6" x-cloak>
+      <template x-if="!session.authenticated">
+        <section class="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[1520px] items-center justify-center">
+          <div class="relative w-full overflow-hidden rounded-[1.25rem] border border-white/70 bg-white/76 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <div class="pointer-events-none absolute -left-20 top-0 h-72 w-72 rounded-full bg-blue-500/14 blur-3xl"></div>
+            <div class="pointer-events-none absolute right-0 top-6 h-72 w-72 rounded-full bg-violet-400/12 blur-3xl"></div>
+            <div class="pointer-events-none absolute bottom-0 left-1/3 h-56 w-56 rounded-full bg-sky-300/16 blur-3xl"></div>
+
+            <div class="relative grid gap-0 lg:grid-cols-[1.18fr_auto_0.82fr]">
+              <div class="order-2 p-6 sm:p-7 lg:order-1 xl:p-8">
+                <div class="flex h-full flex-col">
+                  <div class="flex items-center gap-3.5">
+                    <img src="/static/logo.png" alt="" aria-hidden="true" class="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
+                    <h1 class="text-3xl font-black tracking-[-0.05em] text-slate-900 sm:text-4xl">MD Quiz</h1>
+                  </div>
+
+                  <p class="mt-4 max-w-5xl text-sm leading-7 text-slate-600 sm:text-base lg:text-lg">
+                    智能体时代的招聘搭子
+                  </p>
+
+                  <div class="mt-6 grid gap-3 sm:grid-cols-2">
+                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
+                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-sky-700">
+                        <span class="material-symbols-rounded text-3xl">description</span>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">试卷管理</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">题目整理、版本留档，更新时心里有数</p>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
+                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-teal-700">
+                        <span class="material-symbols-rounded text-3xl">groups</span>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">候选人管理</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">简历入库、标签归档，需要时一搜就到</p>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
+                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-cyan-700">
+                        <span class="material-symbols-rounded text-3xl">edit_square</span>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">答题邀约</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">链接和二维码直接发出，进度看得见</p>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
+                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-emerald-700">
+                        <span class="material-symbols-rounded text-3xl">grading</span>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">智能判卷</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">先给分，再给评语，帮你更快进入复盘</p>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
+                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-slate-700">
+                        <span class="material-symbols-rounded text-3xl">article</span>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">系统日志</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">关键操作自动记下，回头排查不靠回忆</p>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
+                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-amber-700">
+                        <span class="material-symbols-rounded text-3xl">monitor_heart</span>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">系统状态</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">Token 和短信消耗及时提醒，避免临时掉链子</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold tracking-[-0.02em] text-slate-600 sm:text-base">
+                    <span class="font-bold text-slate-800">常用流程：</span>
+                    <span class="font-bold text-sky-700">准备试卷</span>
+                    <span class="material-symbols-rounded text-slate-400">chevron_right</span>
+                    <span class="font-bold text-teal-700">发邀约</span>
+                    <span class="material-symbols-rounded text-slate-400">chevron_right</span>
+                    <span class="font-bold text-cyan-700">看作答</span>
+                    <span class="material-symbols-rounded text-slate-400">chevron_right</span>
+                    <span class="font-bold text-emerald-700">判卷</span>
+                    <span class="material-symbols-rounded text-slate-400">chevron_right</span>
+                    <span class="font-bold text-slate-700">复盘</span>
+                  </div>
+
+                  <div class="mt-7 inline-flex w-fit items-center gap-3 rounded-full border border-slate-200/90 bg-white/82 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-[0_14px_30px_rgba(15,23,42,0.06)]">
+                    <span class="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_0_8px_rgba(34,197,94,0.16)]"></span>
+                    <span>服务运行中</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="order-3 hidden w-px bg-slate-200/80 lg:order-2 lg:my-8 lg:block"></div>
+
+              <div class="order-1 border-b border-slate-200/80 p-6 sm:p-7 lg:order-3 lg:border-b-0 xl:p-8">
+                <div class="mx-auto w-full max-w-xl lg:flex lg:min-h-full lg:items-center">
+                  <form
+                    @submit.prevent="login"
+                    class="w-full"
+                  >
+                    <div class="mb-8">
+                      <div class="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                        <span class="material-symbols-rounded text-sm">shield_person</span>
+                        后台入口
+                      </div>
+                      <h2 class="mt-4 text-2xl font-semibold tracking-[-0.03em] text-slate-900">管理员登录</h2>
+                    </div>
+                    <div class="space-y-5">
+                      <label class="block">
+                        <span class="mb-2 block text-sm font-semibold text-slate-500">账号</span>
+                        <input
+                          x-model="loginForm.username"
+                          class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm text-slate-800 outline-none ring-0 transition focus:border-blue-300 focus:bg-blue-50/40"
+                          placeholder="admin"
+                          autocomplete="username"
+                        />
+                      </label>
+                      <label class="block">
+                        <span class="mb-2 block text-sm font-semibold text-slate-500">密码</span>
+                        <input
+                          x-model="loginForm.password"
+                          type="password"
+                          class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm text-slate-800 outline-none ring-0 transition focus:border-blue-300 focus:bg-blue-50/40"
+                          placeholder="password"
+                          autocomplete="current-password"
+                        />
+                      </label>
+                    </div>
+                    <p x-show="error" class="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" x-text="error"></p>
+                    <button
+                      type="submit"
+                      class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                    >
+                      <span class="material-symbols-rounded text-base">login</span>
+                      登录后台
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </template>
+
+      <template x-if="session.authenticated">
+        <section class="mx-auto flex max-w-[1700px] gap-4">
+        <aside class="hidden w-64 shrink-0 lg:block">
+          <div class="sticky top-6 rounded-[1.25rem] border border-white/70 bg-white/78 p-4 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <div class="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-emerald-500 px-4 py-4 text-white">
+              <span class="material-symbols-rounded text-3xl">shield_person</span>
+              <div>
+                <div class="text-xs uppercase tracking-[0.18em] text-white/75">MD Quiz</div>
+                <div class="text-lg font-semibold">Admin Shell</div>
+              </div>
+            </div>
+            <nav class="mt-4 space-y-2">
+              <template x-for="item in navItems" :key="item.href">
+                <button
+                  type="button"
+                  @click="go(item.href)"
+                  :class="route.path.startsWith(item.href) ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/85 text-slate-600 hover:bg-blue-50 hover:text-blue-700'"
+                  class="flex w-full items-center justify-between rounded-2xl border border-blue-100/80 px-4 py-3 text-left text-sm font-medium transition"
+                >
+                  <span class="flex items-center gap-3">
+                    <span class="material-symbols-rounded text-[20px]" x-text="item.icon"></span>
+                    <span x-text="item.label"></span>
+                  </span>
+                  <span class="text-xs opacity-70" x-text="route.path.startsWith(item.href) ? '当前' : ''"></span>
+                </button>
+              </template>
+            </nav>
+            <button
+              type="button"
+              @click="logout"
+              class="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+            >
+              <span class="material-symbols-rounded text-base">logout</span>
+              退出登录
+            </button>
+          </div>
+        </aside>
+
+        <div class="min-w-0 flex-1">
+          <header class="mb-4 rounded-[1.25rem] border border-white/70 bg-white/76 px-5 py-4 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500" x-text="route.section"></div>
+                <h1 class="mt-1 truncate text-3xl font-semibold tracking-[-0.04em] text-slate-900" x-text="route.title"></h1>
+              </div>
+              <div class="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                <div class="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5">
+                  当前用户：
+                  <span class="font-semibold text-slate-900" x-text="session.username || 'admin'"></span>
+                </div>
+                <div class="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5">
+                  系统状态：
+                  <span class="font-semibold text-emerald-700" x-text="statusSummary.overall_level || 'ok'"></span>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <div x-show="route.name === 'exams'" class="space-y-4">
+            <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+              <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">试卷列表</h2>
+                    <p class="mt-1 text-sm text-slate-600">只保留 Git 仓库同步，不再开放 AI 生成、上传、在线编辑与删除。</p>
+                  </div>
+                  <div class="flex gap-2">
+                    <input x-model="filters.exams.q" @keydown.enter.prevent="loadExams" class="w-52 rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="搜索试卷" />
+                    <button @click="loadExams" type="button" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100">查询</button>
+                  </div>
+                </div>
+                <div class="mt-5 grid gap-3">
+                  <template x-for="item in exams.items" :key="item.exam_key">
+                    <button
+                      type="button"
+                      @click="go('/admin/exams/' + item.exam_key)"
+                      class="grid gap-3 rounded-3xl border border-blue-100/80 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50/50 md:grid-cols-[1fr_auto]"
+                    >
+                      <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h3 class="truncate text-lg font-semibold text-slate-900" x-text="item.title || item.exam_key"></h3>
+                          <span class="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700" x-text="item.exam_key"></span>
+                        </div>
+                        <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                          <span class="rounded-full bg-slate-100 px-2.5 py-1">题目数 <strong x-text="item.question_count"></strong></span>
+                          <span class="rounded-full bg-slate-100 px-2.5 py-1">版本 <strong x-text="item.current_version_no || '-'"></strong></span>
+                          <span class="rounded-full bg-slate-100 px-2.5 py-1">状态 <strong x-text="item.status"></strong></span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2 text-xs text-slate-500">
+                        <span x-show="item.public_invite_enabled" class="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-emerald-700">公开邀约</span>
+                        <span class="material-symbols-rounded text-slate-400">arrow_outward</span>
+                      </div>
+                    </button>
+                  </template>
+                </div>
+              </section>
+
+              <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+                <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">仓库同步</h2>
+                <p class="mt-1 text-sm text-slate-600">同步外部试卷仓库，异步落版本快照。</p>
+                <label class="mt-5 block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">仓库地址</span>
+                  <input x-model="syncForm.repoUrl" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="https://example.com/repo.git" />
+                </label>
+                <button @click="syncExams" type="button" class="mt-4 inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">
+                  <span class="material-symbols-rounded text-base">sync</span>
+                  创建同步任务
+                </button>
+                <div class="mt-6 rounded-3xl border border-blue-100 bg-blue-50/70 p-4 text-sm text-slate-700">
+                  <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">当前状态</div>
+                  <pre class="mt-3 overflow-auto whitespace-pre-wrap text-xs leading-6 text-slate-700" x-text="pretty(syncState)"></pre>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div x-show="route.name === 'exam-detail'" class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="truncate text-2xl font-semibold tracking-[-0.03em] text-slate-900" x-text="examDetail.exam?.title || examDetail.exam?.exam_key"></h2>
+                    <span class="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700" x-text="examDetail.exam?.exam_key"></span>
+                  </div>
+                  <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                    <span class="rounded-full bg-slate-100 px-2.5 py-1">状态 <strong x-text="examDetail.exam?.status"></strong></span>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-1">当前版本 <strong x-text="examDetail.exam?.current_version_no || '-'"></strong></span>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-1">题目数 <strong x-text="examDetail.stats?.total_questions || 0"></strong></span>
+                  </div>
+                </div>
+                <button @click="togglePublicInvite" type="button" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100">
+                  <span x-text="examDetail.exam?.public_invite_enabled ? '关闭公开邀约' : '开启公开邀约'"></span>
+                </button>
+              </div>
+
+              <div class="mt-5 grid gap-4 lg:grid-cols-3">
+                <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">总分</div>
+                  <div class="mt-3 text-3xl font-semibold text-slate-900" x-text="examDetail.stats?.total_points || 0"></div>
+                </div>
+                <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">资源路径</div>
+                  <div class="mt-3 break-all text-sm text-slate-700" x-text="examDetail.exam?.source_path || '-'"></div>
+                </div>
+                <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">公开链接</div>
+                  <div class="mt-3 break-all text-sm text-slate-700" x-text="examDetail.exam?.public_invite_url || '未开启'"></div>
+                </div>
+              </div>
+
+              <div class="mt-5 rounded-3xl border border-slate-200 bg-slate-950 p-4 text-slate-100">
+                <div class="mb-3 text-xs uppercase tracking-[0.18em] text-slate-400">试卷快照</div>
+                <pre class="max-h-[520px] overflow-auto whitespace-pre-wrap text-xs leading-6" x-text="pretty(examDetail.selected_version?.spec || {})"></pre>
+              </div>
+            </section>
+
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">版本历史</h2>
+              <div class="mt-4 grid gap-3">
+                <template x-for="version in examDetail.version_history || []" :key="version.id">
+                  <button type="button" @click="loadExamVersion(version.id)" class="rounded-3xl border border-blue-100 bg-white p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/40">
+                    <div class="flex items-center justify-between gap-3">
+                      <div class="font-semibold text-slate-900">版本 <span x-text="version.version_no || version.id"></span></div>
+                      <span x-show="version.is_current" class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">当前</span>
+                    </div>
+                    <div class="mt-2 text-xs break-all text-slate-500" x-text="version.git_commit || version.source_path || '-'"></div>
+                  </button>
+                </template>
+              </div>
+            </section>
+          </div>
+
+          <div x-show="route.name === 'candidates'" class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">候选人</h2>
+                  <p class="mt-1 text-sm text-slate-600">支持搜索、创建、详情查看与简历入库。</p>
+                </div>
+                <div class="flex gap-2">
+                  <input x-model="filters.candidates.q" @keydown.enter.prevent="loadCandidates" class="w-52 rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="搜索姓名/手机号" />
+                  <button @click="loadCandidates" type="button" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100">查询</button>
+                </div>
+              </div>
+              <div class="mt-5 grid gap-3">
+                <template x-for="item in candidates.items" :key="item.id">
+                  <button type="button" @click="go('/admin/candidates/' + item.id)" class="rounded-3xl border border-blue-100 bg-white p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/40">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div class="text-lg font-semibold text-slate-900" x-text="item.name"></div>
+                        <div class="mt-1 font-mono text-xs text-slate-500" x-text="item.phone"></div>
+                      </div>
+                      <div class="flex gap-2 text-xs text-slate-600">
+                        <span x-show="item.has_resume" class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">有简历</span>
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1" x-text="item.created_at"></span>
+                      </div>
+                    </div>
+                  </button>
+                </template>
+              </div>
+            </section>
+
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建候选人</h2>
+              <div class="mt-4 space-y-4">
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">姓名</span>
+                  <input x-model="candidateForm.name" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="张三" />
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">手机号</span>
+                  <input x-model="candidateForm.phone" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="13800138000" />
+                </label>
+                <button @click="createCandidate" type="button" class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
+                  <span class="material-symbols-rounded text-base">person_add</span>
+                  创建候选人
+                </button>
+              </div>
+
+              <div class="mt-8 rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
+                <div class="text-sm font-semibold text-slate-900">从简历直接入库</div>
+                <p class="mt-1 text-sm leading-6 text-slate-600">上传简历后，系统会自动解析手机号并创建或更新候选人。</p>
+                <input x-ref="candidateResumeUpload" type="file" class="mt-4 block w-full text-sm text-slate-600" />
+                <button @click="uploadCandidateResume" type="button" class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100">
+                  上传并解析简历
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <div x-show="route.name === 'candidate-detail'" class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-2xl font-semibold tracking-[-0.03em] text-slate-900" x-text="candidateDetail.candidate?.name"></h2>
+                    <span class="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700" x-text="'#' + (candidateDetail.candidate?.id || '')"></span>
+                  </div>
+                  <div class="mt-2 font-mono text-sm text-slate-500" x-text="candidateDetail.candidate?.phone"></div>
+                </div>
+                <button @click="deleteCandidate" type="button" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100">
+                  删除候选人
+                </button>
+              </div>
+
+              <div class="mt-5 grid gap-4 lg:grid-cols-2">
+                <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">教育</div>
+                  <div class="mt-3 space-y-2 text-sm text-slate-700">
+                    <template x-for="edu in candidateDetail.profile?.educations || []" :key="edu.school + edu.start">
+                      <div class="rounded-2xl bg-white px-3 py-3">
+                        <div class="font-semibold text-slate-900" x-text="edu.school || '-'"></div>
+                        <div class="mt-1 text-xs text-slate-500">
+                          <span x-text="edu.degree || '-'"></span>
+                          <span x-text="edu.school_tag_label ? ' · ' + edu.school_tag_label : ''"></span>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">答题记录</div>
+                  <div class="mt-3 space-y-2 text-sm text-slate-700">
+                    <template x-for="attempt in candidateDetail.profile?.attempt_results || []" :key="attempt.archive_name || attempt.token || attempt.no">
+                      <button type="button" @click="go('/admin/attempt/' + attempt.token)" class="flex w-full items-center justify-between rounded-2xl bg-white px-3 py-3 text-left transition hover:bg-blue-50">
+                        <div>
+                          <div class="font-semibold text-slate-900" x-text="attempt.exam_name"></div>
+                          <div class="mt-1 text-xs text-slate-500" x-text="attempt.end_at"></div>
+                        </div>
+                        <div class="text-sm font-semibold text-blue-700" x-text="attempt.score"></div>
+                      </button>
+                    </template>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-5 rounded-3xl border border-slate-200 bg-slate-950 p-4 text-slate-100">
+                <div class="mb-3 text-xs uppercase tracking-[0.18em] text-slate-400">简历解析结果</div>
+                <pre class="max-h-[480px] overflow-auto whitespace-pre-wrap text-xs leading-6" x-text="pretty(candidateDetail.resume_parsed || {})"></pre>
+              </div>
+            </section>
+
+            <section class="space-y-4">
+              <div class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+                <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">管理员评价</h2>
+                <textarea x-model="candidateEvaluation" class="mt-4 h-44 w-full rounded-3xl border border-blue-100 bg-white px-4 py-4 text-sm leading-7 outline-none focus:border-blue-300" placeholder="记录你的评估结论"></textarea>
+                <button @click="saveCandidateEvaluation" type="button" class="mt-4 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">保存评价</button>
+              </div>
+
+              <div class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+                <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">简历文件</h2>
+                <div class="mt-4 flex flex-col gap-3">
+                  <button @click="downloadCandidateResume" type="button" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">下载当前简历</button>
+                  <input x-ref="candidateResumeReparse" type="file" class="block w-full text-sm text-slate-600" />
+                  <button @click="reparseCandidateResume" type="button" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100">上传新简历并重新解析</button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div x-show="route.name === 'assignments'" class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">邀约与答题状态</h2>
+                  <p class="mt-1 text-sm text-slate-600">查看当前答题实例、状态和分数。</p>
+                </div>
+                <div class="flex gap-2">
+                  <input x-model="filters.assignments.q" @keydown.enter.prevent="loadAssignments" class="w-52 rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="搜索姓名 / 手机号 / token" />
+                  <button @click="loadAssignments" type="button" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100">查询</button>
+                </div>
+              </div>
+              <div class="mt-5 grid gap-3">
+                <template x-for="item in assignments.items" :key="item.attempt_id">
+                  <button type="button" @click="go('/admin/attempt/' + item.token)" class="rounded-3xl border border-blue-100 bg-white p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/40">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div class="text-lg font-semibold text-slate-900" x-text="item.candidate_name"></div>
+                        <div class="mt-1 font-mono text-xs text-slate-500" x-text="item.token"></div>
+                      </div>
+                      <span class="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700" x-text="item.status_label"></span>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                      <span class="rounded-full bg-slate-100 px-2.5 py-1" x-text="item.exam_key"></span>
+                      <span class="rounded-full bg-slate-100 px-2.5 py-1">分数 <strong x-text="item.score ?? '-'"></strong></span>
+                    </div>
+                  </button>
+                </template>
+              </div>
+            </section>
+
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建邀约</h2>
+              <div class="mt-4 space-y-4">
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">试卷</span>
+                  <select x-model="assignmentForm.exam_key" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300">
+                    <option value="">请选择试卷</option>
+                    <template x-for="item in exams.items" :key="item.exam_key">
+                      <option :value="item.exam_key" x-text="item.title || item.exam_key"></option>
+                    </template>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">候选人</span>
+                  <select x-model="assignmentForm.candidate_id" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300">
+                    <option value="">请选择候选人</option>
+                    <template x-for="item in candidates.items" :key="item.id">
+                      <option :value="item.id" x-text="item.name + ' / ' + item.phone"></option>
+                    </template>
+                  </select>
+                </label>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="block">
+                    <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">开始日期</span>
+                    <input x-model="assignmentForm.invite_start_date" type="date" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">结束日期</span>
+                    <input x-model="assignmentForm.invite_end_date" type="date" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
+                  </label>
+                </div>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">时长（秒）</span>
+                  <input x-model="assignmentForm.time_limit_seconds" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="7200" />
+                </label>
+                <button @click="createAssignment" type="button" class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
+                  <span class="material-symbols-rounded text-base">assignment_add</span>
+                  创建邀请链接
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <div x-show="route.name === 'attempt-detail'" class="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">答题实例</h2>
+              <pre class="mt-4 max-h-[720px] overflow-auto whitespace-pre-wrap rounded-3xl border border-slate-200 bg-slate-950 p-4 text-xs leading-6 text-slate-100" x-text="pretty(attemptDetail.assignment || {})"></pre>
+            </section>
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">答题归档</h2>
+              <pre class="mt-4 max-h-[720px] overflow-auto whitespace-pre-wrap rounded-3xl border border-slate-200 bg-slate-950 p-4 text-xs leading-6 text-slate-100" x-text="pretty(attemptDetail.archive || {})"></pre>
+            </section>
+          </div>
+
+          <div x-show="route.name === 'logs'" class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">系统日志</h2>
+                  <p class="mt-1 text-sm text-slate-600">候选人、试卷、邀约、判卷和系统告警日志。</p>
+                </div>
+                <button @click="loadLogs" type="button" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100">刷新</button>
+              </div>
+              <div class="mt-5 grid gap-3">
+                <template x-for="item in logs.items" :key="item.id">
+                  <div class="rounded-3xl border border-blue-100 bg-white p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div class="text-sm font-semibold text-slate-900" x-text="item.type_label"></div>
+                      <div class="font-mono text-xs text-slate-500" x-text="item.at_display"></div>
+                    </div>
+                    <div class="mt-2 text-sm leading-7 text-slate-700" x-text="item.detail_text"></div>
+                  </div>
+                </template>
+              </div>
+            </section>
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">分类趋势</h2>
+                  <p class="mt-1 text-sm text-slate-600">恢复近 30 天分类统计折线图，观察日志密度变化。</p>
+                </div>
+                <div class="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700" x-text="logTrendRangeLabel()"></div>
+              </div>
+
+              <template x-if="hasLogTrendData()">
+                <div x-ref="logsTrendChart" class="mt-4 h-80 overflow-hidden rounded-[1.125rem] border border-slate-800/70 bg-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"></div>
+              </template>
+
+              <div x-show="!hasLogTrendData()" class="mt-4 grid h-80 place-items-center rounded-[1.125rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center">
+                <div>
+                  <div class="text-sm font-semibold text-slate-700">近 30 天暂无分类波动</div>
+                  <p class="mt-2 text-sm leading-6 text-slate-500">保留分类汇总，后续产生新日志后会自动恢复折线图。</p>
+                </div>
+              </div>
+
+              <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                <template x-for="item in logCategoryCards()" :key="item.key">
+                  <div class="rounded-3xl border border-blue-100 bg-blue-50/60 p-4">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="h-2.5 w-2.5 rounded-full" :style="'background-color:' + item.color"></span>
+                          <div class="text-sm font-semibold text-slate-900" x-text="item.label"></div>
+                        </div>
+                        <p class="mt-2 text-xs leading-5 text-slate-500" x-text="item.hint"></p>
+                      </div>
+                      <div class="text-2xl font-semibold tabular-nums text-slate-900" x-text="item.count"></div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </section>
+          </div>
+
+          <div x-show="route.name === 'status'" class="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">系统状态摘要</h2>
+                  <p class="mt-1 text-sm text-slate-600">恢复每日统计表，按天查看新增试卷、邀约、候选人与资源消耗。</p>
+                </div>
+                <div class="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700" x-text="statusRangeLabel()"></div>
+              </div>
+              <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">LLM</div>
+                  <div class="mt-3 text-3xl font-semibold text-slate-900" x-text="statusSummary.llm?.used || 0"></div>
+                  <div class="mt-1 text-sm text-slate-600" x-text="'阈值 ' + (statusSummary.llm?.limit || 0)"></div>
+                </div>
+                <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">短信</div>
+                  <div class="mt-3 text-3xl font-semibold text-slate-900" x-text="statusSummary.sms?.used || 0"></div>
+                  <div class="mt-1 text-sm text-slate-600" x-text="'阈值 ' + (statusSummary.sms?.limit || 0)"></div>
+                </div>
+              </div>
+
+              <div class="mt-5 overflow-hidden rounded-[1.125rem] border border-slate-200 bg-white">
+                <div class="grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  <div>日期</div>
+                  <div class="text-right">试卷新增</div>
+                  <div class="text-right">邀约新增</div>
+                  <div class="text-right">候选人新增</div>
+                  <div class="text-right">LLM tokens</div>
+                  <div class="text-right">短信调用</div>
+                </div>
+                <div class="max-h-[520px] overflow-auto">
+                  <template x-for="item in statusDailyRows()" :key="item.day">
+                    <div class="grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-700 last:border-b-0 hover:bg-blue-50/35">
+                      <div class="font-mono text-xs text-slate-500" x-text="item.day"></div>
+                      <div class="text-right font-semibold tabular-nums text-slate-900" x-text="formatNumber(item.exams_new)"></div>
+                      <div class="text-right font-semibold tabular-nums text-slate-900" x-text="formatNumber(item.invites_new)"></div>
+                      <div class="text-right font-semibold tabular-nums text-slate-900" x-text="formatNumber(item.candidates_new)"></div>
+                      <div class="text-right font-semibold tabular-nums text-slate-900" x-text="formatNumber(item.llm_tokens)"></div>
+                      <div class="text-right font-semibold tabular-nums text-slate-900" x-text="formatNumber(item.sms_calls)"></div>
+                    </div>
+                  </template>
+                </div>
+                <div class="grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-t border-slate-200 bg-blue-50/60 px-4 py-3 text-sm text-slate-700">
+                  <div class="font-semibold text-slate-900">区间合计</div>
+                  <div class="text-right font-semibold tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().exams_new)"></div>
+                  <div class="text-right font-semibold tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().invites_new)"></div>
+                  <div class="text-right font-semibold tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().candidates_new)"></div>
+                  <div class="text-right font-semibold tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().llm_tokens)"></div>
+                  <div class="text-right font-semibold tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().sms_calls)"></div>
+                </div>
+              </div>
+            </section>
+            <section class="rounded-[1.25rem] border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">阈值配置</h2>
+              <div class="mt-4 space-y-4">
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">LLM token 日阈值</span>
+                  <input x-model="statusConfig.llm_tokens_limit" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">短信调用日阈值</span>
+                  <input x-model="statusConfig.sms_calls_limit" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
+                </label>
+                <button @click="saveStatusConfig" type="button" class="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">保存阈值</button>
+              </div>
+            </section>
+          </div>
+
+          <div x-show="notice" class="fixed bottom-6 right-6 z-40 max-w-md rounded-3xl border border-slate-200 bg-white/95 px-5 py-4 text-sm text-slate-700 shadow-[var(--admin-shadow)] backdrop-blur-xl" x-text="notice"></div>
+        </div>
+        </section>
+      </template>
+    </main>
+  </body>
+</html>

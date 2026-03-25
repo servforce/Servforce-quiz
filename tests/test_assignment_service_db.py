@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import services.assignment_service as assignment_service
+import backend.md_quiz.services.assignment_service as assignment_service
 
 
 def test_create_assignment_persists_via_db(monkeypatch):

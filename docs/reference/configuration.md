@@ -11,7 +11,6 @@
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
 - `DATABASE_URL`
-- `STORAGE_DIR`
 - `LOG_LEVEL`
 
 ### Worker / Scheduler
@@ -33,7 +32,9 @@
 
 ## 运行时配置
 
-当前保存到 `storage/runtime/runtime-config.json`：
+运行时配置现在保存到数据库表 `runtime_kv` 的 `runtime_config` 键中。
+
+环境变量只提供初始默认值；管理员在后台修改后，以数据库值为准。当前配置项包括：
 
 - `sms_enabled`
 - `token_daily_threshold`
@@ -42,12 +43,12 @@
 - `min_submit_seconds`
 - `ui_theme_name`
 
-## 旧系统配置
+## 集成配置
 
-旧 Flask 单体仍会继续读取原有变量，例如：
+以下变量仍由服务直接读取，用于外部集成：
 
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
 - 阿里云短信相关配置
 
-这些变量目前仍保留，以支撑当前挂载在根路径下的旧后台与候选人端能力。
+它们不属于运行时后台配置，重启前后都依赖环境变量。

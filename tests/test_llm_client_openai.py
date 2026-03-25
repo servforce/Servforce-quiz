@@ -1,8 +1,8 @@
 import importlib
 import json
 
-import config as config_module
-from services import llm_client as llm_client_module
+import backend.md_quiz.config as config_module
+import backend.md_quiz.services.llm_client as llm_client_module
 
 
 class _FakeResponse:

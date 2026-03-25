@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MD Quiz</title>
+    <link href="/static/assets/css/material-symbols.css" rel="stylesheet" />
+    <link href="/static/public.css" rel="stylesheet" />
+    <script defer src="/static/public/app.js"></script>
+    <script defer src="/static/assets/js/alpine.min.js"></script>
+  </head>
+  <body x-data="publicApp()" x-init="init()" class="min-h-screen bg-transparent text-slate-900">
+    <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      <div class="absolute left-0 top-0 h-80 w-80 rounded-full bg-teal-500/18 blur-3xl"></div>
+      <div class="absolute right-0 top-8 h-80 w-80 rounded-full bg-blue-500/14 blur-3xl"></div>
+      <div class="absolute bottom-0 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-emerald-400/16 blur-3xl"></div>
+    </div>
+
+    <main class="mx-auto min-h-screen max-w-6xl px-4 py-6 sm:px-6 lg:py-10" x-cloak>
+      <div
+        x-show="booting"
+        class="grid min-h-[calc(100vh-3rem)] place-items-center rounded-[2rem] border border-white/70 bg-white/65 backdrop-blur-xl"
+      >
+        <div class="rounded-3xl border border-white/70 bg-white/85 px-6 py-4 shadow-[var(--public-shadow)]">
+          <div class="flex items-center gap-3 text-sm font-medium text-slate-700">
+            <span class="material-symbols-rounded animate-spin text-teal-700">progress_activity</span>
+            正在加载答题流程
+          </div>
+        </div>
+      </div>
+
+      <section x-show="!booting" class="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+        <div class="rounded-[2rem] border border-white/70 bg-white/78 p-8 shadow-[var(--public-shadow)] backdrop-blur-xl">
+          <div class="inline-flex items-center gap-3 rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-700">
+            <span class="material-symbols-rounded text-base">work</span>
+            MD Quiz Candidate Flow
+          </div>
+          <h1 class="mt-6 text-4xl font-semibold tracking-[-0.04em] text-slate-900" x-text="heroTitle"></h1>
+          <p class="mt-4 max-w-xl text-sm leading-7 text-slate-600" x-text="heroDescription"></p>
+
+          <div class="mt-8 grid gap-4 sm:grid-cols-3">
+            <div class="rounded-3xl border border-teal-100 bg-white/92 p-4">
+              <div class="text-xs uppercase tracking-[0.18em] text-slate-500">入口</div>
+              <div class="mt-3 text-lg font-semibold text-slate-900" x-text="state.step || '-'"></div>
+            </div>
+            <div class="rounded-3xl border border-teal-100 bg-white/92 p-4">
+              <div class="text-xs uppercase tracking-[0.18em] text-slate-500">试卷</div>
+              <div class="mt-3 text-lg font-semibold text-slate-900" x-text="state.exam?.title || state.assignment?.exam_key || '-'"></div>
+            </div>
+            <div class="rounded-3xl border border-teal-100 bg-white/92 p-4">
+              <div class="text-xs uppercase tracking-[0.18em] text-slate-500">剩余时间</div>
+              <div class="mt-3 text-lg font-semibold text-slate-900" x-text="remainingText"></div>
+            </div>
+          </div>
+
+          <template x-if="state.step === 'exam'">
+            <div class="mt-8 rounded-[2rem] border border-slate-200 bg-slate-950 p-4 text-slate-100">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-400">题目数</div>
+                  <div class="mt-2 text-2xl font-semibold" x-text="state.exam?.stats?.total_questions || 0"></div>
+                </div>
+                <div class="text-right">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-400">总分</div>
+                  <div class="mt-2 text-2xl font-semibold" x-text="state.exam?.stats?.total_points || 0"></div>
+                </div>
+              </div>
+              <pre class="mt-4 max-h-64 overflow-auto whitespace-pre-wrap text-xs leading-6 text-slate-300" x-text="pretty(state.assignment?.answers || {})"></pre>
+            </div>
+          </template>
+        </div>
+
+        <div class="rounded-[2rem] border border-white/70 bg-[var(--public-panel)] p-8 shadow-[var(--public-shadow)] backdrop-blur-xl">
+          <p x-show="error" class="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" x-text="error"></p>
+
+          <div x-show="state.step === 'unavailable'" class="space-y-4">
+            <h2 class="text-3xl font-semibold tracking-[-0.03em] text-slate-900" x-text="state.unavailable?.title || '链接不可用'"></h2>
+            <p class="text-sm leading-7 text-slate-600" x-text="state.unavailable?.message || ''"></p>
+            <div class="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+              有效期：
+              <span x-text="state.invite_window?.start_date || '-'"></span>
+              至
+              <span x-text="state.invite_window?.end_date || '-'"></span>
+            </div>
+          </div>
+
+          <form x-show="state.step === 'verify'" @submit.prevent="verify" class="space-y-4">
+            <div>
+              <h2 class="text-3xl font-semibold tracking-[-0.03em] text-slate-900">身份验证</h2>
+              <p class="mt-2 text-sm leading-7 text-slate-600">先验证姓名、手机号与短信验证码，再继续后续流程。</p>
+            </div>
+            <label class="block">
+              <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">姓名</span>
+              <input x-model="forms.verify.name" class="w-full rounded-2xl border border-teal-100 bg-white px-4 py-3 text-sm outline-none focus:border-teal-300" placeholder="请输入姓名" />
+            </label>
+            <label class="block">
+              <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">手机号</span>
+              <input x-model="forms.verify.phone" class="w-full rounded-2xl border border-teal-100 bg-white px-4 py-3 text-sm outline-none focus:border-teal-300" placeholder="请输入手机号" />
+            </label>
+            <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <label class="block">
+                <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">短信验证码</span>
+                <input x-model="forms.verify.sms_code" class="w-full rounded-2xl border border-teal-100 bg-white px-4 py-3 text-sm outline-none focus:border-teal-300" placeholder="6 位验证码" />
+              </label>
+              <button type="button" @click="sendSms" class="self-end rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-700 transition hover:bg-teal-100">发送验证码</button>
+            </div>
+            <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-teal-800">
+              <span class="material-symbols-rounded text-base">verified_user</span>
+              验证并继续
+            </button>
+          </form>
+
+          <form x-show="state.step === 'resume'" @submit.prevent="uploadResume" class="space-y-4">
+            <div>
+              <h2 class="text-3xl font-semibold tracking-[-0.03em] text-slate-900">上传简历</h2>
+              <p class="mt-2 text-sm leading-7 text-slate-600">当前是公开邀约流程，请上传简历完成候选人建档。</p>
+            </div>
+            <div class="rounded-3xl border border-teal-100 bg-teal-50/70 px-4 py-4 text-sm text-slate-700">
+              <div>姓名：<strong x-text="state.resume?.name || '-'"></strong></div>
+              <div class="mt-2">手机号：<strong x-text="state.resume?.phone || '-'"></strong></div>
+            </div>
+            <input x-ref="resumeFile" type="file" class="block w-full text-sm text-slate-600" />
+            <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-teal-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-teal-800">
+              <span class="material-symbols-rounded text-base">upload_file</span>
+              上传并继续答题
+            </button>
+          </form>
+
+          <div x-show="state.step === 'exam'" class="space-y-4">
+            <div class="flex flex-col gap-2">
+              <h2 class="text-3xl font-semibold tracking-[-0.03em] text-slate-900" x-text="state.exam?.title || '在线答题'"></h2>
+              <p class="text-sm leading-7 text-slate-600" x-text="state.exam?.description || '请按要求完成题目并提交。'"></p>
+            </div>
+            <button
+              x-show="!state.exam?.entered_at"
+              type="button"
+              @click="enterExam"
+              class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+            >
+              <span class="material-symbols-rounded text-base">play_circle</span>
+              开始答题并启动倒计时
+            </button>
+            <div class="max-h-[52vh] space-y-4 overflow-auto pr-1">
+              <template x-for="question in state.exam?.spec?.questions || []" :key="question.qid">
+                <div class="rounded-3xl border border-teal-100 bg-white px-4 py-4">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full border border-teal-100 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-700" x-text="question.qid"></span>
+                    <span class="text-sm font-semibold text-slate-900" x-text="question.label || question.qid"></span>
+                  </div>
+                  <pre class="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700" x-text="question.stem_md || ''"></pre>
+                  <template x-if="question.type === 'single' || question.type === 'multiple'">
+                    <div class="mt-4 space-y-2">
+                      <template x-for="option in question.options || []" :key="option.key">
+                        <label class="flex items-start gap-3 rounded-2xl border border-slate-200 px-3 py-3 text-sm text-slate-700">
+                          <input
+                            :type="question.type === 'single' ? 'radio' : 'checkbox'"
+                            :name="question.qid"
+                            :value="option.key"
+                            :checked="isOptionChecked(question.qid, question.type, option.key)"
+                            @change="toggleOption(question, option.key, $event.target.checked)"
+                            class="mt-1"
+                          />
+                          <span x-text="option.text"></span>
+                        </label>
+                      </template>
+                    </div>
+                  </template>
+                  <template x-if="question.type !== 'single' && question.type !== 'multiple'">
+                    <textarea
+                      :value="answerText(question.qid)"
+                      @input="setAnswer(question.qid, $event.target.value)"
+                      class="mt-4 h-36 w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-7 outline-none focus:border-teal-300"
+                      placeholder="请输入答案"
+                    ></textarea>
+                  </template>
+                </div>
+              </template>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <button type="button" @click="saveAnswers" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">保存答案</button>
+              <button type="button" @click="submitExam" class="rounded-2xl bg-teal-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-teal-800">提交答卷</button>
+            </div>
+          </div>
+
+          <div x-show="state.step === 'done'" class="space-y-4">
+            <h2 class="text-3xl font-semibold tracking-[-0.03em] text-slate-900">答题已结束</h2>
+            <p class="text-sm leading-7 text-slate-600">系统已接收你的答案，正在判卷或已经完成判卷。</p>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div class="rounded-3xl border border-teal-100 bg-teal-50/70 p-4">
+                <div class="text-xs uppercase tracking-[0.18em] text-slate-500">判卷状态</div>
+                <div class="mt-3 text-2xl font-semibold text-slate-900" x-text="state.result?.status || '-'"></div>
+              </div>
+              <div class="rounded-3xl border border-teal-100 bg-teal-50/70 p-4">
+                <div class="text-xs uppercase tracking-[0.18em] text-slate-500">总分</div>
+                <div class="mt-3 text-2xl font-semibold text-slate-900" x-text="state.result?.total_score ?? '-'"></div>
+              </div>
+            </div>
+            <pre class="rounded-3xl border border-slate-200 bg-slate-950 p-4 text-xs leading-6 text-slate-100" x-text="pretty(state.result || {})"></pre>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

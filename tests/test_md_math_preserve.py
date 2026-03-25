@@ -2,7 +2,7 @@ import html
 
 import markdown as mdlib
 
-from app import _protect_math_for_markdown
+from backend.md_quiz.services.exam_helpers import _protect_math_for_markdown
 
 
 def test_md_filter_preserves_tex_row_separators() -> None:

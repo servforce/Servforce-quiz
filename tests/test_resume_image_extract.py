@@ -4,7 +4,7 @@ from io import BytesIO
 def test_extract_resume_text_uses_llm_vision_for_images(monkeypatch):
     from PIL import Image
 
-    from services import resume_service
+    import backend.md_quiz.services.resume_service as resume_service
 
     calls = {}
 

@@ -10,7 +10,8 @@ browser
       -> /api/public/*
       -> /static/*
       -> /legacy/*  (307 跳转到真实路径)
-      -> /*         (挂载旧 Flask 应用，包含 /admin/*)
+      -> /admin*    (后台 Alpine SPA)
+      -> /p/* /t/* /resume/* /exam/* /done/* /a/* (候选人 Alpine SPA)
 
 scheduler
   -> enqueue jobs
@@ -28,7 +29,7 @@ worker
 - 装配：`backend/md_quiz/app.py`
 - 静态资源：`/static/*`
 - 默认后台入口：`/admin`
-- 根路径：挂载旧 Flask 应用
+- 根路径：按登录态 307 跳转到 `/admin` 或 `/admin/login`
 - `/legacy/*`：兼容跳转到当前真实路径
 
 ### Worker
@@ -43,10 +44,11 @@ worker
 
 ## 当前存储边界
 
-第一阶段为了先把边界拉直，运行时数据先落在：
+运行时状态已经统一入库：
 
-- `storage/runtime/runtime-config.json`
-- `storage/runtime/jobs.json`
-- `storage/runtime/processes.json`
+- `runtime_kv`
+- `runtime_daily_metric`
+- `runtime_job`
+- `process_heartbeat`
 
-后续再把真实业务主数据迁到正式 repository / database 层。
+根目录 `storage/` 不再是当前运行时依赖；历史 `storage/runtime/*.json` 仅在兼容旧部署数据时作为一次性迁移输入源读取一次。

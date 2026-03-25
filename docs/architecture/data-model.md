@@ -49,7 +49,25 @@
 
 的当前状态与最近更新时间。
 
-## 阶段性说明
+## 当前数据库表
 
-第一阶段先用 JSON store 把“配置 / 任务 / 进程状态”从旧 Flask 进程内状态中拆出来；
-后续迁移真实业务主数据时，再把旧 `db.py` 拆成 repository / query 层。
+运行时状态现在统一保存在 PostgreSQL 中：
+
+- `runtime_kv`
+  - 保存 `runtime_config`
+  - 保存 exam repo sync 状态、运行时迁移标记等键值数据
+- `runtime_daily_metric`
+  - 保存系统状态页按日聚合指标与告警快照
+- `runtime_job`
+  - 保存后台任务队列、执行状态与结果
+- `process_heartbeat`
+  - 保存 API / Worker / Scheduler 心跳
+
+## 迁移说明
+
+历史 `storage/runtime/*.json` 只在需要兼容旧部署数据时作为一次性迁移输入源：
+
+- 首次启动时若检测到旧 JSON，会自动导入数据库
+- 导入完成后不再继续写入这些文件
+- 后续运行时状态以数据库为唯一事实来源
+- 若仓库里已经没有旧运行时 JSON，根目录 `storage/` 目录本身也不再是运行时依赖

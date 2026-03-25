@@ -3,9 +3,11 @@ from __future__ import annotations
 import time
 
 from backend.md_quiz.app import _build_container
+from backend.md_quiz.services import runtime_bootstrap
 
 
 def main() -> None:
+    runtime_bootstrap.bootstrap_runtime()
     container = _build_container()
     settings = container.settings
     runtime = container.runtime_service

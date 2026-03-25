@@ -4,7 +4,7 @@ import os
 from datetime import UTC, datetime
 
 from backend.md_quiz.models import ProcessHeartbeat, RuntimeConfig
-from backend.md_quiz.storage import JsonProcessStore, JsonRuntimeConfigStore
+from backend.md_quiz.storage import ProcessStore, RuntimeConfigStore
 
 
 def _utc_now() -> str:
@@ -15,8 +15,8 @@ class RuntimeService:
     def __init__(
         self,
         *,
-        process_store: JsonProcessStore,
-        runtime_config_store: JsonRuntimeConfigStore,
+        process_store: ProcessStore,
+        runtime_config_store: RuntimeConfigStore,
     ):
         self.process_store = process_store
         self.runtime_config_store = runtime_config_store

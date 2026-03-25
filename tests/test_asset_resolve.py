@@ -1,4 +1,4 @@
-import web.support.exams as exams_module
+import backend.md_quiz.services.exam_helpers as exams_module
 
 
 def test_resolve_exam_asset_reads_from_db(monkeypatch) -> None:

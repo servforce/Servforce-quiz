@@ -3,7 +3,7 @@ import unittest
 
 class TestResumeExtractSection(unittest.TestCase):
     def test_stop_keyword_on_same_line(self):
-        from services.resume_service import extract_resume_section
+        from backend.md_quiz.services.resume_service import extract_resume_section
 
         text = (
             "基本信息 张三 13800138000 "
@@ -21,4 +21,3 @@ class TestResumeExtractSection(unittest.TestCase):
         self.assertIn("Project A", got)
         self.assertNotIn("工作经历", got)
         self.assertNotIn("Company B", got)
-

@@ -3,7 +3,7 @@ import unittest
 
 class TestResumeProjectSplit(unittest.TestCase):
     def test_split_glued_project_outcome_into_previous_body(self):
-        from services.resume_service import split_projects_raw_into_blocks
+        from backend.md_quiz.services.resume_service import split_projects_raw_into_blocks
 
         raw = (
             "项目经历\n"
@@ -26,7 +26,7 @@ class TestResumeProjectSplit(unittest.TestCase):
         self.assertNotIn("项目成果", blocks[1]["title"])
 
     def test_split_numeric_period_formats(self):
-        from services.resume_service import split_projects_raw_into_blocks
+        from backend.md_quiz.services.resume_service import split_projects_raw_into_blocks
 
         raw = (
             "项目经验\n"
@@ -41,7 +41,7 @@ class TestResumeProjectSplit(unittest.TestCase):
         self.assertIn("2024-07", blocks[1]["period"])
 
     def test_split_period_with_present(self):
-        from services.resume_service import split_projects_raw_into_blocks
+        from backend.md_quiz.services.resume_service import split_projects_raw_into_blocks
 
         raw = (
             "项目经历\n"
@@ -54,7 +54,7 @@ class TestResumeProjectSplit(unittest.TestCase):
         self.assertIn("至今", blocks[0]["period"])
 
     def test_split_drops_education_line_inside_body(self):
-        from services.resume_service import split_projects_raw_into_blocks
+        from backend.md_quiz.services.resume_service import split_projects_raw_into_blocks
 
         raw = (
             "工作经历\n"
@@ -67,7 +67,7 @@ class TestResumeProjectSplit(unittest.TestCase):
         self.assertNotIn("公安部高级警官学院", blocks[0]["body"])
 
     def test_split_work_block_into_project_items(self):
-        from services.resume_service import split_projects_raw_into_blocks
+        from backend.md_quiz.services.resume_service import split_projects_raw_into_blocks
 
         raw = (
             "工作经历\n"

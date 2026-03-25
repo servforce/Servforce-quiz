@@ -3,7 +3,7 @@ import unittest
 
 class TestGradingServiceLLM(unittest.TestCase):
     def test_short_answer_scored_and_analyzed(self):
-        import services.grading_service as gs
+        import backend.md_quiz.services.grading_service as gs
 
         def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
             self.assertIn("【评分标准】", prompt)
@@ -49,7 +49,7 @@ class TestGradingServiceLLM(unittest.TestCase):
             gs.call_llm_text = orig_text
 
     def test_empty_short_answer_gets_zero_without_llm_call(self):
-        import services.grading_service as gs
+        import backend.md_quiz.services.grading_service as gs
 
         def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
             raise AssertionError("LLM should not be called for empty short answer")
@@ -78,7 +78,7 @@ class TestGradingServiceLLM(unittest.TestCase):
             gs.call_llm_json = orig_json
 
     def test_numeric_only_short_answer_gets_zero_without_llm_call(self):
-        import services.grading_service as gs
+        import backend.md_quiz.services.grading_service as gs
 
         def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
             raise AssertionError("LLM should not be called for numeric-only short answer")
@@ -107,7 +107,7 @@ class TestGradingServiceLLM(unittest.TestCase):
             gs.call_llm_json = orig_json
 
     def test_contradiction_flag_forces_zero(self):
-        import services.grading_service as gs
+        import backend.md_quiz.services.grading_service as gs
 
         def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
             return '{"score": 3, "reason": "关键结论说反了", "relevance": 2, "contradiction": true}'
@@ -136,7 +136,7 @@ class TestGradingServiceLLM(unittest.TestCase):
             gs.call_llm_json = orig_json
 
     def test_relevance_zero_forces_zero(self):
-        import services.grading_service as gs
+        import backend.md_quiz.services.grading_service as gs
 
         def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
             return '{"score": 4, "reason": "与题目无关", "relevance": 0, "contradiction": false}'
@@ -164,7 +164,7 @@ class TestGradingServiceLLM(unittest.TestCase):
             gs.call_llm_json = orig_json
 
     def test_contradiction_string_false_does_not_force_zero(self):
-        import services.grading_service as gs
+        import backend.md_quiz.services.grading_service as gs
 
         def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
             # Some LLM gateways may serialize booleans as strings ("true"/"false").
@@ -193,7 +193,7 @@ class TestGradingServiceLLM(unittest.TestCase):
             gs.call_llm_json = orig_json
 
     def test_contradiction_string_true_forces_zero(self):
-        import services.grading_service as gs
+        import backend.md_quiz.services.grading_service as gs
 
         def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
             return '{"score": 8, "reason": "关键结论说反了", "relevance": 2, "contradiction": "true"}'
@@ -221,7 +221,7 @@ class TestGradingServiceLLM(unittest.TestCase):
             gs.call_llm_json = orig_json
 
     def test_integer_only_score_triggers_reason_generation(self):
-        import services.grading_service as gs
+        import backend.md_quiz.services.grading_service as gs
 
         calls = {"reason": 0}
 

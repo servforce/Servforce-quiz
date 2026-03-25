@@ -3,7 +3,7 @@ import unittest
 
 class TestResumeFocus(unittest.TestCase):
     def test_focus_includes_tail_awards(self):
-        from services.resume_service import focus_resume_text_for_details
+        from backend.md_quiz.services.resume_service import focus_resume_text_for_details
 
         text = (
             "姓名：张三\n电话：13800138000\n\n"
@@ -16,7 +16,7 @@ class TestResumeFocus(unittest.TestCase):
         self.assertIn("数学建模", focused)
 
     def test_focus_matches_english_headings(self):
-        from services.resume_service import focus_resume_text_for_details
+        from backend.md_quiz.services.resume_service import focus_resume_text_for_details
 
         text = (
             "John Doe\nEmail: a@b.com\n\n"
@@ -26,4 +26,3 @@ class TestResumeFocus(unittest.TestCase):
         focused = focus_resume_text_for_details(text, head_chars=80, tail_chars=80, max_chars=2000)
         self.assertIn("WORK EXPERIENCE", focused)
         self.assertIn("PROJECTS", focused)
-

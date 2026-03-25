@@ -1,7 +1,7 @@
 import unittest
 
 
-from services.assignment_service import compute_min_submit_seconds
+from backend.md_quiz.services.assignment_service import compute_min_submit_seconds
 
 
 class TestMinSubmitSeconds(unittest.TestCase):

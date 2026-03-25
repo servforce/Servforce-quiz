@@ -40,4 +40,4 @@
 ## 说明
 
 - `docs/architecture/` 记录当前稳定边界与后续整理方向。
-- 当前正式后台入口仍是 `web/` + `templates/` + `static/`。
+- 当前正式前端入口为 `static/admin/` 与 `static/public/` 两套 Alpine SPA。
