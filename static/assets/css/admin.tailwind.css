@@ -1138,349 +1138,46 @@
     @apply bg-rose-50 text-rose-700;
   }
 
-  .page-admin-exams .admin-surface {
+  .page-admin-candidates .admin-candidates-layout {
     font-size: var(--admin-font-size-base);
     min-height: 0;
   }
 
-  .page-admin-exams .admin-surface > .section {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .page-admin-exams .sync-head {
-    display: grid;
-    gap: 10px;
-    align-items: stretch;
-    justify-content: normal;
-    width: 100%;
-  }
-
-  .page-admin-exams .sync-toolbar {
-    display: grid;
-    grid-template-columns: repeat(13, minmax(0, 1fr));
-    align-items: end;
-    gap: 14px;
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .page-admin-exams .sync-search-form,
-  .page-admin-exams .sync-repo-form {
-    display: grid;
-    gap: 8px;
-    margin: 0;
-    min-width: 0;
-  }
-
-  .page-admin-exams .sync-search-form { grid-column: span 3; }
-  .page-admin-exams .sync-repo-form { grid-column: span 4; }
-  .page-admin-exams .sync-search-form .field,
-  .page-admin-exams .sync-repo-form .field { margin: 0; }
-
-  .page-admin-exams .sync-search-form label,
-  .page-admin-exams .sync-repo-form label {
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-    color: rgba(51, 65, 85, 0.92);
-  }
-
-  .page-admin-exams .sync-search-form .input,
-  .page-admin-exams .sync-repo-form .input { height: 46px; }
-
-  .page-admin-exams .sync-card {
-    min-width: 0;
-    width: 100%;
-    height: 46px;
-    grid-column: span 1;
-    padding: 6px 12px;
-    border: 1px solid rgba(15, 23, 42, 0.10);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.82);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
-  }
-
-  .page-admin-exams .sync-card .k {
-    font-size: 11px;
-    line-height: 1.1;
-    color: var(--muted);
-    white-space: nowrap;
-  }
-
-  .page-admin-exams .sync-card .v {
-    margin-top: 0;
-    font-size: 13px;
-    line-height: 1.1;
-    font-weight: 800;
-    color: var(--text);
-    word-break: break-all;
-  }
-
-  .page-admin-exams .sync-submit {
-    min-width: 0;
-    align-self: end;
-    grid-column: span 2;
-  }
-
-  .page-admin-exams .sync-submit .btn {
-    height: 46px;
-    width: 100%;
-    min-width: 132px;
-    padding-left: 20px;
-    padding-right: 20px;
-  }
-
-  .page-admin-exams .status-pill {
-    display: inline-flex;
-    align-items: center;
-    font-size: 12px;
-    font-weight: 800;
-    line-height: 1.2;
-    color: #64748b;
-  }
-
-  .page-admin-exams .status-pill.active { color: #15803d; }
-  .page-admin-exams .status-pill.retired { color: #64748b; }
-  .page-admin-exams .status-pill.sync_error { color: #be123c; }
-
-  .page-admin-exams .sync-notes {
-    display: grid;
-    gap: 6px;
-    width: 100%;
-  }
-
-  .page-admin-exams .sync-hint {
-    margin: 0;
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--muted);
-  }
-
-  .page-admin-exams .table-scroll { margin-top: 12px; }
-
-  .page-admin-exams table.exam-table {
-    width: 100%;
-    table-layout: fixed;
-    font-size: var(--admin-font-size-table-body);
-  }
-
-  .page-admin-exams table.exam-table th,
-  .page-admin-exams table.exam-table td {
-    padding: 14px 16px;
-    text-align: left;
-    vertical-align: middle;
-  }
-
-  .page-admin-exams table.exam-table th {
-    font-size: var(--admin-font-size-table-head);
-    color: rgba(71, 85, 105, 0.96);
-  }
-
-  .page-admin-exams tr.row-link { cursor: pointer; }
-  .page-admin-exams tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
-  .page-admin-exams .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-
-  .page-admin-exams .cell-sub {
-    margin-top: 4px;
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-
-  .page-admin-candidates .admin-surface {
-    font-size: var(--admin-font-size-base);
-    min-height: 0;
-  }
-
-  .page-admin-candidates .admin-surface > .section:first-child { display: none; }
-
-  .page-admin-candidates .admin-surface > .section:last-child {
+  .page-admin-candidates .candidate-list-panel {
     flex: 1 1 auto;
     min-height: 0;
   }
 
-  .page-admin-candidates .admin-surface .table-scroll {
+  .page-admin-candidates .admin-candidates-layout .table-scroll {
     flex: 1 1 auto;
     min-height: 0;
     overflow-x: hidden;
   }
 
-  .page-admin-candidates .admin-surface .tri-pager {
+  .page-admin-candidates .admin-candidates-layout .tri-pager {
     margin-top: auto;
     justify-content: flex-end;
     padding-top: 12px;
   }
 
-  .page-admin-candidates .admin-surface .title {
+  .page-admin-candidates .admin-candidates-layout .title {
     font-size: var(--admin-font-size-title-lg);
     letter-spacing: -0.02em;
   }
 
-  .page-admin-candidates .admin-surface .field label {
+  .page-admin-candidates .admin-candidates-layout .field label {
     font-size: var(--admin-font-size-label);
     font-weight: 800;
     color: rgba(15, 23, 42, 0.78);
   }
 
-  .page-admin-candidates .admin-surface .input,
-  .page-admin-candidates .admin-surface select {
+  .page-admin-candidates .admin-candidates-layout .input,
+  .page-admin-candidates .admin-candidates-layout select {
     height: 40px;
     padding-top: 0;
     padding-bottom: 0;
     line-height: 1.25;
     font-size: var(--admin-font-size-control);
-  }
-
-  .page-admin-candidates .form-grid {
-    display: grid;
-    grid-template-columns: minmax(220px, 1fr) minmax(260px, 1fr) max-content max-content;
-    gap: 10px;
-    align-items: end;
-    justify-content: start;
-    max-width: 100%;
-    width: 100%;
-  }
-
-  .page-admin-candidates .form-grid form { display: contents; }
-
-  .page-admin-candidates .form-grid #candidateCreateForm .btn.btn-primary,
-  .page-admin-candidates .form-grid #resumePickBtn.btn.btn-primary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 40px;
-    padding: 0 16px;
-    line-height: 1;
-    font-size: var(--admin-font-size-control);
-    border-radius: var(--radius-md);
-  }
-
-  .page-admin-candidates .status-code {
-    display: inline-flex;
-    min-width: 74px;
-    justify-content: center;
-    white-space: nowrap;
-  }
-
-  .page-admin-candidates .search-inline { margin: 0; }
-  .page-admin-candidates .section-head > .search-inline { flex: 1 1 auto; }
-  .page-admin-candidates .search-inline .field { margin: 0; min-width: 0; }
-  .page-admin-candidates .search-inline .toolbar-field--query { max-width: 360px; }
-  .page-admin-candidates .section-head .search-inline label { display: none; }
-
-  .page-admin-candidates .search-inline .input,
-  .page-admin-candidates .search-inline .btn {
-    height: 40px;
-    line-height: 1;
-    font-size: var(--admin-font-size-control);
-  }
-
-  .page-admin-candidates .search-inline .input {
-    padding-top: 0;
-    padding-bottom: 0;
-    line-height: 1.25;
-  }
-
-  .page-admin-candidates .range-group {
-    margin-left: 0;
-    min-width: 0;
-    flex: 0 0 auto;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    align-items: end;
-    gap: 8px;
-  }
-
-  .page-admin-candidates .range-group .toolbar-field--date { width: auto; min-width: 0; }
-  .page-admin-candidates .search-actions { display: none; margin-left: 0; }
-  .page-admin-candidates .search-actions:empty { display: none; }
-  .page-admin-candidates .search-create { margin-left: 0; }
-
-  .page-admin-candidates .range-sep {
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 2px;
-    color: rgba(15, 23, 42, 0.55);
-    font-weight: 900;
-    user-select: none;
-  }
-
-  .page-admin-candidates .search-inline .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 16px;
-    border-radius: var(--radius-md);
-    text-decoration: none;
-  }
-
-  .page-admin-candidates .search-inline a.btn:hover { text-decoration: none; }
-
-  .page-admin-candidates .search-create .btn {
-    width: auto;
-    min-width: 96px;
-    padding: 0 14px;
-    font-weight: 900;
-    gap: 8px;
-  }
-
-  .page-admin-candidates .search-create .btn .material-symbols-rounded {
-    font-size: 18px;
-    line-height: 1;
-  }
-
-  .page-admin-candidates .btn-icon {
-    min-width: 64px;
-    padding: 9px 12px;
-    text-align: center;
-    font-size: var(--admin-font-size-control);
-    line-height: 1;
-  }
-
-  .page-admin-candidates .resume-upload-cell { display: flex; align-items: center; }
-
-  .page-admin-candidates .cand-actions {
-    display: inline-flex;
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-end;
-    white-space: nowrap;
-  }
-
-  .page-admin-candidates .cand-actions .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 42px;
-    padding: 0 14px;
-    font-size: var(--admin-font-size-control);
-    font-weight: 900;
-    border-radius: var(--radius-lg);
-    line-height: 1;
-  }
-
-  .page-admin-candidates .cand-actions .btn-icon {
-    min-width: 0;
-    width: auto;
-    padding: 0 14px;
-  }
-
-  .page-admin-candidates .cand-actions .invite-create-btn {
-    background: #16a34a;
-    border-color: #16a34a;
-    color: #fff;
-  }
-
-  .page-admin-candidates .cand-actions .invite-create-btn:hover {
-    background: #15803d;
-    border-color: #15803d;
   }
 
   .page-admin-candidates .flash-center {
@@ -1507,38 +1204,6 @@
     opacity: 0;
     transform: translate(-50%, calc(-50% - 6px));
   }
-
-  .page-admin-candidates table.cands-table {
-    width: 100%;
-    table-layout: fixed;
-    font-size: var(--admin-font-size-table-body);
-  }
-
-  .page-admin-candidates table.cands-table th {
-    font-size: var(--admin-font-size-table-head);
-    color: rgba(71, 85, 105, 0.96);
-  }
-
-  .page-admin-candidates table.cands-table th,
-  .page-admin-candidates table.cands-table td {
-    vertical-align: middle;
-    text-align: left;
-  }
-
-  .page-admin-candidates table.cands-table th { padding: 12px 16px; line-height: 1.2; }
-  .page-admin-candidates table.cands-table td { padding: 18px 22px; }
-  .page-admin-candidates table.cands-table th:first-child { padding-left: 10px; padding-right: 12px; }
-  .page-admin-candidates table.cands-table td:first-child { padding-left: 10px; padding-right: 16px; }
-  .page-admin-candidates table.cands-table th:nth-child(2) { padding-left: 34px; }
-  .page-admin-candidates table.cands-table td:nth-child(2) { padding-left: 68px; }
-  .page-admin-candidates table.cands-table th:nth-child(3),
-  .page-admin-candidates table.cands-table th:nth-child(4) { padding-left: 18px; }
-  .page-admin-candidates table.cands-table td:nth-child(3),
-  .page-admin-candidates table.cands-table td:nth-child(4) { padding-left: 28px; }
-  .page-admin-candidates table.cands-table th:nth-child(5) { padding-left: 18px; padding-right: 18px; text-align: center; }
-  .page-admin-candidates table.cands-table td:nth-child(5) { padding-left: 24px; padding-right: 24px; text-align: center; }
-  .page-admin-candidates table.cands-table th:last-child { padding-left: 12px; padding-right: 10px; text-align: right; }
-  .page-admin-candidates table.cands-table td:last-child { padding-left: 16px; padding-right: 10px; text-align: right; }
 
   .page-admin-candidates .parsing-overlay {
     position: fixed;
@@ -1640,9 +1305,6 @@
     background: #1d4ed8;
     border-color: #1d4ed8;
   }
-
-  .page-admin-candidates tr.row-link { cursor: pointer; }
-  .page-admin-candidates tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
 
   .page-admin-candidate-profile .admin-content { grid-template-columns: minmax(0, 1fr); }
 
@@ -1822,7 +1484,7 @@
   .page-admin-candidate-attempt .section-head .sub code { font-size: var(--admin-font-size-control); padding: 4px 10px; }
   .page-admin-candidate-attempt .section-head .btn { font-size: var(--admin-font-size-control); padding: 12px 18px; border-radius: var(--radius-md); }
 
-  .page-admin-assignments .admin-surface { font-size: var(--admin-font-size-base); min-height: 0; }
+  .page-admin-assignments .admin-assignments-layout { font-size: var(--admin-font-size-base); min-height: 0; }
   .page-admin-assignments .assign-form .field { margin: 0; width: 100%; max-width: none; }
   .page-admin-assignments .assign-form .field label { margin-bottom: 6px; }
   .page-admin-assignments .time-picker { position: relative; width: 100%; }
@@ -1844,33 +1506,8 @@
   .page-admin-assignments .duration-grid .input, .page-admin-assignments .duration-grid select { width: 100%; height: 40px; }
   .page-admin-assignments .duration-sep { height: 40px; display: inline-flex; align-items: center; justify-content: center; color: rgba(15, 23, 42, 0.45); font-weight: 700; }
   .page-admin-assignments .duration-card-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 16px 16px; border-top: 1px solid rgba(37, 99, 235, 0.10); background: rgba(247, 250, 255, 0.60); }
-  .page-admin-assignments .attempt-filter { margin: 0 0 10px; }
-  .page-admin-assignments .attempt-filter .field { margin: 0; }
-  .page-admin-assignments .attempt-filter .toolbar-field--query { min-width: 0; max-width: none; }
-  .page-admin-assignments .attempt-filter .range-group { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 8px; width: 100%; }
-  .page-admin-assignments .attempt-filter .range-group .toolbar-field--date { width: auto; min-width: 0; }
-  .page-admin-assignments .attempt-actions { justify-content: flex-end; }
-  .page-admin-assignments .attempt-actions:empty { display: none; }
-  .page-admin-assignments .range-sep { height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0 2px; color: rgba(15, 23, 42, 0.55); font-weight: 900; user-select: none; }
   .page-admin-assignments .table-scroll { flex: 1 1 auto; min-height: 0; }
-  .page-admin-assignments .attempt-table th, .page-admin-assignments .attempt-table td { vertical-align: middle; }
-  .page-admin-assignments .attempt-table th { padding: 10px 8px; line-height: 1.15; }
-  .page-admin-assignments .attempt-table td { padding: 14px 10px; }
   .page-admin-assignments .tri-pager { margin-top: auto; justify-content: flex-end; padding-top: 12px; }
-  .page-admin-assignments tr.row-link { cursor: pointer; }
-  .page-admin-assignments tr.row-link:hover td { background: rgba(37, 99, 235, 0.06); }
-  .page-admin-assignments a.row-a,
-  .page-admin-assignments a.token-copy { color: inherit; text-decoration: none; }
-  .page-admin-assignments a.row-a:hover,
-  .page-admin-assignments a.token-copy:hover { text-decoration: underline; }
-  .page-admin-assignments .status-pill { display: inline-flex; align-items: center; padding: 7px 14px; border-radius: 999px; font-weight: 900; font-size: var(--admin-font-size-pill); border: 1px solid rgba(15, 23, 42, 0.12); background: rgba(15, 23, 42, 0.03); color: rgba(15, 23, 42, 0.86); white-space: nowrap; }
-  .page-admin-assignments .status-pill.invited,
-  .page-admin-assignments .status-pill.distributed { border-color: rgba(37, 99, 235, 0.28); background: rgba(37, 99, 235, 0.10); color: #1d4ed8; }
-  .page-admin-assignments .status-pill.verified { border-color: rgba(16, 185, 129, 0.28); background: rgba(16, 185, 129, 0.10); color: #047857; }
-  .page-admin-assignments .status-pill.in_exam { border-color: rgba(249, 115, 22, 0.30); background: rgba(249, 115, 22, 0.10); color: #9a3412; }
-  .page-admin-assignments .status-pill.grading { border-color: rgba(124, 58, 237, 0.30); background: rgba(124, 58, 237, 0.10); color: #6d28d9; }
-  .page-admin-assignments .status-pill.finished { border-color: rgba(22, 163, 74, 0.30); background: rgba(22, 163, 74, 0.10); color: #166534; }
-  .page-admin-assignments .status-pill.expired { border-color: rgba(220, 38, 38, 0.30); background: rgba(220, 38, 38, 0.08); color: #b91c1c; }
 
   .page-admin-assignment-created .card-mini { border: 1px solid rgba(15, 23, 42, 0.12); border-radius: var(--radius-md); padding: 14px; background: rgba(15, 23, 42, 0.02); }
   .page-admin-assignment-created .linkbox { padding: 10px 12px; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: var(--radius-md); background: rgba(255, 255, 255, 0.92); word-break: break-all; }
@@ -2270,43 +1907,6 @@
   .page-admin-exam-detail .section-subtitle { margin: 18px 0 0; font-size: 16px; color: var(--brand-strong); }
   }
 
-@media (max-width: 1499px) {
-  .page-admin-exams .sync-toolbar {
-    grid-template-columns: repeat(8, minmax(0, 1fr));
-    align-items: end;
-  }
-
-  .page-admin-exams .sync-search-form {
-    grid-column: span 3;
-  }
-
-  .page-admin-exams .sync-repo-form {
-    grid-column: span 5;
-  }
-
-  .page-admin-exams .sync-card {
-    grid-column: span 2;
-  }
-
-  .page-admin-exams .sync-submit {
-    grid-column: span 8;
-  }
-}
-
-@media (max-width: 1120px) {
-  .page-admin-candidates .search-inline {
-    align-items: flex-start;
-  }
-
-  .page-admin-candidates .range-group {
-    flex-wrap: wrap;
-  }
-
-  .page-admin-candidates .search-create {
-    align-self: center;
-  }
-}
-
 @media (max-width: 1080px) {
   .admin-topbar {
     padding-left: 10px;
@@ -2317,49 +1917,6 @@
   .grid-2,
   .grid-3 {
     @apply grid-cols-1;
-  }
-
-  .page-admin-exams .sync-toolbar {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .page-admin-exams .sync-search-form,
-  .page-admin-exams .sync-repo-form {
-    grid-column: span 4;
-  }
-
-  .page-admin-exams .sync-card {
-    grid-column: span 2;
-    height: auto;
-    min-height: 46px;
-  }
-
-  .page-admin-exams .sync-submit {
-    grid-column: span 4;
-  }
-
-  .page-admin-candidates .form-grid {
-    grid-template-columns: 1fr;
-    max-width: 100%;
-  }
-
-  .page-admin-candidates .search-inline {
-    align-items: stretch;
-  }
-
-  .page-admin-candidates .search-inline .toolbar-field--query {
-    flex-basis: 100%;
-    max-width: 100%;
-    min-width: 0;
-  }
-
-  .page-admin-candidates .search-inline .toolbar-field--date {
-    width: auto;
-  }
-
-  .page-admin-candidates .range-group {
-    width: 100%;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   }
 
   .page-admin-candidate-profile .grid {
@@ -2390,7 +1947,6 @@
     grid-template-columns: 120px 1fr;
   }
 
-  .page-admin-assignments .attempt-actions,
   .page-admin-dashboard #tab-assign .assign-attempts .attempt-actions {
     justify-content: flex-start;
   }
@@ -2530,17 +2086,6 @@
     @apply gap-3.5 p-3.5;
   }
 
-  .page-admin-exams .sync-toolbar {
-    grid-template-columns: 1fr;
-  }
-
-  .page-admin-exams .sync-search-form,
-  .page-admin-exams .sync-repo-form,
-  .page-admin-exams .sync-card {
-    grid-column: span 1;
-  }
-
-  .page-admin-exams .sync-submit .btn,
   .page-admin-assignment-created .copy-btn {
     width: 100%;
   }

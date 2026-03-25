@@ -3,8 +3,7 @@
 {% set admin_page_title = "系统状态" %}
 {% set admin_page_subtitle = "查看当日指标与阈值配置" %}
 {% block content %}
-      <div class="surface admin-surface p-4 text-[15px]" role="region" aria-label="系统状态">
-        <div class="grid w-full content-start gap-4">
+        <div class="grid w-full content-start gap-4 text-[15px]" role="region" aria-label="系统状态">
           <div
             id="status_head"
             class="status-head level-ok rounded-lg border px-[18px] py-4 text-center text-[clamp(1.4rem,2vw,2rem)] font-black max-[980px]:text-[clamp(1.2rem,4.8vw,1.7rem)]"
@@ -116,7 +115,6 @@
             </div>
           </section>
         </div>
-      </div>
 {% endblock %}
 {% block scripts %}
     <script src="{{ url_for('static', filename='admin_status.js') }}"></script>

@@ -4,9 +4,8 @@
 {% set admin_page_subtitle = "创建邀请与查看作答状态" %}
 {% block body_class %}page-admin-assignments{% endblock %}
 {% block content %}
-      <div class="surface admin-surface" role="region" aria-label="答题邀请">
-        <section class="section">
-          <div class="panel-head"><div></div></div>
+      <div class="admin-assignments-layout grid w-full content-start gap-4 text-[15px]" role="region" aria-label="答题邀请">
+        <section class="assign-create-panel overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
           <form class="assign-form" method="post" action="/admin/assignments">
             <div class="invite-grid">
               <div class="field invite-grid__exam"><label for="exam_key">试卷</label><select id="exam_key" name="exam_key" required>{% for e in exams_all %}<option value="{{ e.exam_key }}" {% if assign_exam_key and assign_exam_key == e.exam_key %}selected{% endif %}>{{ e.exam_key }}</option>{% endfor %}</select></div>
@@ -26,18 +25,17 @@
             </div>
           </form>
         </section>
-        <section class="section">
-          <form class="attempt-filter toolbar-form" method="get" action="{{ url_for('admin_assignments') }}">
-            <div class="field toolbar-field--query"><input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷/Token" autocomplete="off" aria-label="查询" /></div>
-            <div class="range-group toolbar-range">
-              <div class="field toolbar-field--date"><div class="date-proxy"><input id="attempt_start_from_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="attempt_start_from" class="input date-native" type="date" name="attempt_start_from" value="{{ attempt_start_from or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="attempt_start_from" aria-label="选择开始时间(起)"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
-              <div class="range-sep" aria-hidden="true">-</div>
-              <div class="field toolbar-field--date"><div class="date-proxy"><input id="attempt_start_to_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="attempt_start_to" class="input date-native" type="date" name="attempt_start_to" value="{{ attempt_start_to or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="attempt_start_to" aria-label="选择开始时间(止)"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
+        <section class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+          <form class="mb-[10px] grid w-full grid-cols-[minmax(260px,1fr)_max-content] items-end gap-x-3 gap-y-2 max-[980px]:grid-cols-1 max-[980px]:items-stretch" method="get" action="{{ url_for('admin_assignments') }}">
+            <div class="field !m-0 min-w-0"><input id="attempt_q" class="input" name="attempt_q" value="{{ attempt_q or '' }}" placeholder="姓名/电话/试卷/Token" autocomplete="off" aria-label="查询" /></div>
+            <div class="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
+              <div class="field !m-0 min-w-0"><div class="date-proxy"><input id="attempt_start_from_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="attempt_start_from" class="input date-native" type="date" name="attempt_start_from" value="{{ attempt_start_from or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="attempt_start_from" aria-label="选择开始时间(起)"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
+              <div class="inline-flex h-10 items-center justify-center px-[2px] font-[900] text-slate-700/55 select-none" aria-hidden="true">-</div>
+              <div class="field !m-0 min-w-0"><div class="date-proxy"><input id="attempt_start_to_display" class="input date-display" type="text" value="" placeholder="yyyy/mm/dd" readonly /><input id="attempt_start_to" class="input date-native" type="date" name="attempt_start_to" value="{{ attempt_start_to or '' }}" tabindex="-1" aria-hidden="true" /><button class="date-btn" type="button" data-for="attempt_start_to" aria-label="选择开始时间(止)"><span class="material-symbols-rounded" aria-hidden="true">calendar_month</span></button></div></div>
             </div>
-            <div class="attempt-actions toolbar-actions"></div>
           </form>
           <div class="table-scroll">
-            <table class="attempt-table" aria-label="候选人答题情况列表">
+            <table class="w-full min-w-[980px] table-fixed text-[15px]" aria-label="候选人答题情况列表">
               <colgroup>
                 <col class="col-w-5p" />
                 <col class="col-w-10p" />
@@ -48,18 +46,20 @@
                 <col class="col-w-8p" />
                 <col class="col-w-26p" />
               </colgroup>
-              <thead><tr><th>ID</th><th>姓名</th><th>电话</th><th>试卷</th><th>TOKEN</th><th class="center">状态</th><th class="center">成绩</th><th>时间</th></tr></thead>
+              <thead><tr><th class="whitespace-nowrap px-2 py-[10px] align-middle leading-[1.15]">ID</th><th class="whitespace-nowrap px-2 py-[10px] align-middle leading-[1.15]">姓名</th><th class="whitespace-nowrap px-2 py-[10px] align-middle leading-[1.15]">电话</th><th class="whitespace-nowrap px-2 py-[10px] align-middle leading-[1.15]">试卷</th><th class="whitespace-nowrap px-2 py-[10px] align-middle leading-[1.15]">TOKEN</th><th class="center whitespace-nowrap px-2 py-[10px] align-middle leading-[1.15]">状态</th><th class="center whitespace-nowrap px-2 py-[10px] align-middle leading-[1.15]">成绩</th><th class="whitespace-nowrap px-2 py-[10px] align-middle leading-[1.15]">时间</th></tr></thead>
               <tbody>
                 {% for c in attempt_candidates %}
-                <tr {% if c.attempt_href or c.attempt_msg %}class="row-link"{% endif %} {% if c.attempt_href %}data-href="{{ c.attempt_href }}"{% endif %} {% if c.attempt_msg %}data-msg="{{ c.attempt_msg }}"{% endif %} data-token="{{ c.token }}">
-                  <td>{{ c.attempt_id }}</td>
-                  <td class="ellipsis">{% if c.candidate_clickable %}<a class="row-a" href="{{ url_for('admin_candidate_profile', candidate_id=c.candidate_id) }}">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %}</td>
-                  <td class="ellipsis">{{ c.phone }}</td>
-                  <td class="ellipsis">{% if c.exam_key and c.exam_href %}<a class="row-a" href="{{ c.exam_href }}"><code>{{ c.exam_key }}</code></a>{% else %}<code>{{ c.exam_key }}</code>{% endif %}</td>
-                  <td class="ellipsis"><a class="token-copy" href="#" data-token="{{ c.token }}"><code title="{{ c.token }}">{{ c.token }}</code></a></td>
-                  <td class="center status-cell"><span class="status-pill {{ c.status }}">{{ c.status_label }}</span></td>
-                  <td class="center score-cell">{{ c.score if c.score is not none else "" }}</td>
-                  <td class="nowrap">{% if c.invite_start_date %}<div>开始：{{ c.invite_start_date.replace("-", "/") }}</div>{% endif %}{% if c.invite_end_date %}<div>结束：{{ c.invite_end_date.replace("-", "/") }}</div>{% endif %}</td>
+                <tr {% if c.attempt_href or c.attempt_msg %}class="row-link cursor-pointer hover:[&>td]:bg-blue-50/70"{% endif %} {% if c.attempt_href %}data-href="{{ c.attempt_href }}"{% endif %} {% if c.attempt_msg %}data-msg="{{ c.attempt_msg }}"{% endif %} data-token="{{ c.token }}">
+                  <td class="px-[10px] py-[14px] align-middle">{{ c.attempt_id }}</td>
+                  <td class="ellipsis px-[10px] py-[14px] align-middle">{% if c.candidate_clickable %}<a class="row-a text-inherit no-underline hover:underline" href="{{ url_for('admin_candidate_profile', candidate_id=c.candidate_id) }}">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %}</td>
+                  <td class="ellipsis px-[10px] py-[14px] align-middle">{{ c.phone }}</td>
+                  <td class="ellipsis px-[10px] py-[14px] align-middle">{% if c.exam_key and c.exam_href %}<a class="row-a text-inherit no-underline hover:underline" href="{{ c.exam_href }}"><code>{{ c.exam_key }}</code></a>{% else %}<code>{{ c.exam_key }}</code>{% endif %}</td>
+                  <td class="ellipsis px-[10px] py-[14px] align-middle"><a class="token-copy text-inherit no-underline hover:underline" href="#" data-token="{{ c.token }}"><code title="{{ c.token }}">{{ c.token }}</code></a></td>
+                  <td class="center status-cell px-[10px] py-[14px] align-middle">
+                    <span class="inline-flex whitespace-nowrap rounded-full border px-[14px] py-[7px] text-[12px] font-[900] {% if c.status in ['invited', 'distributed'] %}border-blue-600/28 bg-blue-600/10 text-blue-700{% elif c.status == 'verified' %}border-emerald-500/28 bg-emerald-500/10 text-emerald-700{% elif c.status == 'in_exam' %}border-orange-500/30 bg-orange-500/10 text-orange-800{% elif c.status == 'grading' %}border-violet-600/30 bg-violet-600/10 text-violet-700{% elif c.status == 'finished' %}border-green-600/30 bg-green-600/10 text-green-800{% elif c.status == 'expired' %}border-red-600/30 bg-red-600/8 text-red-700{% else %}border-slate-900/12 bg-slate-900/3 text-slate-900/86{% endif %}">{{ c.status_label }}</span>
+                  </td>
+                  <td class="center score-cell px-[10px] py-[14px] align-middle">{{ c.score if c.score is not none else "" }}</td>
+                  <td class="nowrap px-[10px] py-[14px] align-middle">{% if c.invite_start_date %}<div>开始：{{ c.invite_start_date.replace("-", "/") }}</div>{% endif %}{% if c.invite_end_date %}<div>结束：{{ c.invite_end_date.replace("-", "/") }}</div>{% endif %}</td>
                 </tr>
                 {% endfor %}
               </tbody>

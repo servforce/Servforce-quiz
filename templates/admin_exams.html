@@ -4,89 +4,93 @@
 {% set admin_page_subtitle = "Git 仓库同步与版本快照" %}
 {% block body_class %}page-admin-exams{% endblock %}
 {% block content %}
-      <div class="surface admin-surface" role="region" aria-label="试卷管理">
-        <section class="section">
-          <div class="section-head sync-head">
-            <div class="sync-toolbar">
-              <form class="sync-search-form" method="get" action="{{ url_for('admin_exams') }}">
-                <div class="field">
-                  <label for="exam_q">搜索</label>
-                  <input id="exam_q" class="input" name="exam_q" value="{{ exam_q or '' }}" placeholder="搜索 ID/exam_key/标题" autocomplete="off" aria-label="搜索试卷" />
+      <div class="grid w-full content-start gap-4 text-[15px]" role="region" aria-label="试卷管理">
+        <section class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+          <div class="grid w-full gap-[10px]">
+            <div class="grid w-full grid-cols-[repeat(13,minmax(0,1fr))] items-end gap-[14px] max-[1499px]:grid-cols-[repeat(8,minmax(0,1fr))] max-[980px]:grid-cols-[repeat(4,minmax(0,1fr))] max-[640px]:grid-cols-1">
+              <form class="col-span-3 grid min-w-0 gap-2 max-[1499px]:col-span-3 max-[980px]:col-span-4 max-[640px]:col-span-1" method="get" action="{{ url_for('admin_exams') }}">
+                <div class="field !m-0">
+                  <label for="exam_q" class="text-[12px] font-[800] tracking-[0.02em] text-slate-700/90">搜索</label>
+                  <input id="exam_q" class="input h-[46px]" name="exam_q" value="{{ exam_q or '' }}" placeholder="搜索 ID/exam_key/标题" autocomplete="off" aria-label="搜索试卷" />
                 </div>
               </form>
 
-              <form id="repo_url_form" class="sync-repo-form" method="post" action="{{ url_for('admin_exams_sync') }}">
-                <div class="field">
-                  <label for="repo_url">Git 仓库地址</label>
-                  <input id="repo_url" class="input" name="repo_url" value="{{ exam_repo_url or '' }}" placeholder="https://example.com/repo.git" autocomplete="off" required />
+              <form id="repo_url_form" class="col-span-4 grid min-w-0 gap-2 max-[1499px]:col-span-5 max-[980px]:col-span-4 max-[640px]:col-span-1" method="post" action="{{ url_for('admin_exams_sync') }}">
+                <div class="field !m-0">
+                  <label for="repo_url" class="text-[12px] font-[800] tracking-[0.02em] text-slate-700/90">Git 仓库地址</label>
+                  <input id="repo_url" class="input h-[46px]" name="repo_url" value="{{ exam_repo_url or '' }}" placeholder="https://example.com/repo.git" autocomplete="off" required />
                 </div>
               </form>
 
-              <div class="sync-card">
-                <div class="k">仓库地址</div>
-                <div class="v mono">{{ (exam_sync_state or {}).get('repo_url') or '未配置' }}</div>
+              <div class="col-span-1 flex h-[46px] min-w-0 flex-col justify-center gap-[2px] rounded-[10px] border border-slate-900/10 bg-white/82 px-3 py-[6px] max-[1499px]:col-span-2 max-[980px]:col-span-2 max-[980px]:min-h-[46px] max-[980px]:h-auto max-[640px]:col-span-1">
+                <div class="whitespace-nowrap text-[11px] leading-[1.1] text-slate-500">仓库地址</div>
+                <div class="break-all font-mono text-[13px] leading-[1.1] font-[800] text-slate-900">{{ (exam_sync_state or {}).get('repo_url') or '未配置' }}</div>
               </div>
-              <div class="sync-card">
-                <div class="k">最近状态</div>
-                <div class="v">
+              <div class="col-span-1 flex h-[46px] min-w-0 flex-col justify-center gap-[2px] rounded-[10px] border border-slate-900/10 bg-white/82 px-3 py-[6px] max-[1499px]:col-span-2 max-[980px]:col-span-2 max-[980px]:min-h-[46px] max-[980px]:h-auto max-[640px]:col-span-1">
+                <div class="whitespace-nowrap text-[11px] leading-[1.1] text-slate-500">最近状态</div>
+                <div class="text-[13px] leading-[1.1] font-[800] text-slate-900">
                   {% set sync_status = (exam_sync_state or {}).get('status') or 'idle' %}
-                  <span class="status-pill {{ sync_status }}">{{ sync_status }}</span>
+                  <span class="inline-flex items-center text-[12px] font-[800] leading-[1.2] {% if sync_status == 'active' %}text-green-700{% elif sync_status == 'sync_error' %}text-rose-700{% else %}text-slate-500{% endif %}">{{ sync_status }}</span>
                 </div>
               </div>
-              <div class="sync-card">
-                <div class="k">最近 Commit</div>
-                <div class="v mono">{{ (exam_sync_state or {}).get('last_commit') or '-' }}</div>
+              <div class="col-span-1 flex h-[46px] min-w-0 flex-col justify-center gap-[2px] rounded-[10px] border border-slate-900/10 bg-white/82 px-3 py-[6px] max-[1499px]:col-span-2 max-[980px]:col-span-2 max-[980px]:min-h-[46px] max-[980px]:h-auto max-[640px]:col-span-1">
+                <div class="whitespace-nowrap text-[11px] leading-[1.1] text-slate-500">最近 Commit</div>
+                <div class="break-all font-mono text-[13px] leading-[1.1] font-[800] text-slate-900">{{ (exam_sync_state or {}).get('last_commit') or '-' }}</div>
               </div>
-              <div class="sync-card">
-                <div class="k">最近完成时间</div>
-                <div class="v">{{ (exam_sync_state or {}).get('finished_at') or '-' }}</div>
+              <div class="col-span-1 flex h-[46px] min-w-0 flex-col justify-center gap-[2px] rounded-[10px] border border-slate-900/10 bg-white/82 px-3 py-[6px] max-[1499px]:col-span-2 max-[980px]:col-span-2 max-[980px]:min-h-[46px] max-[980px]:h-auto max-[640px]:col-span-1">
+                <div class="whitespace-nowrap text-[11px] leading-[1.1] text-slate-500">最近完成时间</div>
+                <div class="break-all text-[13px] leading-[1.1] font-[800] text-slate-900">{{ (exam_sync_state or {}).get('finished_at') or '-' }}</div>
               </div>
 
-              <div class="sync-submit">
-                <button class="btn btn-primary" type="submit" form="repo_url_form">立即同步</button>
+              <div class="col-span-2 min-w-0 self-end max-[1499px]:col-span-8 max-[980px]:col-span-4 max-[640px]:col-span-1">
+                <button class="btn btn-primary h-[46px] w-full min-w-[132px] px-5" type="submit" form="repo_url_form">立即同步</button>
               </div>
             </div>
 
-            <div class="sync-notes">
-              <p class="sync-hint">只支持公共只读 HTTPS 仓库。同步会扫描仓库根目录第一层的 Markdown。</p>
+            <div class="grid w-full gap-[6px]">
+              <p class="m-0 text-[13px] leading-[1.6] text-slate-500">只支持公共只读 HTTPS 仓库。同步会扫描仓库根目录第一层的 Markdown。</p>
               {% if (exam_sync_state or {}).get('last_error') %}
-                <p class="sync-hint">最近错误：{{ (exam_sync_state or {}).get('last_error') }}</p>
+                <p class="m-0 text-[13px] leading-[1.6] text-slate-500">最近错误：{{ (exam_sync_state or {}).get('last_error') }}</p>
               {% endif %}
               {% if (exam_sync_state or {}).get('last_result') %}
                 {% set sync_result = (exam_sync_state or {}).get('last_result') or {} %}
-                <p class="sync-hint">最近一次同步：扫描 {{ sync_result.get('scanned_md', 0) }} 个 Markdown，新增 {{ sync_result.get('created_versions', 0) }}，更新 {{ sync_result.get('updated_versions', 0) }}，未变化 {{ sync_result.get('unchanged_versions', 0) }}，退役 {{ sync_result.get('retired_exams', 0) }}，异常 {{ sync_result.get('error_count', 0) }}。</p>
+                <p class="m-0 text-[13px] leading-[1.6] text-slate-500">最近一次同步：扫描 {{ sync_result.get('scanned_md', 0) }} 个 Markdown，新增 {{ sync_result.get('created_versions', 0) }}，更新 {{ sync_result.get('updated_versions', 0) }}，未变化 {{ sync_result.get('unchanged_versions', 0) }}，退役 {{ sync_result.get('retired_exams', 0) }}，异常 {{ sync_result.get('error_count', 0) }}。</p>
               {% endif %}
             </div>
           </div>
+        </section>
 
-          <div class="table-scroll">
-            <table class="exam-table" aria-label="试卷列表">
+        <section class="exams-table-panel flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200/80 bg-slate-50/90 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+          <div class="table-scroll mt-3">
+            <table class="w-full table-fixed text-[15px]" aria-label="试卷列表">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>EXAM_KEY</th>
-                  <th>标题</th>
-                  <th>状态</th>
-                  <th>当前版本</th>
-                  <th>来源文件</th>
-                  <th>更新时间</th>
+                  <th class="px-4 py-[14px] text-left align-middle text-[13px] text-slate-600">ID</th>
+                  <th class="px-4 py-[14px] text-left align-middle text-[13px] text-slate-600">EXAM_KEY</th>
+                  <th class="px-4 py-[14px] text-left align-middle text-[13px] text-slate-600">标题</th>
+                  <th class="px-4 py-[14px] text-left align-middle text-[13px] text-slate-600">状态</th>
+                  <th class="px-4 py-[14px] text-left align-middle text-[13px] text-slate-600">当前版本</th>
+                  <th class="px-4 py-[14px] text-left align-middle text-[13px] text-slate-600">来源文件</th>
+                  <th class="px-4 py-[14px] text-left align-middle text-[13px] text-slate-600">更新时间</th>
                 </tr>
               </thead>
               <tbody>
                 {% for e in exams_page %}
-                <tr class="row-link" data-href="/admin/exams/{{ e.id }}">
-                  <td>{{ e.id }}</td>
-                  <td class="mono">{{ e.exam_key }}</td>
-                  <td>
+                <tr class="cursor-pointer hover:[&>td]:bg-blue-50/70" data-href="/admin/exams/{{ e.id }}">
+                  <td class="px-4 py-[14px] align-middle">{{ e.id }}</td>
+                  <td class="px-4 py-[14px] align-middle font-mono">{{ e.exam_key }}</td>
+                  <td class="px-4 py-[14px] align-middle">
                     <div>{{ e.title | title_clean }}</div>
                     {% if e.last_sync_error %}
-                      <div class="cell-sub">{{ e.last_sync_error }}</div>
+                      <div class="mt-1 text-[12px] leading-[1.5] text-slate-500">{{ e.last_sync_error }}</div>
                     {% endif %}
                   </td>
-                  <td><span class="status-pill {{ e.status }}">{{ e.status }}</span></td>
-                  <td>{% if e.current_version_no %}v{{ e.current_version_no }}{% else %}-{% endif %}</td>
-                  <td class="mono">{{ e.source_path or '-' }}</td>
-                  <td>{{ e.updated_at.strftime("%Y-%m-%d %H:%M:%S") if e.updated_at else "" }}</td>
+                  <td class="px-4 py-[14px] align-middle">
+                    <span class="inline-flex items-center text-[12px] font-[800] leading-[1.2] {% if e.status == 'active' %}text-green-700{% elif e.status == 'sync_error' %}text-rose-700{% else %}text-slate-500{% endif %}">{{ e.status }}</span>
+                  </td>
+                  <td class="px-4 py-[14px] align-middle">{% if e.current_version_no %}v{{ e.current_version_no }}{% else %}-{% endif %}</td>
+                  <td class="px-4 py-[14px] align-middle font-mono">{{ e.source_path or '-' }}</td>
+                  <td class="px-4 py-[14px] align-middle">{{ e.updated_at.strftime("%Y-%m-%d %H:%M:%S") if e.updated_at else "" }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
