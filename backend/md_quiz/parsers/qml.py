@@ -24,6 +24,7 @@ _HEADER_RE = re.compile(
 
 _OPTION_RE = re.compile(r"^\s*[-*]\s+(?P<key>[A-Z])(?P<correct>\*)?\)\s*(?P<body>.*)$")
 _ATTR_KV_RE = re.compile(r"(?P<k>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<v>[^,}]+)")
+_DURATION_RE = re.compile(r"^(?P<num>\d+)\s*(?P<unit>s|m|h)?$", re.IGNORECASE)
 
 
 def _parse_attrs(attrs: str | None) -> dict[str, Any]:
@@ -74,6 +75,34 @@ def _split_front_matter(text: str) -> tuple[dict[str, Any], str]:
     if not isinstance(fm, dict):
         raise QmlParseError("Front matter must be a YAML mapping", line=1)
     return fm, body
+
+
+def _parse_answer_time_seconds(raw: Any, *, qid: str, line: int) -> int | None:
+    if raw in {None, ""}:
+        return None
+
+    seconds: int
+    if isinstance(raw, bool):
+        raise QmlParseError(f"{qid} invalid answer_time, expected 1s..1h", line=line)
+
+    if isinstance(raw, int):
+        seconds = raw
+    else:
+        text = str(raw).strip().lower()
+        m = _DURATION_RE.fullmatch(text)
+        if not m:
+            raise QmlParseError(
+                f"{qid} invalid answer_time, expected integer seconds or suffix s/m/h",
+                line=line,
+            )
+        num = int(m.group("num"))
+        unit = (m.group("unit") or "s").lower()
+        factor = {"s": 1, "m": 60, "h": 3600}[unit]
+        seconds = num * factor
+
+    if seconds < 1 or seconds > 3600:
+        raise QmlParseError(f"{qid} answer_time out of range, expected 1..3600 seconds", line=line)
+    return seconds
 
 
 # 解析mardown试卷
@@ -156,6 +185,11 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
         partial = bool(attrs.get("partial", False))
         media = attrs.get("media", "")
         max_points = int(attrs.get("max", points if points else 0) or 0)
+        answer_time_seconds = _parse_answer_time_seconds(
+            attrs.get("answer_time"),
+            qid=qid,
+            line=line_no(),
+        )
 
         if qtype != "short" and points <= 0:
             raise QmlParseError(
@@ -265,6 +299,7 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             "max_points": max_points if qtype == "short" else points,
             "partial": partial,
             "media": media,
+            "answer_time_seconds": int(answer_time_seconds or 0),
             "stem_md": stem_md,
             "options": options,
             "rubric": rubric,
@@ -280,6 +315,7 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             "max_points": q["max_points"],
             "partial": partial,
             "media": media,
+            "answer_time_seconds": int(answer_time_seconds or 0),
             "stem_md": stem_md,
             "options": [{"key": o["key"], "text": o["text"]} for o in options],
         }

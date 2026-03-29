@@ -10,7 +10,8 @@
 
   * 类型：`[single] | [multiple] | [short]`
   * 分值：能力题用 `(5)`；简答用 `{max=10}`
-  * 其他属性：`{partial=true}`、`{media=img/q1.png}` 等
+  * 其他属性：`{partial=true}`、`{media=img/q1.png}`、`{answer_time=90s}` 等
+  * `answer_time` 表示该题单独作答时间，支持纯秒数或 `s / m / h` 后缀；最短 `1s`，最长 `1h`
 * 题干：标题下一段文本/图片
 * 选项：使用无序列表，格式 `- A) 文本`
 
@@ -51,7 +52,7 @@ trait:
 format: qml-v2
 ---
 
-## Q1 [single] (5) {media=}
+## Q1 [single] (5) {media=, answer_time=45s}
 选择正确的描述：Transformer 的自注意力用于？
 
 - A) 仅用于解码器，建模语言的因果依赖
@@ -73,7 +74,7 @@ format: qml-v2
 - A) 实操演练 {traits:S=1}
 - B) 概念推演 {traits:N=1}
 
-## Q4 [short] {max=10}
+## Q4 [short] {max=10, answer_time=10m}
 用不超过150字解释“过拟合”的定义与危害。
 
 [rubric]
@@ -90,7 +91,7 @@ prompt_template=你是严格的阅卷老师，请仅输出分数数字（0-{{max
 
 **映射到后端字段**
 
-* `## Q1 [single] (5) {media=...}` → `Question.id/type/points/media/partial_credit/...`
+* `## Q1 [single] (5) {media=..., answer_time=45s}` → `Question.id/type/points/media/partial_credit/answer_time_seconds/...`
 * 选项行 `- B*) 文本 {traits:S=1}` → `Option.key='B'`, `correct` 自动收集，`traits={'S':1}`
 * 简答 `[short]{max=10}` + `[rubric]...` → `max_points/rubric`；`[llm]` → 题目级 `LLMConfig`
 
@@ -104,6 +105,8 @@ prompt_template=你是严格的阅卷老师，请仅输出分数数字（0-{{max
 * 若出现极端复杂的题目元信息（很少见），可能仍需回退到 YAML。
 * **唯一性**：`QID` 必须唯一；解析器应校验并给出行号/列号。
 * **多选的 `partial_credit`**：缺省 `false`，仅当题头或属性有 `{partial=true}` 时启用。
+* **每题作答时间**：使用题头属性 `{answer_time=...}`；支持 `45`、`45s`、`3m`、`1h`；解析后统一落到 `answer_time_seconds`。
+* **每题作答时间范围**：最短 1 秒，最长 3600 秒；超出范围解析器应报错并指出题号。
 * **traits 合法性**：允许正负与 0，维度键不做强校验（保持扩展性）。
 * **LLM 覆盖**：题目级 `[llm]` 优先于 Front Matter；解析器需要层级合并。
 * **标识符**：建议 Front Matter 加 `format: qml-v2`，便于导入器做分支。

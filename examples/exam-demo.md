@@ -13,7 +13,7 @@ llm:
     【考生回答】{{answer}}
 ---
 
-## Q1 [single] (5)
+## Q1 [single] (5) {answer_time=45s}
 Transformer 的自注意力主要用于？
 
 - A) 仅用于位置编码
@@ -28,7 +28,7 @@ Transformer 的自注意力主要用于？
 - C*) SGD
 - D*) AdamW
 
-## Q3 [short] {max=10}
+## Q3 [short] {max=10, answer_time=10m}
 用不超过 150 字解释“过拟合”的定义与危害。
 
 [rubric]
@@ -37,4 +37,3 @@ Transformer 的自注意力主要用于？
 3) 描述危害；
 4) 表达清晰。
 [/rubric]
-

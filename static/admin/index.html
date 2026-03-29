@@ -32,7 +32,7 @@
 
     <main class="min-h-screen p-4 sm:p-6" x-cloak>
       <template x-if="!session.authenticated">
-        <section class="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[1520px] items-center justify-center">
+        <section class="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[1024px] items-center justify-center">
           <div class="relative w-full overflow-hidden rounded-[1.25rem] border border-white/70 bg-white/76 shadow-[var(--admin-shadow)] backdrop-blur-xl">
             <div class="pointer-events-none absolute -left-20 top-0 h-72 w-72 rounded-full bg-blue-500/14 blur-3xl"></div>
             <div class="pointer-events-none absolute right-0 top-6 h-72 w-72 rounded-full bg-violet-400/12 blur-3xl"></div>
@@ -41,83 +41,92 @@
             <div class="relative grid gap-0 lg:grid-cols-[1.18fr_auto_0.82fr]">
               <div class="order-2 p-6 sm:p-7 lg:order-1 xl:p-8">
                 <div class="flex h-full flex-col">
-                  <div class="flex items-center gap-3.5">
-                    <img src="/static/logo.png" alt="" aria-hidden="true" class="h-9 w-9 shrink-0 sm:h-10 sm:w-10" />
-                    <h1 class="text-3xl font-black tracking-[-0.05em] text-slate-900 sm:text-4xl">MD Quiz</h1>
+                  <div class="overflow-hidden rounded-2xl border border-blue-200/50 bg-gradient-to-r from-blue-600 to-emerald-500 px-5 py-4 text-white shadow-[0_16px_40px_rgba(37,99,235,0.18)] sm:px-6">
+                    <div class="flex items-center gap-3.5">
+                      <img src="/static/logo.png" alt="" aria-hidden="true" class="h-8 w-8 shrink-0 sm:h-9 sm:w-9" />
+                      <div class="min-w-0">
+                        <h1 class="text-[2rem] font-black tracking-[-0.05em] text-white sm:text-[2.5rem]">MD Quiz</h1>
+                      </div>
+                    </div>
+
+                    <p class="ms-1 max-w-5xl text-sm leading-6 text-white/88 sm:text-base lg:text-[1.05rem]">
+                      智能体时代的招聘搭子
+                    </p>
                   </div>
 
-                  <p class="mt-4 max-w-5xl text-sm leading-7 text-slate-600 sm:text-base lg:text-lg">
-                    智能体时代的招聘搭子
-                  </p>
-
-                  <div class="mt-6 grid gap-3 sm:grid-cols-2">
-                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
-                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-sky-700">
-                        <span class="material-symbols-rounded text-3xl">description</span>
+                  <div class="mt-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/78 divide-y divide-slate-200/80">
+                    <div class="grid sm:grid-cols-2 sm:divide-x sm:divide-slate-200/80">
+                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 p-4">
+                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600">
+                          <span class="material-symbols-rounded text-3xl">description</span>
+                        </div>
+                        <div class="min-w-0">
+                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">试卷管理</div>
+                          <p class="mt-1 text-sm leading-6 text-slate-600">题目整理、版本留档，更新时心里有数</p>
+                        </div>
                       </div>
-                      <div class="min-w-0">
-                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">试卷管理</div>
-                        <p class="mt-1 text-sm leading-6 text-slate-600">题目整理、版本留档，更新时心里有数</p>
-                      </div>
-                    </div>
-                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
-                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-teal-700">
-                        <span class="material-symbols-rounded text-3xl">groups</span>
-                      </div>
-                      <div class="min-w-0">
-                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">候选人管理</div>
-                        <p class="mt-1 text-sm leading-6 text-slate-600">简历入库、标签归档，需要时一搜就到</p>
+                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 border-t border-slate-200/80 p-4 sm:border-t-0">
+                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                          <span class="material-symbols-rounded text-3xl">groups</span>
+                        </div>
+                        <div class="min-w-0">
+                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">候选人管理</div>
+                          <p class="mt-1 text-sm leading-6 text-slate-600">简历入库、标签归档，需要时一搜就到</p>
+                        </div>
                       </div>
                     </div>
-                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
-                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-cyan-700">
-                        <span class="material-symbols-rounded text-3xl">edit_square</span>
+                    <div class="grid sm:grid-cols-2 sm:divide-x sm:divide-slate-200/80">
+                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 p-4">
+                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600">
+                          <span class="material-symbols-rounded text-3xl">edit_square</span>
+                        </div>
+                        <div class="min-w-0">
+                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">答题邀约</div>
+                          <p class="mt-1 text-sm leading-6 text-slate-600">链接和二维码直接发出，进度看得见</p>
+                        </div>
                       </div>
-                      <div class="min-w-0">
-                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">答题邀约</div>
-                        <p class="mt-1 text-sm leading-6 text-slate-600">链接和二维码直接发出，进度看得见</p>
-                      </div>
-                    </div>
-                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
-                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-emerald-700">
-                        <span class="material-symbols-rounded text-3xl">grading</span>
-                      </div>
-                      <div class="min-w-0">
-                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">智能判卷</div>
-                        <p class="mt-1 text-sm leading-6 text-slate-600">先给分，再给评语，帮你更快进入复盘</p>
-                      </div>
-                    </div>
-                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
-                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-slate-700">
-                        <span class="material-symbols-rounded text-3xl">article</span>
-                      </div>
-                      <div class="min-w-0">
-                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">系统日志</div>
-                        <p class="mt-1 text-sm leading-6 text-slate-600">关键操作自动记下，回头排查不靠回忆</p>
+                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 border-t border-slate-200/80 p-4 sm:border-t-0">
+                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                          <span class="material-symbols-rounded text-3xl">grading</span>
+                        </div>
+                        <div class="min-w-0">
+                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">智能判卷</div>
+                          <p class="mt-1 text-sm leading-6 text-slate-600">先给分，再给评语，帮你更快进入复盘</p>
+                        </div>
                       </div>
                     </div>
-                    <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-3xl border border-slate-200/80 bg-white/72 p-4">
-                      <div class="grid h-14 w-14 place-items-center rounded-2xl bg-slate-50 text-amber-700">
-                        <span class="material-symbols-rounded text-3xl">monitor_heart</span>
+                    <div class="grid sm:grid-cols-2 sm:divide-x sm:divide-slate-200/80">
+                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 p-4">
+                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600">
+                          <span class="material-symbols-rounded text-3xl">article</span>
+                        </div>
+                        <div class="min-w-0">
+                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">系统日志</div>
+                          <p class="mt-1 text-sm leading-6 text-slate-600">关键操作自动记下，回头排查不靠回忆</p>
+                        </div>
                       </div>
-                      <div class="min-w-0">
-                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">系统状态</div>
-                        <p class="mt-1 text-sm leading-6 text-slate-600">Token 和短信消耗及时提醒，避免临时掉链子</p>
+                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 border-t border-slate-200/80 p-4 sm:border-t-0">
+                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                          <span class="material-symbols-rounded text-3xl">monitor_heart</span>
+                        </div>
+                        <div class="min-w-0">
+                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">系统状态</div>
+                          <p class="mt-1 text-sm leading-6 text-slate-600">Token 和短信消耗及时提醒，避免临时掉链子</p>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   <div class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold tracking-[-0.02em] text-slate-600 sm:text-base">
-                    <span class="font-bold text-slate-800">常用流程：</span>
-                    <span class="font-bold text-sky-700">准备试卷</span>
+                    <span class="font-bold text-blue-600">备卷</span>
                     <span class="material-symbols-rounded text-slate-400">chevron_right</span>
-                    <span class="font-bold text-teal-700">发邀约</span>
+                    <span class="font-bold text-blue-500">邀约</span>
                     <span class="material-symbols-rounded text-slate-400">chevron_right</span>
-                    <span class="font-bold text-cyan-700">看作答</span>
+                    <span class="font-bold text-cyan-600">作答</span>
                     <span class="material-symbols-rounded text-slate-400">chevron_right</span>
-                    <span class="font-bold text-emerald-700">判卷</span>
+                    <span class="font-bold text-emerald-600">判卷</span>
                     <span class="material-symbols-rounded text-slate-400">chevron_right</span>
-                    <span class="font-bold text-slate-700">复盘</span>
+                    <span class="font-bold text-emerald-700">复盘</span>
                   </div>
 
                   <div class="mt-7 inline-flex w-fit items-center gap-3 rounded-full border border-slate-200/90 bg-white/82 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-[0_14px_30px_rgba(15,23,42,0.06)]">
