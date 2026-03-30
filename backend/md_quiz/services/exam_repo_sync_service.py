@@ -41,9 +41,17 @@ EXAM_SYNC_MIGRATION_KEY = "exam_repo_sync_migration"
 IMAGE_MAX_BYTES = 1024 * 1024
 
 _MD_IMAGE_RE = re.compile(r"!\[[^\]]*]\((?P<path>[^)]+)\)")
+_HTML_IMG_SRC_RE = re.compile(
+    r"""<img\b(?P<before>[^>]*?)\bsrc\s*=\s*(?P<quote>["']?)(?P<path>[^"'>\s]+)(?P=quote)(?P<after>[^>]*)>""",
+    re.IGNORECASE,
+)
 _MD_LINK_RE = re.compile(r"(?<!\!)\[[^\]]*]\((?P<path>[^)]+)\)")
 _FRONTMATTER_ID_RE = re.compile(r"(?mi)^id:\s*(?P<id>[A-Za-z0-9_-]+)\s*$")
 _VERSION_ASSET_RE = re.compile(r"\(/exams/[^)]+/assets/(?P<path>[^)]+)\)")
+_HTML_VERSION_ASSET_RE = re.compile(
+    r"""<img\b(?P<before>[^>]*?)\bsrc\s*=\s*(?P<quote>["']?)/exams/[^"'>\s]*/assets/(?P<path>[^"'>\s]+)(?P=quote)(?P<after>[^>]*)>""",
+    re.IGNORECASE,
+)
 _LEGACY_ASSET_URL_RE = re.compile(r"^/exams/[^/]+/assets/(?P<path>.+)$")
 _SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp"}
 
@@ -83,6 +91,34 @@ def _rewrite_asset_paths_for_version(version_id: int, spec: dict[str, Any], publ
     out_spec = copy.deepcopy(spec or {})
     out_public = copy.deepcopy(public_spec or {})
 
+    def _rewrite_text(text: str) -> str:
+        out = str(text or "")
+        for match in list(_MD_IMAGE_RE.finditer(out)):
+            rel = _safe_relpath(match.group("path"))
+            if rel and _is_local_asset_path(rel):
+                out = out.replace(f"({match.group('path')})", f"({_version_asset_url(version_id, rel)})")
+
+        def _replace_html_img(match: re.Match[str]) -> str:
+            rel = _safe_relpath(match.group("path"))
+            if not rel or not _is_local_asset_path(rel):
+                return match.group(0)
+            before = match.group("before") or ""
+            quote = match.group("quote") or '"'
+            after = match.group("after") or ""
+            return f'<img{before}src={quote}{_version_asset_url(version_id, rel)}{quote}{after}>'
+
+        def _replace_legacy_html_img(match: re.Match[str]) -> str:
+            rel = _safe_relpath(match.group("path"))
+            before = match.group("before") or ""
+            quote = match.group("quote") or '"'
+            after = match.group("after") or ""
+            return f'<img{before}src={quote}{_version_asset_url(version_id, rel)}{quote}{after}>'
+
+        out = _HTML_IMG_SRC_RE.sub(_replace_html_img, out)
+        out = _VERSION_ASSET_RE.sub(lambda m: f"({_version_asset_url(version_id, m.group('path'))})", out)
+        out = _HTML_VERSION_ASSET_RE.sub(_replace_legacy_html_img, out)
+        return out
+
     def _rewrite_doc(doc: dict[str, Any]) -> None:
         for key in ("welcome_image", "end_image"):
             raw = str(doc.get(key) or "").strip()
@@ -94,12 +130,7 @@ def _rewrite_asset_paths_for_version(version_id: int, spec: dict[str, Any], publ
             if value and _is_local_asset_path(value):
                 doc[key] = _version_asset_url(version_id, value)
         for q in doc.get("questions") or []:
-            stem = str(q.get("stem_md") or "")
-            for match in list(_MD_IMAGE_RE.finditer(stem)):
-                rel = _safe_relpath(match.group("path"))
-                if rel and _is_local_asset_path(rel):
-                    stem = stem.replace(f"({match.group('path')})", f"({_version_asset_url(version_id, rel)})")
-            stem = _VERSION_ASSET_RE.sub(lambda m: f"({_version_asset_url(version_id, m.group('path'))})", stem)
+            stem = _rewrite_text(str(q.get("stem_md") or ""))
             media = _safe_relpath(str(q.get("media") or "").strip())
             media_match = _LEGACY_ASSET_URL_RE.match(str(q.get("media") or "").strip())
             if media_match:
@@ -138,7 +169,15 @@ def _rewrite_archive_asset_urls(archive: dict[str, Any], *, version_id: int) -> 
             rel = _safe_relpath(match.group("path"))
             return f"({_version_asset_url(version_id, rel)})"
 
-        item["stem_md"] = _VERSION_ASSET_RE.sub(_replace, stem)
+        def _replace_html(match: re.Match[str]) -> str:
+            rel = _safe_relpath(match.group("path"))
+            before = match.group("before") or ""
+            quote = match.group("quote") or '"'
+            after = match.group("after") or ""
+            return f'<img{before}src={quote}{_version_asset_url(version_id, rel)}{quote}{after}>'
+
+        stem = _VERSION_ASSET_RE.sub(_replace, stem)
+        item["stem_md"] = _HTML_VERSION_ASSET_RE.sub(_replace_html, stem)
     return out
 
 
@@ -187,6 +226,10 @@ def _validate_markdown_links(markdown_text: str) -> None:
 def _collect_assets(markdown_text: str, spec: dict[str, Any]) -> list[str]:
     refs: set[str] = set()
     for match in _MD_IMAGE_RE.finditer(markdown_text or ""):
+        rel = _safe_relpath(match.group("path"))
+        if rel and _is_local_asset_path(rel):
+            refs.add(rel)
+    for match in _HTML_IMG_SRC_RE.finditer(markdown_text or ""):
         rel = _safe_relpath(match.group("path"))
         if rel and _is_local_asset_path(rel):
             refs.add(rel)

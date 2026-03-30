@@ -131,6 +131,13 @@
               <h2 class="text-3xl font-semibold tracking-[-0.03em] text-slate-900" x-text="state.exam?.title || '在线答题'"></h2>
               <p class="text-sm leading-7 text-slate-600" x-text="state.exam?.description || '请按要求完成题目并提交。'"></p>
             </div>
+            <div x-show="state.exam?.spec?.welcome_image" class="rounded-3xl border border-teal-100 bg-white px-4 py-4">
+              <img
+                :src="state.exam?.spec?.welcome_image || ''"
+                alt="欢迎图"
+                class="mx-auto block h-auto max-w-full rounded-2xl"
+              />
+            </div>
             <button
               x-show="!state.exam?.entered_at"
               type="button"
@@ -147,7 +154,7 @@
                     <span class="rounded-full border border-teal-100 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold text-teal-700" x-text="question.qid"></span>
                     <span class="text-sm font-semibold text-slate-900" x-text="question.label || question.qid"></span>
                   </div>
-                  <pre class="mt-3 whitespace-pre-wrap text-sm leading-7 text-slate-700" x-text="question.stem_md || ''"></pre>
+                  <div class="public-rich mt-3 text-sm leading-7 text-slate-700" x-html="question.stem_html || ''"></div>
                   <template x-if="question.type === 'single' || question.type === 'multiple'">
                     <div class="mt-4 space-y-2">
                       <template x-for="option in question.options || []" :key="option.key">
@@ -175,6 +182,13 @@
                   </template>
                 </div>
               </template>
+            </div>
+            <div x-show="state.exam?.spec?.end_image" class="rounded-3xl border border-teal-100 bg-white px-4 py-4">
+              <img
+                :src="state.exam?.spec?.end_image || ''"
+                alt="结束图"
+                class="mx-auto block h-auto max-w-full rounded-2xl"
+              />
             </div>
             <div class="grid gap-3 sm:grid-cols-2">
               <button type="button" @click="saveAnswers" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">保存答案</button>

@@ -202,6 +202,7 @@ def _bootstrap_attempt(token: str) -> dict[str, Any]:
     public_spec = exam_snapshot.get("public_spec") if isinstance(exam_snapshot.get("public_spec"), dict) else {}
     if not public_spec:
         raise HTTPException(status_code=404, detail="试卷不存在")
+    public_spec = exam_helpers.build_render_ready_public_spec(public_spec)
 
     time_limit_seconds = int(assignment.get("time_limit_seconds") or 0)
     min_submit_seconds = deps.compute_min_submit_seconds(

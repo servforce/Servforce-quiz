@@ -88,10 +88,13 @@ def grade_attempt(spec: dict[str, Any], assignment: dict[str, Any]) -> dict[str,
         "overall_reason": overall_reason,
         "graded_at": datetime.now(timezone.utc).isoformat(),
     }
-    try:
-        out["analysis"] = _analyze_grading(spec, assignment, out)
-    except Exception as e:
-        logger.warning("Grading analysis failed: %s", e)
+    if subjective_details:
+        try:
+            out["analysis"] = _analyze_grading(spec, assignment, out)
+        except Exception as e:
+            logger.warning("Grading analysis failed: %s", e)
+            out["analysis"] = ""
+    else:
         out["analysis"] = ""
     return out
 
@@ -286,6 +289,8 @@ def _analyze_grading(spec: dict[str, Any], assignment: dict[str, Any], grading: 
 
     lines: list[str] = []
     for q in questions[:60]:
+        if str(q.get("type") or "").strip() != "short":
+            continue
         qid = str(q.get("qid") or "")
         if not qid:
             continue
@@ -309,6 +314,9 @@ def _analyze_grading(spec: dict[str, Any], assignment: dict[str, Any], grading: 
         if ans_text:
             line += f"；答={ans_text}"
         lines.append(line)
+
+    if not lines:
+        return ""
 
     total = int(grading.get("total") or 0)
     interview = bool(grading.get("interview"))
@@ -349,6 +357,8 @@ def generate_candidate_remark(
 
     parts: list[str] = []
     for q in questions[:30]:
+        if str(q.get("type") or "").strip() != "short":
+            continue
         qid = str(q.get("qid") or "")
         stem = str(q.get("stem_md") or "").strip().replace("\n", " ")
         stem = stem[:160]
@@ -367,6 +377,9 @@ def generate_candidate_remark(
         if reason:
             line += f"；判分要点={str(reason)[:160]}"
         parts.append(line)
+
+    if not parts:
+        return str(grading.get("overall_reason") or "").strip()
 
     total = int(grading.get("total") or 0)
     interview = bool(grading.get("interview"))

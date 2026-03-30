@@ -25,6 +25,7 @@ _HEADER_RE = re.compile(
 _OPTION_RE = re.compile(r"^\s*[-*]\s+(?P<key>[A-Z])(?P<correct>\*)?\)\s*(?P<body>.*)$")
 _ATTR_KV_RE = re.compile(r"(?P<k>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<v>[^,}]+)")
 _DURATION_RE = re.compile(r"^(?P<num>\d+)\s*(?P<unit>s|m|h)?$", re.IGNORECASE)
+_STANDALONE_MD_IMAGE_RE = re.compile(r"^\s*!\[[^\]]*]\((?P<path>[^)]+)\)\s*$")
 
 
 def _parse_attrs(attrs: str | None) -> dict[str, Any]:
@@ -105,6 +106,16 @@ def _parse_answer_time_seconds(raw: Any, *, qid: str, line: int) -> int | None:
     return seconds
 
 
+def _extract_edge_image(lines: list[str]) -> str:
+    non_empty = [line.strip() for line in lines if line.strip()]
+    if len(non_empty) != 1:
+        return ""
+    match = _STANDALONE_MD_IMAGE_RE.fullmatch(non_empty[0])
+    if not match:
+        return ""
+    return str(match.group("path") or "").strip()
+
+
 # 解析mardown试卷
 def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, Any]]:
     front_matter, body = _split_front_matter(markdown_text)
@@ -137,7 +148,26 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
     public_exam["questions"] = []
 
     lines = body.splitlines()
-    i = 0
+    parse_end = len(lines)
+    j = len(lines) - 1
+    while j >= 0 and not lines[j].strip():
+        j -= 1
+    if j >= 0:
+        end_image = _extract_edge_image([lines[j]])
+        if end_image:
+            exam["end_image"] = end_image
+            public_exam["end_image"] = end_image
+            parse_end = j
+
+    header_indices = [idx for idx, line in enumerate(lines[:parse_end]) if _HEADER_RE.match(line.strip())]
+    if not header_indices:
+        return exam, public_exam
+
+    welcome_image = _extract_edge_image(lines[: header_indices[0]])
+    if welcome_image:
+        exam["welcome_image"] = welcome_image
+        public_exam["welcome_image"] = welcome_image
+
     seen_qids: set[str] = set()
     auto_q_counter = 0
 
@@ -160,15 +190,13 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             if qid not in seen_qids:
                 return qid
 
-    def line_no() -> int:
-        return i + 1
+    def line_no(idx: int) -> int:
+        return idx + 1
 
-    while i < len(lines):
+    def _parse_question_segment(start_idx: int, end_idx: int) -> tuple[dict[str, Any], dict[str, Any]]:
+        i = start_idx
         line = lines[i]
         m = _HEADER_RE.match(line.strip())
-        if not m:
-            i += 1
-            continue
 
         label = m.group("label").strip()
         qid = label
@@ -176,7 +204,7 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             qid = _next_auto_qid()
         _bump_counter_from_qid(qid)
         if qid in seen_qids:
-            raise QmlParseError(f"Duplicate QID: {qid}", line=line_no())
+            raise QmlParseError(f"Duplicate QID: {qid}", line=line_no(i))
         seen_qids.add(qid)
 
         qtype = m.group("type")
@@ -188,18 +216,18 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
         answer_time_seconds = _parse_answer_time_seconds(
             attrs.get("answer_time"),
             qid=qid,
-            line=line_no(),
+            line=line_no(i),
         )
 
         if qtype != "short" and points <= 0:
             raise QmlParseError(
                 f"{qid} missing points, expected (N) for {qtype}",
-                line=line_no(),
+                line=line_no(i),
             )
         if qtype == "short" and max_points <= 0:
             raise QmlParseError(
                 f"{qid} missing max points, expected {{max=N}}",
-                line=line_no(),
+                line=line_no(i),
             )
 
         i += 1
@@ -209,23 +237,19 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
         rubric: str | None = None
         llm_block: str | None = None
 
-        while i < len(lines):
+        while i < end_idx:
             cur = lines[i]
-            if _HEADER_RE.match(cur.strip()):
-                break
-            if cur.strip().startswith("## "):
-                break
 
             if cur.strip() == "[rubric]":
                 i += 1
                 rb: list[str] = []
-                while i < len(lines) and lines[i].strip() != "[/rubric]":
+                while i < end_idx and lines[i].strip() != "[/rubric]":
                     # Allow missing closing tag: end rubric when the next question header starts.
                     if _HEADER_RE.match(lines[i].strip()):
                         break
                     rb.append(lines[i])
                     i += 1
-                if i < len(lines) and lines[i].strip() == "[/rubric]":
+                if i < end_idx and lines[i].strip() == "[/rubric]":
                     i += 1
                 rubric = "\n".join(rb).strip()
                 continue
@@ -233,12 +257,12 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             if cur.strip() == "[llm]":
                 i += 1
                 lb: list[str] = []
-                while i < len(lines) and lines[i].strip() != "[/llm]":
+                while i < end_idx and lines[i].strip() != "[/llm]":
                     if _HEADER_RE.match(lines[i].strip()):
                         break
                     lb.append(lines[i])
                     i += 1
-                if i < len(lines) and lines[i].strip() == "[/llm]":
+                if i < end_idx and lines[i].strip() == "[/llm]":
                     i += 1
                 llm_block = "\n".join(lb).strip()
                 continue
@@ -276,18 +300,18 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
         stem_md = "\n".join(stem_lines).strip()
 
         if qtype in {"single", "multiple"} and not options:
-            raise QmlParseError(f"{qid} missing options", line=line_no())
+            raise QmlParseError(f"{qid} missing options", line=line_no(i))
         if qtype in {"single", "multiple"}:
             correct_keys = [o["key"] for o in options if o["correct"]]
             if not correct_keys:
-                raise QmlParseError(f"{qid} has no correct option (*)", line=line_no())
+                raise QmlParseError(f"{qid} has no correct option (*)", line=line_no(i))
             if qtype == "single" and len(correct_keys) != 1:
                 raise QmlParseError(
                     f"{qid} single must have exactly 1 correct option",
-                    line=line_no(),
+                    line=line_no(i),
                 )
         if qtype == "short" and not rubric:
-            raise QmlParseError(f"{qid} short missing [rubric] block", line=line_no())
+            raise QmlParseError(f"{qid} short missing [rubric] block", line=line_no(i))
 
         q_llm = _parse_llm_block(llm_block) if llm_block else None
 
@@ -319,8 +343,13 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             "stem_md": stem_md,
             "options": [{"key": o["key"], "text": o["text"]} for o in options],
         }
-        public_exam["questions"].append(public_q)
+        return q, public_q
 
+    for pos, start_idx in enumerate(header_indices):
+        end_idx = header_indices[pos + 1] if pos + 1 < len(header_indices) else parse_end
+        q, public_q = _parse_question_segment(start_idx, end_idx)
+        exam["questions"].append(q)
+        public_exam["questions"].append(public_q)
     return exam, public_exam
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import mimetypes
 
 from backend.md_quiz.services.support_deps import *
@@ -44,8 +45,22 @@ def _invite_window_state(assignment: dict, *, now: datetime | None = None) -> tu
 
 
 _MD_IMAGE_RE = re.compile(r"!\[[^\]]*]\((?P<path>[^)]+)\)")
+_HTML_IMG_SRC_RE = re.compile(
+    r"""<img\b(?P<before>[^>]*?)\bsrc\s*=\s*(?P<quote>["']?)(?P<path>[^"'>\s]+)(?P=quote)(?P<after>[^>]*)>""",
+    re.IGNORECASE,
+)
 _FILENAME_UNSAFE_RE = re.compile(r'[\\\\/:*?"<>|]+')
 _PUBLIC_INVITE_GUARD = threading.Lock()
+_MARKDOWN_EXTENSIONS = [
+    "markdown.extensions.fenced_code",
+    "markdown.extensions.footnotes",
+    "markdown.extensions.attr_list",
+    "markdown.extensions.def_list",
+    "markdown.extensions.tables",
+    "markdown.extensions.abbr",
+    "markdown.extensions.md_in_html",
+    "markdown.extensions.sane_lists",
+]
 
 
 def get_public_invite_config(exam_key: str) -> dict[str, object]:
@@ -236,7 +251,38 @@ def _collect_md_assets(markdown_text: str) -> set[str]:
         p = _safe_relpath(m.group("path"))
         if _is_local_asset_path(p):
             assets.add(p)
+    for m in _HTML_IMG_SRC_RE.finditer(markdown_text or ""):
+        p = _safe_relpath(m.group("path"))
+        if _is_local_asset_path(p):
+            assets.add(p)
     return assets
+
+
+def _render_markdown_html(markdown_text: str) -> str:
+    text = str(markdown_text or "").strip()
+    if not text:
+        return ""
+
+    protected, math_repls = _protect_math_for_markdown(text)
+    rendered = mdlib.markdown(
+        protected,
+        extensions=_MARKDOWN_EXTENSIONS,
+        output_format="html5",
+    )
+    for token, math_html in math_repls:
+        rendered = rendered.replace(token, math_html)
+    return rendered
+
+
+def build_render_ready_public_spec(public_spec: dict[str, Any]) -> dict[str, Any]:
+    out = copy.deepcopy(public_spec or {})
+    questions_out = []
+    for q in out.get("questions") or []:
+        q2 = dict(q)
+        q2["stem_html"] = _render_markdown_html(str(q2.get("stem_md") or ""))
+        questions_out.append(q2)
+    out["questions"] = questions_out
+    return out
 
 
 def _asset_url(exam_key: str, relpath: str) -> str:
@@ -332,6 +378,23 @@ def _resolve_exam_asset_payload(exam_key: str, relpath: str) -> tuple[bytes, str
 
 # 试卷资源处理：将 Markdown 中的本地资源路径统一重写为受控访问 URL。
 def _rewrite_exam_asset_paths(exam_key: str, spec: dict, public_spec: dict) -> None:
+    def _rewrite_text_assets(text: str) -> str:
+        out = str(text or "")
+        for p in _collect_md_assets(out):
+            asset_url = _asset_url(exam_key, p)
+            out = out.replace(f"({p})", f"({asset_url})")
+
+        def _replace_html_img(match: re.Match[str]) -> str:
+            rel = _safe_relpath(match.group("path"))
+            if not rel or not _is_local_asset_path(rel):
+                return match.group(0)
+            before = match.group("before") or ""
+            quote = match.group("quote") or '"'
+            after = match.group("after") or ""
+            return f'<img{before}src={quote}{_asset_url(exam_key, rel)}{quote}{after}>'
+
+        return _HTML_IMG_SRC_RE.sub(_replace_html_img, out)
+
     for k in ("welcome_image", "end_image"):
         v = str(spec.get(k) or "").strip()
         if v:
@@ -341,15 +404,9 @@ def _rewrite_exam_asset_paths(exam_key: str, spec: dict, public_spec: dict) -> N
             public_spec[k] = _asset_url(exam_key, v2) if _is_local_asset_path(v2) else v2
 
     for q in (spec.get("questions") or []):
-        stem = str(q.get("stem_md") or "")
-        for p in _collect_md_assets(stem):
-            stem = stem.replace(f"({p})", f"({_asset_url(exam_key, p)})")
-        q["stem_md"] = stem
+        q["stem_md"] = _rewrite_text_assets(str(q.get("stem_md") or ""))
     for q in (public_spec.get("questions") or []):
-        stem = str(q.get("stem_md") or "")
-        for p in _collect_md_assets(stem):
-            stem = stem.replace(f"({p})", f"({_asset_url(exam_key, p)})")
-        q["stem_md"] = stem
+        q["stem_md"] = _rewrite_text_assets(str(q.get("stem_md") or ""))
 
 
 # 首次写入试卷：解析 Markdown -> 落盘 source/spec/public -> 同步资源文件。
