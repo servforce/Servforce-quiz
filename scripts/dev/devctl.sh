@@ -20,11 +20,64 @@ SCHED_LOG_FILE="${LOG_DIR}/scheduler.log"
 
 mkdir -p "$PID_DIR" "$LOG_DIR"
 
+resolve_python_bin() {
+  if [[ -x "${ROOT_DIR}/.venv/bin/python" ]]; then
+    echo "${ROOT_DIR}/.venv/bin/python"
+    return 0
+  fi
+  if [[ -x "${ROOT_DIR}/.venv/Scripts/python.exe" ]]; then
+    echo "${ROOT_DIR}/.venv/Scripts/python.exe"
+    return 0
+  fi
+  return 1
+}
+
+ensure_python() {
+  if resolve_python_bin >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "[dev] missing project python interpreter (.venv/bin/python or .venv/Scripts/python.exe)" >&2
+  echo "[dev] run: ./scripts/dev/install-deps.sh python" >&2
+  exit 1
+}
+
+ensure_static_deps() {
+  if [[ ! -f "${ROOT_DIR}/static/package.json" ]]; then
+    return 0
+  fi
+  if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+    echo "[ui] missing node or npm" >&2
+    echo "[ui] install Node.js, then run: ./scripts/dev/install-deps.sh node" >&2
+    exit 1
+  fi
+  if (
+    cd "${ROOT_DIR}/static" &&
+      node -e "require('postcss'); require('@tailwindcss/postcss'); require('autoprefixer')"
+  ) >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "[ui] missing frontend dependencies in static/node_modules" >&2
+  echo "[ui] run: ./scripts/dev/install-deps.sh node" >&2
+  exit 1
+}
+
 build_admin_css() {
   if [[ -f "${ROOT_DIR}/static/package.json" ]]; then
+    ensure_static_deps
     echo "[ui] building admin css"
     (cd "${ROOT_DIR}/static" && npm run build:admin-css)
   fi
+}
+
+prepare_start() {
+  ensure_python
+  build_admin_css
+}
+
+start_all() {
+  start_one api "$API_PID_FILE" "$API_LOG_FILE" bash scripts/dev/run-api.sh
+  start_one worker "$WORKER_PID_FILE" "$WORKER_LOG_FILE" bash scripts/dev/run-worker.sh
+  start_one scheduler "$SCHED_PID_FILE" "$SCHED_LOG_FILE" bash scripts/dev/run-scheduler.sh
 }
 
 usage() {
@@ -104,10 +157,8 @@ stop_one() {
 }
 
 do_start() {
-  build_admin_css
-  start_one api "$API_PID_FILE" "$API_LOG_FILE" bash scripts/dev/run-api.sh
-  start_one worker "$WORKER_PID_FILE" "$WORKER_LOG_FILE" bash scripts/dev/run-worker.sh
-  start_one scheduler "$SCHED_PID_FILE" "$SCHED_LOG_FILE" bash scripts/dev/run-scheduler.sh
+  prepare_start
+  start_all
 }
 
 do_stop() {
@@ -145,7 +196,7 @@ do_logs() {
 case "${1:-}" in
   start) do_start ;;
   stop) do_stop ;;
-  restart) do_stop; do_start ;;
+  restart) prepare_start; do_stop; start_all ;;
   status) do_status ;;
   logs) do_logs ;;
   *) usage; exit 1 ;;
