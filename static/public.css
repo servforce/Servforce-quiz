@@ -84,6 +84,69 @@
     --default-mono-font-family: var(--font-mono);
   }
 }
+
+.public-rich {
+  color: var(--color-slate-700);
+}
+
+.public-rich > :first-child {
+  margin-top: 0;
+}
+
+.public-rich > :last-child {
+  margin-bottom: 0;
+}
+
+.public-rich p,
+.public-rich ul,
+.public-rich ol,
+.public-rich pre,
+.public-rich table,
+.public-rich blockquote {
+  margin-top: 0.75rem;
+}
+
+.public-rich ul,
+.public-rich ol {
+  padding-left: 1.25rem;
+}
+
+.public-rich ul {
+  list-style: disc;
+}
+
+.public-rich ol {
+  list-style: decimal;
+}
+
+.public-rich code {
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.06);
+  padding: 0.1rem 0.35rem;
+  font-size: 0.92em;
+}
+
+.public-rich pre {
+  overflow-x: auto;
+  border-radius: 1rem;
+  background: #0f172a;
+  padding: 0.9rem 1rem;
+  color: #e2e8f0;
+}
+
+.public-rich pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.public-rich img {
+  display: block;
+  max-width: min(100%, 720px);
+  height: auto;
+  margin: 0.75rem auto;
+  border-radius: 1rem;
+}
 @layer base {
   *, ::after, ::before, ::backdrop, ::file-selector-button {
     box-sizing: border-box;

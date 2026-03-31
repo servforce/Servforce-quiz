@@ -12,6 +12,10 @@
   * 分值：能力题用 `(5)`；简答用 `{max=10}`
   * 其他属性：`{partial=true}`、`{media=img/q1.png}`、`{answer_time=90s}` 等
   * `answer_time` 表示该题单独作答时间，支持纯秒数或 `s / m / h` 后缀；最短 `1s`，最长 `1h`
+* 首题前/末题后：当前仅支持单独一张 Markdown 图片
+  * 首题前如 `![intro](img/welcome.png)` 会解析为 `welcome_image`
+  * 末题后如 `![bye](img/thanks.png)` 会解析为 `end_image`
+  * 暂不支持首题前/末题后的其他正文内容
 * 题干：标题下一段文本/图片
 * 选项：使用无序列表，格式 `- A) 文本`
 
@@ -31,16 +35,21 @@ id: exam-demo-001
 title: AI 基础测评
 description: |
   本试卷包含基础能力与性向维度两部分内容。
-welcome_image: img/welcome.png
-end_image: img/thanks.png
 llm:
   model: gpt-4o-mini
   temperature: 0.0
   prompt_template: |
-    请依据评分标准对答案打分，仅输出一个0-{{max_points}}的整数分值。
-    【题目】{{question}}
-    【评分标准】{{rubric}}
-    【考生回答】{{answer}}
+    请根据评分标准对考生答案打分，允许部分得分。
+    只输出 JSON，不要解释，不要 Markdown。
+    JSON 必须包含字段：score、reason、relevance、contradiction。
+    - score：0 到 {{max_points}} 的整数
+    - reason：1 到 3 句，说明得分点和失分点
+    - relevance：0 到 3 的整数
+    - contradiction：true 或 false
+
+    题目：{{question}}
+    评分标准：{{rubric}}
+    考生回答：{{answer}}
 trait:
   dimensions: [I, E, S, N, T, F, J, P]
   chart:
@@ -51,6 +60,8 @@ trait:
       "T" : {{T}} "F" : {{F}} "J" : {{J}} "P" : {{P}}
 format: qml-v2
 ---
+
+![intro](img/welcome.png)
 
 ## Q1 [single] (5) {media=, answer_time=45s}
 选择正确的描述：Transformer 的自注意力用于？
@@ -87,6 +98,8 @@ format: qml-v2
 [llm]
 prompt_template=你是严格的阅卷老师，请仅输出分数数字（0-{{max_points}}）。
 [/llm]
+
+![bye](img/thanks.png)
 ```
 
 **映射到后端字段**
@@ -94,6 +107,7 @@ prompt_template=你是严格的阅卷老师，请仅输出分数数字（0-{{max
 * `## Q1 [single] (5) {media=..., answer_time=45s}` → `Question.id/type/points/media/partial_credit/answer_time_seconds/...`
 * 选项行 `- B*) 文本 {traits:S=1}` → `Option.key='B'`, `correct` 自动收集，`traits={'S':1}`
 * 简答 `[short]{max=10}` + `[rubric]...` → `max_points/rubric`；`[llm]` → 题目级 `LLMConfig`
+* 首题前图片 / 末题后图片 → `welcome_image / end_image`
 
 ## 优点
 

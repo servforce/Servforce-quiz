@@ -33,6 +33,29 @@ def test_parse_qml_answer_time_seconds_variants() -> None:
     assert [q["answer_time_seconds"] for q in public_exam["questions"]] == [45, 90, 3600]
 
 
+def test_parse_qml_intro_and_outro_blocks() -> None:
+    exam, public_exam = parse_qml_markdown(
+        """
+![intro](img/welcome.png)
+
+## Q1 [single] (5)
+题目一
+
+- A*) 正确
+- B) 错误
+
+![bye](img/thanks.png)
+""".strip()
+    )
+
+    assert exam["welcome_image"] == "img/welcome.png"
+    assert public_exam["welcome_image"] == exam["welcome_image"]
+    assert len(exam["questions"]) == 1
+    assert exam["questions"][0]["stem_md"] == "题目一"
+    assert exam["end_image"] == "img/thanks.png"
+    assert public_exam["end_image"] == exam["end_image"]
+
+
 @pytest.mark.parametrize("raw", ["0", "0s", "3601", "61m", "bad"])
 def test_parse_qml_answer_time_invalid(raw: str) -> None:
     markdown = f"""

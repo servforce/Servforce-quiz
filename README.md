@@ -42,8 +42,7 @@ static/
 ### 1. Python 环境
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt pytest
+scripts/dev/install-deps.sh python
 ```
 
 推荐本地数据库连接串：
@@ -61,20 +60,23 @@ cp .env.example .env
 ### 2. 前端静态资源构建
 
 ```bash
-cd static
-npm install
-npm run build:css
+scripts/dev/install-deps.sh node
+cd static && npm run build:css
 ```
 
 ### 3. 启动服务
 
 ```bash
+scripts/dev/install-deps.sh
 scripts/dev/devctl.sh start
 ```
 
 常用命令：
 
 ```bash
+scripts/dev/install-deps.sh
+scripts/dev/install-deps.sh python
+scripts/dev/install-deps.sh node
 scripts/dev/devctl.sh start
 scripts/dev/devctl.sh stop
 scripts/dev/devctl.sh restart

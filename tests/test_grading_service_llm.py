@@ -2,6 +2,46 @@ import unittest
 
 
 class TestGradingServiceLLM(unittest.TestCase):
+    def test_objective_only_exam_skips_llm_analysis_and_remark(self):
+        import backend.md_quiz.services.grading_service as gs
+
+        def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
+            raise AssertionError("LLM json should not be called for objective-only exam")
+
+        def fake_call_llm_text(prompt: str, model=None):  # noqa: ARG001
+            raise AssertionError("LLM text should not be called for objective-only exam")
+
+        orig_json = gs.call_llm_json
+        orig_text = gs.call_llm_text
+        gs.call_llm_json = fake_call_llm_json
+        gs.call_llm_text = fake_call_llm_text
+        try:
+            spec = {
+                "title": "demo",
+                "questions": [
+                    {
+                        "qid": "Q1",
+                        "type": "single",
+                        "points": 5,
+                        "stem_md": "1+1=?",
+                        "options": [
+                            {"key": "A", "text": "2", "correct": True},
+                            {"key": "B", "text": "3", "correct": False},
+                        ],
+                    }
+                ],
+            }
+            assignment = {"answers": {"Q1": "A"}, "pass_threshold": 70}
+            grading = gs.grade_attempt(spec, assignment)
+            self.assertEqual(grading["raw_scored"], 5)
+            self.assertEqual(grading["analysis"], "")
+
+            remark = gs.generate_candidate_remark(spec, assignment, grading)
+            self.assertEqual(remark, grading["overall_reason"])
+        finally:
+            gs.call_llm_json = orig_json
+            gs.call_llm_text = orig_text
+
     def test_short_answer_scored_and_analyzed(self):
         import backend.md_quiz.services.grading_service as gs
 
@@ -44,6 +84,64 @@ class TestGradingServiceLLM(unittest.TestCase):
 
             remark = gs.generate_candidate_remark(spec, assignment, grading)
             self.assertIn("面试建议", remark)
+        finally:
+            gs.call_llm_json = orig_json
+            gs.call_llm_text = orig_text
+
+    def test_analysis_and_remark_prompt_only_include_short_questions(self):
+        import backend.md_quiz.services.grading_service as gs
+
+        def fake_call_llm_json(prompt: str, model=None):  # noqa: ARG001
+            return '{"score": 3, "reason": "命中2个要点，少1个要点"}'
+
+        seen_prompts: list[str] = []
+
+        def fake_call_llm_text(prompt: str, model=None):  # noqa: ARG001
+            seen_prompts.append(prompt)
+            if "内部复盘" in prompt:
+                return "总体：表现中等。要点：1) 基础尚可 2) 细节不足 3) 表达一般。面试建议：建议，补问关键点。"
+            if "能力评价" in prompt:
+                return "综合评价：基础尚可。优势：概念清楚。短板：细节不足。建议：加强例题训练。面试建议：建议，需追问细节。"
+            return ""
+
+        orig_json = gs.call_llm_json
+        orig_text = gs.call_llm_text
+        gs.call_llm_json = fake_call_llm_json
+        gs.call_llm_text = fake_call_llm_text
+        try:
+            spec = {
+                "title": "demo",
+                "questions": [
+                    {
+                        "qid": "Q1",
+                        "type": "single",
+                        "points": 5,
+                        "stem_md": "客观题",
+                        "options": [
+                            {"key": "A", "text": "对", "correct": True},
+                            {"key": "B", "text": "错", "correct": False},
+                        ],
+                    },
+                    {
+                        "qid": "Q2",
+                        "type": "short",
+                        "max_points": 5,
+                        "stem_md": "简答题",
+                        "rubric": "评分标准",
+                    },
+                ],
+            }
+            assignment = {"answers": {"Q1": "A", "Q2": "回答"}, "pass_threshold": 70}
+            grading = gs.grade_attempt(spec, assignment)
+            remark = gs.generate_candidate_remark(spec, assignment, grading)
+
+            self.assertIn("面试建议", grading.get("analysis") or "")
+            self.assertIn("面试建议", remark)
+            self.assertEqual(len(seen_prompts), 2)
+            for prompt in seen_prompts:
+                self.assertIn("Q2", prompt)
+                self.assertNotIn("Q1（", prompt)
+                self.assertNotIn("题目=客观题", prompt)
         finally:
             gs.call_llm_json = orig_json
             gs.call_llm_text = orig_text
