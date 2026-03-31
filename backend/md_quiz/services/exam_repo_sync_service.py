@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+import yaml
+
 from backend.md_quiz.config import logger
 from backend.md_quiz.parsers.qml import QmlParseError, parse_qml_markdown
 from backend.md_quiz.storage import JobStore
@@ -39,6 +41,10 @@ EXAM_SYNC_JOB_KIND = "git_sync_exams"
 EXAM_SYNC_STATE_KEY = "exam_repo_sync"
 EXAM_SYNC_MIGRATION_KEY = "exam_repo_sync_migration"
 IMAGE_MAX_BYTES = 1024 * 1024
+QUIZ_REPO_MANIFEST = "md-quiz-repo.yaml"
+QUIZ_REPO_KIND = "md-quiz-repo"
+QUIZ_REPO_SCHEMA_VERSION = 1
+_QUIZ_PATH_RE = re.compile(r"^quizzes/(?P<quiz_id>[A-Za-z0-9_-]+)/quiz\.md$")
 
 _MD_IMAGE_RE = re.compile(r"!\[[^\]]*]\((?P<path>[^)]+)\)")
 _HTML_IMG_SRC_RE = re.compile(
@@ -47,9 +53,9 @@ _HTML_IMG_SRC_RE = re.compile(
 )
 _MD_LINK_RE = re.compile(r"(?<!\!)\[[^\]]*]\((?P<path>[^)]+)\)")
 _FRONTMATTER_ID_RE = re.compile(r"(?mi)^id:\s*(?P<id>[A-Za-z0-9_-]+)\s*$")
-_VERSION_ASSET_RE = re.compile(r"\(/exams/[^)]+/assets/(?P<path>[^)]+)\)")
+_VERSION_ASSET_RE = re.compile(r"\(/exams/(?:versions/[^/]+|[^/]+)/assets/(?P<path>[^)]+)\)")
 _HTML_VERSION_ASSET_RE = re.compile(
-    r"""<img\b(?P<before>[^>]*?)\bsrc\s*=\s*(?P<quote>["']?)/exams/[^"'>\s]*/assets/(?P<path>[^"'>\s]+)(?P=quote)(?P<after>[^>]*)>""",
+    r"""<img\b(?P<before>[^>]*?)\bsrc\s*=\s*(?P<quote>["']?)/exams/(?:versions/[^/\s"'>]+|[^/\s"'>]+)/assets/(?P<path>[^"'>\s]+)(?P=quote)(?P<after>[^>]*)>""",
     re.IGNORECASE,
 )
 _LEGACY_ASSET_URL_RE = re.compile(r"^/exams/[^/]+/assets/(?P<path>.+)$")
@@ -94,12 +100,18 @@ def _rewrite_asset_paths_for_version(version_id: int, spec: dict[str, Any], publ
     def _rewrite_text(text: str) -> str:
         out = str(text or "")
         for match in list(_MD_IMAGE_RE.finditer(out)):
-            rel = _safe_relpath(match.group("path"))
+            raw_target = str(match.group("path") or "").strip()
+            if _LEGACY_ASSET_URL_RE.match(raw_target):
+                continue
+            rel = _safe_relpath(raw_target)
             if rel and _is_local_asset_path(rel):
                 out = out.replace(f"({match.group('path')})", f"({_version_asset_url(version_id, rel)})")
 
         def _replace_html_img(match: re.Match[str]) -> str:
-            rel = _safe_relpath(match.group("path"))
+            raw_target = str(match.group("path") or "").strip()
+            if _LEGACY_ASSET_URL_RE.match(raw_target):
+                return match.group(0)
+            rel = _safe_relpath(raw_target)
             if not rel or not _is_local_asset_path(rel):
                 return match.group(0)
             before = match.group("before") or ""
@@ -203,6 +215,64 @@ def _find_existing_exam_by_source_path(repo_url: str, source_path: str) -> dict[
     return None
 
 
+def _normalize_repo_relpath(raw: str, *, label: str) -> str:
+    value = _safe_relpath(raw)
+    if not value or any(part == ".." for part in Path(value).parts):
+        raise ExamRepoSyncError(f"{label}非法：{raw}")
+    return value
+
+
+def _legacy_repo_migration_hint() -> str:
+    return "当前仅支持新版 quiz 仓库规范：仓库根目录需包含 md-quiz-repo.yaml，并使用 quizzes/<quiz_id>/quiz.md 结构"
+
+
+def _load_quiz_repo_manifest(repo_root: Path) -> list[str]:
+    manifest_path = repo_root / QUIZ_REPO_MANIFEST
+    if not manifest_path.exists() or not manifest_path.is_file():
+        raise ExamRepoSyncError(f"仓库缺少 {QUIZ_REPO_MANIFEST}；{_legacy_repo_migration_hint()}")
+    readme_path = repo_root / "README.md"
+    if not readme_path.exists() or not readme_path.is_file():
+        raise ExamRepoSyncError("仓库缺少 README.md")
+
+    try:
+        raw = yaml.safe_load(manifest_path.read_text(encoding="utf-8", errors="replace")) or {}
+    except Exception as exc:
+        raise ExamRepoSyncError(f"{QUIZ_REPO_MANIFEST} 解析失败：{exc}") from exc
+    if not isinstance(raw, dict):
+        raise ExamRepoSyncError(f"{QUIZ_REPO_MANIFEST} 必须是 YAML mapping")
+    try:
+        schema_version = int(raw.get("schema_version"))
+    except Exception as exc:
+        raise ExamRepoSyncError(f"{QUIZ_REPO_MANIFEST} 缺少有效 schema_version") from exc
+    if schema_version != QUIZ_REPO_SCHEMA_VERSION:
+        raise ExamRepoSyncError(f"{QUIZ_REPO_MANIFEST} 仅支持 schema_version: {QUIZ_REPO_SCHEMA_VERSION}")
+    if str(raw.get("kind") or "").strip() != QUIZ_REPO_KIND:
+        raise ExamRepoSyncError(f"{QUIZ_REPO_MANIFEST} kind 必须为 {QUIZ_REPO_KIND}")
+
+    quizzes = raw.get("quizzes")
+    if not isinstance(quizzes, list) or not quizzes:
+        raise ExamRepoSyncError(f"{QUIZ_REPO_MANIFEST} quizzes 必须是非空列表")
+
+    paths: list[str] = []
+    seen_paths: set[str] = set()
+    for item in quizzes:
+        if not isinstance(item, dict):
+            raise ExamRepoSyncError(f"{QUIZ_REPO_MANIFEST} quizzes 条目必须是对象")
+        source_path = _normalize_repo_relpath(str(item.get("path") or "").strip(), label="manifest path")
+        if not _QUIZ_PATH_RE.fullmatch(source_path):
+            raise ExamRepoSyncError(f"manifest path 只支持 quizzes/<quiz_id>/quiz.md：{source_path}")
+        if source_path in seen_paths:
+            raise ExamRepoSyncError(f"{QUIZ_REPO_MANIFEST} 存在重复 quiz path：{source_path}")
+        abs_path = (repo_root / source_path).resolve()
+        if repo_root.resolve() not in abs_path.parents:
+            raise ExamRepoSyncError(f"manifest path 越界：{source_path}")
+        if not abs_path.exists() or not abs_path.is_file():
+            raise ExamRepoSyncError(f"manifest path 不存在：{source_path}")
+        seen_paths.add(source_path)
+        paths.append(source_path)
+    return paths
+
+
 def _read_frontmatter_exam_id(markdown_text: str) -> str:
     text = str(markdown_text or "")
     if not text.startswith("---"):
@@ -244,19 +314,19 @@ def _collect_assets(markdown_text: str, spec: dict[str, Any]) -> list[str]:
     return sorted(refs)
 
 
-def _load_assets(repo_root: Path, refs: list[str]) -> dict[str, tuple[bytes, str]]:
+def _load_assets(quiz_root: Path, refs: list[str]) -> dict[str, tuple[bytes, str]]:
     assets: dict[str, tuple[bytes, str]] = {}
     for rel in refs:
-        safe = _safe_relpath(rel)
+        safe = _normalize_repo_relpath(rel, label="资源路径")
         if not safe or any(part == ".." for part in Path(safe).parts):
             raise ExamRepoSyncError(f"资源路径非法：{rel}")
-        if not safe.startswith("images/"):
-            raise ExamRepoSyncError(f"图片必须位于仓库根目录 images/ 下：{rel}")
+        if not safe.startswith("assets/"):
+            raise ExamRepoSyncError(f"图片必须位于当前 quiz 目录 assets/ 下：{rel}")
         suffix = Path(safe).suffix.lower()
         if suffix not in _SUPPORTED_IMAGE_EXTS:
             raise ExamRepoSyncError(f"只允许同步图片资源：{rel}")
-        abs_path = (repo_root / safe).resolve()
-        if repo_root.resolve() not in abs_path.parents and abs_path != repo_root.resolve():
+        abs_path = (quiz_root / safe).resolve()
+        if quiz_root.resolve() not in abs_path.parents and abs_path != quiz_root.resolve():
             raise ExamRepoSyncError(f"资源路径越界：{rel}")
         if not abs_path.exists() or not abs_path.is_file():
             raise ExamRepoSyncError(f"缺少被引用的图片资源：{rel}")
@@ -336,24 +406,35 @@ def enqueue_exam_repo_sync(repo_url: str) -> dict[str, Any]:
     return {"job_id": job.id, "created": True, "status": job.status}
 
 
-def _build_exam_candidate(repo_root: Path, repo_url: str, git_commit: str, md_path: Path) -> dict[str, Any]:
+def _build_exam_candidate(repo_root: Path, repo_url: str, git_commit: str, source_path: str) -> dict[str, Any]:
+    normalized_path = _normalize_repo_relpath(source_path, label="quiz path")
+    match = _QUIZ_PATH_RE.fullmatch(normalized_path)
+    if not match:
+        raise ExamRepoSyncError(f"quiz path 只支持 quizzes/<quiz_id>/quiz.md：{normalized_path}")
+    quiz_id = str(match.group("quiz_id") or "").strip()
+    md_path = (repo_root / normalized_path).resolve()
+    if repo_root.resolve() not in md_path.parents:
+        raise ExamRepoSyncError(f"quiz path 越界：{normalized_path}")
+    quiz_root = md_path.parent
     markdown_text = md_path.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
     _validate_markdown_links(markdown_text)
     raw_exam_id = _read_frontmatter_exam_id(markdown_text)
     if not raw_exam_id:
         raise ExamRepoSyncError("Front matter 缺少 id")
+    if raw_exam_id != quiz_id:
+        raise ExamRepoSyncError(f"Front matter id 必须与目录名一致：{quiz_id}")
     try:
         spec, public_spec = parse_qml_markdown(markdown_text)
     except QmlParseError as exc:
         raise ExamRepoSyncError(f"{exc}（line={exc.line}）") from exc
     if str(spec.get("id") or "").strip() != raw_exam_id:
         raise ExamRepoSyncError("试卷 id 解析异常")
-    assets = _load_assets(repo_root, _collect_assets(markdown_text, spec))
+    assets = _load_assets(quiz_root, _collect_assets(markdown_text, spec))
     content_hash = _snapshot_hash(markdown_text, assets)
     return {
         "exam_key": raw_exam_id,
         "title": str(spec.get("title") or "").strip(),
-        "source_path": md_path.name,
+        "source_path": normalized_path,
         "git_repo_url": repo_url,
         "git_commit": git_commit,
         "markdown_text": markdown_text,
@@ -481,23 +562,24 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
             repo_root = Path(tmp_dir) / "repo"
             git_commit = _clone_repo(normalized_url, repo_root)
             synced_at = datetime.now(UTC)
-            md_paths = sorted([path for path in repo_root.iterdir() if path.is_file() and path.suffix.lower() == ".md"], key=lambda p: p.name.lower())
+            source_paths = _load_quiz_repo_manifest(repo_root)
 
             candidates: list[dict[str, Any]] = []
             duplicate_guard: dict[str, str] = {}
             discovered_source_paths: set[str] = set()
-            for md_path in md_paths:
-                discovered_source_paths.add(md_path.name)
+            for source_path in source_paths:
+                discovered_source_paths.add(source_path)
+                md_path = repo_root / source_path
                 markdown_text = md_path.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
                 exam_id = _read_frontmatter_exam_id(markdown_text)
                 if exam_id:
                     other = duplicate_guard.get(exam_id)
                     if other:
-                        raise ExamRepoSyncError(f"仓库内存在重复试卷 id：{exam_id}（{other} / {md_path.name}）")
-                    duplicate_guard[exam_id] = md_path.name
+                        raise ExamRepoSyncError(f"仓库内存在重复试卷 id：{exam_id}（{other} / {source_path}）")
+                    duplicate_guard[exam_id] = source_path
                 candidates.append(
                     {
-                        "path": md_path,
+                        "source_path": source_path,
                         "raw_exam_id": exam_id,
                     }
                 )
@@ -511,12 +593,12 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
             repo_errors: list[dict[str, str]] = []
 
             for entry in candidates:
-                md_path = entry["path"]
+                source_path = str(entry.get("source_path") or "").strip()
                 raw_exam_id = str(entry.get("raw_exam_id") or "").strip()
                 if raw_exam_id:
                     discovered_exam_keys.add(raw_exam_id)
                 try:
-                    candidate = _build_exam_candidate(repo_root, normalized_url, git_commit, md_path)
+                    candidate = _build_exam_candidate(repo_root, normalized_url, git_commit, source_path)
                     result = _sync_exam_candidate(candidate, synced_at=synced_at)
                     seen_exam_keys.add(str(result["exam_key"]))
                     if result["action"] == "created":
@@ -529,14 +611,14 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
                     error_count += 1
                     exam_key = raw_exam_id
                     if not exam_key:
-                        existing_by_path = _find_existing_exam_by_source_path(normalized_url, md_path.name)
+                        existing_by_path = _find_existing_exam_by_source_path(normalized_url, source_path)
                         exam_key = str((existing_by_path or {}).get("exam_key") or "").strip()
                     message = str(exc)
-                    repo_errors.append({"source_path": md_path.name, "exam_key": exam_key, "error": message})
+                    repo_errors.append({"source_path": source_path, "exam_key": exam_key, "error": message})
                     if exam_key:
                         _mark_exam_sync_error(
                             exam_key=exam_key,
-                            source_path=md_path.name,
+                            source_path=source_path,
                             repo_url=normalized_url,
                             git_commit=git_commit,
                             message=message,
@@ -580,7 +662,7 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
             result = {
                 "repo_url": normalized_url,
                 "git_commit": git_commit,
-                "scanned_md": len(md_paths),
+                "scanned_md": len(source_paths),
                 "created_versions": created_count,
                 "updated_versions": updated_count,
                 "unchanged_versions": unchanged_count,

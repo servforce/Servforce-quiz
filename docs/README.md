@@ -22,6 +22,13 @@
 - [REST API 约定](reference/api.md)
 - [QML 试卷格式](../qml.md)
 
+## 项目内 Skills
+
+- [Quiz Repo Spec Skill](../skills/quiz-repo-spec/SKILL.md)
+- [QML Authoring Skill](../skills/qml-authoring/SKILL.md)
+- [Quiz 仓库规范正文](../skills/quiz-repo-spec/references/repo-contract.md)
+- [QML 详细规范](../skills/qml-authoring/references/qml-spec.md)
+
 ## UI
 
 - [UI 主题覆盖](ui/theme.md)

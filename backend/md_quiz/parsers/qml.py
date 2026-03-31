@@ -329,7 +329,6 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             "rubric": rubric,
             "llm": q_llm,
         }
-        exam["questions"].append(q)
 
         public_q = {
             "qid": qid,

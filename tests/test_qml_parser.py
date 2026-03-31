@@ -36,7 +36,7 @@ def test_parse_qml_answer_time_seconds_variants() -> None:
 def test_parse_qml_intro_and_outro_blocks() -> None:
     exam, public_exam = parse_qml_markdown(
         """
-![intro](img/welcome.png)
+![intro](./assets/welcome.png)
 
 ## Q1 [single] (5)
 题目一
@@ -44,15 +44,15 @@ def test_parse_qml_intro_and_outro_blocks() -> None:
 - A*) 正确
 - B) 错误
 
-![bye](img/thanks.png)
+![bye](./assets/thanks.png)
 """.strip()
     )
 
-    assert exam["welcome_image"] == "img/welcome.png"
+    assert exam["welcome_image"] == "./assets/welcome.png"
     assert public_exam["welcome_image"] == exam["welcome_image"]
     assert len(exam["questions"]) == 1
     assert exam["questions"][0]["stem_md"] == "题目一"
-    assert exam["end_image"] == "img/thanks.png"
+    assert exam["end_image"] == "./assets/thanks.png"
     assert public_exam["end_image"] == exam["end_image"]
 
 

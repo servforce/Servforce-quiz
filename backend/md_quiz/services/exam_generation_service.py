@@ -382,15 +382,15 @@ def normalize_svg_bytes_for_serving(data: bytes) -> bytes:
 def _safe_asset_name(raw: Any, fallback_qid: str) -> str:
     s = str(raw or "").strip().replace("\\", "/")
     if not s:
-        s = f"img/{fallback_qid.lower()}-diagram.svg"
+        s = f"assets/{fallback_qid.lower()}-diagram.svg"
     if not s.lower().endswith(".svg"):
         s = f"{s}.svg"
     if "/" not in s:
-        s = f"img/{s}"
+        s = f"assets/{s}"
     s = s.lstrip("/")
     parts = [p for p in s.split("/") if p and p not in {".", ".."}]
     if not parts:
-        return f"img/{fallback_qid.lower()}-diagram.svg"
+        return f"assets/{fallback_qid.lower()}-diagram.svg"
     return "/".join(parts)
 
 
@@ -847,7 +847,7 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
 输出 JSON schema:
 {
   "exam": {"id": "exam-xxx", "title": "...", "description": "..."},
-  "questions": [
+ "questions": [
     {
       "qid": "Q1",
       "type": "single|multiple|short",
@@ -857,7 +857,7 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
       "stem": "题干",
       "options": [{"key":"A","text":"...","correct":false}],
       "rubric": ["评分点1","评分点2"],
-      "figure": {"filename":"img/q1-diagram.svg","type":"latency_curve|service_heatmap|loss_curve|confusion_matrix|model_compare|feature_distribution|decision_boundary|architecture|metric_table","alt":"示意图"}
+      "figure": {"filename":"assets/q1-diagram.svg","type":"latency_curve|service_heatmap|loss_curve|confusion_matrix|model_compare|feature_distribution|decision_boundary|architecture|metric_table","alt":"示意图"}
     }
   ]
 }
@@ -870,6 +870,7 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
 4) 若 include_diagrams=false，请不要输出 figure。
 5) 若 include_diagrams=true，请输出与题干强相关的图信息。
 6) 若需要，figure 可以包含 svg 字段；若没有 svg，至少给出 figure.type/filename/alt。
+6.1) figure.filename 默认使用 assets/ 相对路径，供 quizzes/<quiz_id>/quiz.md 直接引用。
 7) 图示必须跟随题目变化，不得整卷复用同一图内容；保证文字可读、元素不裁切。
 """.strip()
     if diagram_mode == "template":
@@ -981,7 +982,7 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
             need_fig = _question_needs_figure(stem=stem, fig_type=fig_type, alt=alt)
             if need_fig:
                 if not fig:
-                    fig = {"filename": f"img/{qid.lower()}-diagram.svg", "alt": "题目示意图", "type": ""}
+                    fig = {"filename": f"assets/{qid.lower()}-diagram.svg", "alt": "题目示意图", "type": ""}
                 rel = _safe_asset_name(fig.get("filename"), qid)
                 # Dynamic mode: prioritize semantic SVG generation.
                 # Template mode: use local deterministic templates.

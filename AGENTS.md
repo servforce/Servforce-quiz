@@ -8,7 +8,8 @@
 
 - 默认使用中文回复；代码注释、文档说明优先使用中文。
 - 先读文档、代码、日志和测试，再改实现；没有证据时不要猜接口行为。
-- 涉及试卷格式时，先核对 [qml.md](qml.md) 和 `qml/parser.py`，不要凭页面表现反推语法。
+- 涉及 QML 写法、解析边界或示例时，先核对 [qml.md](qml.md)、`backend/md_quiz/parsers/qml.py` 和相关测试；不要凭页面表现反推语法。
+- 涉及 quiz 仓库结构、资源路径或仓库同步时，先核对 `skills/quiz-repo-spec/` 和 `backend/md_quiz/services/exam_repo_sync_service.py`。
 - 涉及数据库行为时，先核对 `db.py` 中的表结构和读写函数；表结构以代码中的 `init_db()` 为准。
 - 优先修根因，不用绕路兼容、吞错、重复兜底来掩盖问题。
 - 代码优先直线化、可读性和可验证性；避免无收益的抽象、层层转发和隐式状态。
@@ -36,6 +37,8 @@
 - `skills/job-system-design/SKILL.md`：涉及后台线程、任务状态、重试、调度、可观测性时优先使用。
 - `skills/static-ui/SKILL.md`：涉及 `templates/`、`static/`、管理端或候选人端页面改造时优先使用。
 - `skills/python-web-refactor/SKILL.md`：涉及 Flask 入口、路由拆分、配置治理、测试补齐、文档补齐时优先使用。
+- `skills/quiz-repo-spec/SKILL.md`：涉及 quiz 仓库结构、manifest、资源路径、仓库同步失败排查时优先使用。
+- `skills/qml-authoring/SKILL.md`：涉及 QML 语法、解析边界、示例修订、`qml.md` 更新时优先使用。
 
 ## 维护边界
 

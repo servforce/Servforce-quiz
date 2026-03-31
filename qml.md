@@ -1,126 +1,43 @@
-# QML（Quiz-Markdown Language）轻量 DSL（推荐）
+# QML（Quiz Markdown Language）
 
-## 设计目标
+`qml.md` 只保留快速入口与最小示例。
 
-让“写题”像写普通 Markdown，一眼能看懂；少符号、少缩进；仍然可无损映射到你现有的后端数据结构。
+- 完整 QML 语法规范：[`skills/qml-authoring/references/qml-spec.md`](skills/qml-authoring/references/qml-spec.md)
+- parser 实际边界与报错口径：[`skills/qml-authoring/references/parser-truth.md`](skills/qml-authoring/references/parser-truth.md)
+- quiz 仓库结构与同步规则：[`skills/quiz-repo-spec/references/repo-contract.md`](skills/quiz-repo-spec/references/repo-contract.md)
 
-## 基本规则
+## 关键提醒
 
-* 题目以二级标题开头：`## Q<编号> [类型] (分值) {可选属性...}`
+- QML 只定义 `quiz.md` 文件内容如何写，不定义仓库目录结构。
+- 仓库结构、manifest、资源目录规则属于 `quiz-repo-spec`，不要混进 QML 语法里。
+- 示例中的资源路径统一使用 `./assets/...`。
+- 解析事实来源是 `backend/md_quiz/parsers/qml.py` 和相关测试。
 
-  * 类型：`[single] | [multiple] | [short]`
-  * 分值：能力题用 `(5)`；简答用 `{max=10}`
-  * 其他属性：`{partial=true}`、`{media=img/q1.png}`、`{answer_time=90s}` 等
-  * `answer_time` 表示该题单独作答时间，支持纯秒数或 `s / m / h` 后缀；最短 `1s`，最长 `1h`
-* 首题前/末题后：当前仅支持单独一张 Markdown 图片
-  * 首题前如 `![intro](img/welcome.png)` 会解析为 `welcome_image`
-  * 末题后如 `![bye](img/thanks.png)` 会解析为 `end_image`
-  * 暂不支持首题前/末题后的其他正文内容
-* 题干：标题下一段文本/图片
-* 选项：使用无序列表，格式 `- A) 文本`
-
-  * 正确选项：在 **选项字母后加星号**，如 `- B*) 文本`
-  * 性向增量：在选项行尾加 `{traits:S=1,N=-1}`
-  * 选项自带分：在行尾加 `{points=2}`（可选）
-* 简答题 rubric/LLM：用成对的标记块
-
-  * `[rubric]...[/rubric]`
-  * `[llm] key=value 行式配置，可选 [/llm]`
-
-## 完整示例
+## 最小示例
 
 ```markdown
 ---
-id: exam-demo-001
-title: AI 基础测评
-description: |
-  本试卷包含基础能力与性向维度两部分内容。
-llm:
-  model: gpt-4o-mini
-  temperature: 0.0
-  prompt_template: |
-    请根据评分标准对考生答案打分，允许部分得分。
-    只输出 JSON，不要解释，不要 Markdown。
-    JSON 必须包含字段：score、reason、relevance、contradiction。
-    - score：0 到 {{max_points}} 的整数
-    - reason：1 到 3 句，说明得分点和失分点
-    - relevance：0 到 3 的整数
-    - contradiction：true 或 false
-
-    题目：{{question}}
-    评分标准：{{rubric}}
-    考生回答：{{answer}}
-trait:
-  dimensions: [I, E, S, N, T, F, J, P]
-  chart:
-    type: mermaid
-    template: |
-      pie title 维度得分
-      "I" : {{I}} "E" : {{E}} "S" : {{S}} "N" : {{N}}
-      "T" : {{T}} "F" : {{F}} "J" : {{J}} "P" : {{P}}
+id: common-ability-2025
+title: 共性能力测评
 format: qml-v2
 ---
 
-![intro](img/welcome.png)
+![intro](./assets/welcome.png)
 
-## Q1 [single] (5) {media=, answer_time=45s}
-选择正确的描述：Transformer 的自注意力用于？
+## Q1 [single] (5) {media=./assets/q1.png, answer_time=45s}
+选择正确描述：
 
-- A) 仅用于解码器，建模语言的因果依赖
-- B*) 计算序列内部依赖与加权聚合
-- C) 仅替代卷积以降维
-- D) 仅做位置编码
+- A) 选项A
+- B*) 选项B
 
-## Q2 [multiple] (6) {partial=true}
-下列哪些属于常见优化器？
-
-- A*) Adam
-- B)  Dropout
-- C*) SGD
-- D*) AdamW
-
-## Q3 [single]
-你更偏好哪种学习方式？
-
-- A) 实操演练 {traits:S=1}
-- B) 概念推演 {traits:N=1}
-
-## Q4 [short] {max=10, answer_time=10m}
-用不超过150字解释“过拟合”的定义与危害。
+## Q2 [short] {max=10}
+请简述原因。
 
 [rubric]
-1) 准确定义：训练误差低测试误差高；
-2) 原因与迹象；
-3) 可能危害；
-4) 表达清晰。
+1) 观点准确
+2) 论证清晰
+3) 表达完整
 [/rubric]
 
-[llm]
-prompt_template=你是严格的阅卷老师，请仅输出分数数字（0-{{max_points}}）。
-[/llm]
-
-![bye](img/thanks.png)
+![bye](./assets/thanks.png)
 ```
-
-**映射到后端字段**
-
-* `## Q1 [single] (5) {media=..., answer_time=45s}` → `Question.id/type/points/media/partial_credit/answer_time_seconds/...`
-* 选项行 `- B*) 文本 {traits:S=1}` → `Option.key='B'`, `correct` 自动收集，`traits={'S':1}`
-* 简答 `[short]{max=10}` + `[rubric]...` → `max_points/rubric`；`[llm]` → 题目级 `LLMConfig`
-* 首题前图片 / 末题后图片 → `welcome_image / end_image`
-
-## 优点
-
-* 极简、友好、git diff 清晰；编辑器高亮良好。
-* 100% 可无损映射到你已有的数据模型与评分规则。
-
-## 潜在问题/边界
-* 少量自定义语法需解析（但远比 YAML 嵌套简单）；
-* 若出现极端复杂的题目元信息（很少见），可能仍需回退到 YAML。
-* **唯一性**：`QID` 必须唯一；解析器应校验并给出行号/列号。
-* **多选的 `partial_credit`**：缺省 `false`，仅当题头或属性有 `{partial=true}` 时启用。
-* **每题作答时间**：使用题头属性 `{answer_time=...}`；支持 `45`、`45s`、`3m`、`1h`；解析后统一落到 `answer_time_seconds`。
-* **每题作答时间范围**：最短 1 秒，最长 3600 秒；超出范围解析器应报错并指出题号。
-* **traits 合法性**：允许正负与 0，维度键不做强校验（保持扩展性）。
-* **LLM 覆盖**：题目级 `[llm]` 优先于 Front Matter；解析器需要层级合并。
-* **标识符**：建议 Front Matter 加 `format: qml-v2`，便于导入器做分支。
