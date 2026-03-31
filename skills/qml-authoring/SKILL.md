@@ -9,6 +9,7 @@ description: Use this skill when authoring, reviewing, fixing, or documenting QM
 
 在以下场景优先使用这个 skill：
 
+- 若任务同时涉及 QML 定义和 quiz 仓库规范，优先先看 [../quiz-workflow/SKILL.md](../quiz-workflow/SKILL.md) 作为总入口
 - 编写或修订 `quiz.md` 内容
 - 排查 QML 解析错误
 - 更新 `qml.md` 或 QML 示例

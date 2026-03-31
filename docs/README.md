@@ -24,8 +24,10 @@
 
 ## 项目内 Skills
 
+- [Quiz Workflow Skill](../skills/quiz-workflow/SKILL.md)
 - [Quiz Repo Spec Skill](../skills/quiz-repo-spec/SKILL.md)
 - [QML Authoring Skill](../skills/qml-authoring/SKILL.md)
+- [Quiz Skills 维护清单](../skills/quiz-workflow/references/maintenance-checklist.md)
 - [Quiz 仓库规范正文](../skills/quiz-repo-spec/references/repo-contract.md)
 - [QML 详细规范](../skills/qml-authoring/references/qml-spec.md)
 

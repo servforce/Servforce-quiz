@@ -37,6 +37,7 @@
 - `skills/job-system-design/SKILL.md`：涉及后台线程、任务状态、重试、调度、可观测性时优先使用。
 - `skills/static-ui/SKILL.md`：涉及 `templates/`、`static/`、管理端或候选人端页面改造时优先使用。
 - `skills/python-web-refactor/SKILL.md`：涉及 Flask 入口、路由拆分、配置治理、测试补齐、文档补齐时优先使用。
+- `skills/quiz-workflow/SKILL.md`：涉及 quiz 仓库规范与 QML 定义的联动设计、统一入口、安装维护、端到端排查时优先使用。
 - `skills/quiz-repo-spec/SKILL.md`：涉及 quiz 仓库结构、manifest、资源路径、仓库同步失败排查时优先使用。
 - `skills/qml-authoring/SKILL.md`：涉及 QML 语法、解析边界、示例修订、`qml.md` 更新时优先使用。
 
