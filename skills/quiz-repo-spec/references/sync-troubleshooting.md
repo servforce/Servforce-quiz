@@ -29,6 +29,11 @@
 
 - manifest 类型错误
 
+### `md-quiz-repo.yaml 仅支持 schema_version: 2`
+
+- 当前仓库规范版本号不匹配
+- 应与 quiz 头部推荐的 `schema_version: 2` / `format: qml-v2` 保持同一代际
+
 ### `manifest path 只支持 quizzes/<quiz_id>/quiz.md`
 
 - 当前 path 不符合标准目录结构

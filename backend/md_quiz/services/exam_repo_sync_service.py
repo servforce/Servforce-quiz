@@ -43,7 +43,7 @@ EXAM_SYNC_MIGRATION_KEY = "exam_repo_sync_migration"
 IMAGE_MAX_BYTES = 1024 * 1024
 QUIZ_REPO_MANIFEST = "md-quiz-repo.yaml"
 QUIZ_REPO_KIND = "md-quiz-repo"
-QUIZ_REPO_SCHEMA_VERSION = 1
+QUIZ_REPO_SCHEMA_VERSION = 2
 _QUIZ_PATH_RE = re.compile(r"^quizzes/(?P<quiz_id>[A-Za-z0-9_-]+)/quiz\.md$")
 
 _MD_IMAGE_RE = re.compile(r"!\[[^\]]*]\((?P<path>[^)]+)\)")

@@ -40,6 +40,14 @@ def test_generate_exam_from_prompt_uses_assets_path_for_generated_figures(monkey
 
     markdown_text, assets, meta = service.generate_exam_from_prompt("请生成一份带图单选题", include_diagrams=True)
 
+    assert "schema_version: 2" in markdown_text
+    assert "format: qml-v2" in markdown_text
+    assert "question_count: 1" in markdown_text
+    assert "question_counts:" in markdown_text
+    assert "  single: 1" in markdown_text
+    assert "estimated_duration_minutes: 2" in markdown_text
     assert "![示意图](assets/q1-diagram.svg)" in markdown_text
     assert "assets/q1-diagram.svg" in assets
     assert meta["asset_count"] == 1
+    assert meta["question_counts"] == {"single": 1, "multiple": 0, "short": 0}
+    assert meta["estimated_duration_minutes"] == 2

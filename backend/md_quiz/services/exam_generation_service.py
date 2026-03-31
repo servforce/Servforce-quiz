@@ -9,6 +9,9 @@ from typing import Any
 
 from backend.md_quiz.services.llm_client import call_llm_structured_ex
 
+QML_SCHEMA_VERSION = 2
+QML_FORMAT = "qml-v2"
+
 
 def _env_int(name: str, default: int, *, min_v: int, max_v: int) -> int:
     v = str(os.getenv(name, "") or "").strip()
@@ -98,6 +101,30 @@ def _safe_qid(raw: Any, idx: int) -> str:
     if not s:
         return f"Q{idx}"
     return s
+
+
+def _normalize_question_type(raw: Any) -> str:
+    qtype = str(raw or "").strip().lower()
+    if qtype in {"single", "multiple", "short"}:
+        return qtype
+    return "single"
+
+
+def _count_question_types(raw_questions: list[Any]) -> dict[str, int]:
+    counts = {"single": 0, "multiple": 0, "short": 0}
+    for item in raw_questions:
+        if not isinstance(item, dict):
+            continue
+        counts[_normalize_question_type(item.get("type"))] += 1
+    return counts
+
+
+def _estimate_duration_minutes(question_counts: dict[str, int]) -> int:
+    return (
+        int(question_counts.get("single", 0)) * 2
+        + int(question_counts.get("multiple", 0)) * 3
+        + int(question_counts.get("short", 0)) * 10
+    )
 
 
 def _safe_svg_text(raw: Any) -> str:
@@ -924,6 +951,18 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
         if len(raw_questions) > target_count:
             raw_questions = raw_questions[:target_count]
 
+    question_counts = _count_question_types(raw_questions)
+    question_count = sum(question_counts.values())
+    estimated_duration_minutes = _estimate_duration_minutes(question_counts)
+    summary_line = (
+        f"本试卷共 {question_count} 题，"
+        f"其中单选 {question_counts['single']} 题、多选 {question_counts['multiple']} 题、简答 {question_counts['short']} 题，"
+        f"预计 {estimated_duration_minutes} 分钟完成。"
+    )
+    description_lines = [description] if description else ["由大模型自动生成的题目集，覆盖基础理解、判断与表达能力。"]
+    if summary_line not in description_lines:
+        description_lines.append(summary_line)
+
     assets: dict[str, bytes] = {}
     seen_qid: set[str] = set()
     lines: list[str] = [
@@ -932,12 +971,17 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
         f"title: {title}",
         "description: |",
     ]
-    if description:
-        for ln in description.splitlines():
+    for block in description_lines:
+        for ln in str(block or "").splitlines():
             lines.append(f"  {ln}".rstrip())
-    else:
-        lines.append("  由大模型自动生成")
-    lines.append("format: qml-v2")
+    lines.append(f"schema_version: {QML_SCHEMA_VERSION}")
+    lines.append(f"format: {QML_FORMAT}")
+    lines.append(f"question_count: {question_count}")
+    lines.append("question_counts:")
+    lines.append(f"  single: {question_counts['single']}")
+    lines.append(f"  multiple: {question_counts['multiple']}")
+    lines.append(f"  short: {question_counts['short']}")
+    lines.append(f"estimated_duration_minutes: {estimated_duration_minutes}")
     lines.extend(["---", ""])
 
     q_idx = 0
@@ -945,9 +989,7 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
         if not isinstance(item, dict):
             continue
         q_idx += 1
-        qtype = str(item.get("type") or "").strip().lower()
-        if qtype not in {"single", "multiple", "short"}:
-            qtype = "single"
+        qtype = _normalize_question_type(item.get("type"))
 
         qid = _safe_qid(item.get("qid"), q_idx)
         while qid in seen_qid:
@@ -1049,5 +1091,11 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
         lines.append("")
 
     markdown_text = "\n".join(lines).strip() + "\n"
-    meta = {"question_count": len(seen_qid), "asset_count": len(assets), "exam_id": exam_id}
+    meta = {
+        "question_count": len(seen_qid),
+        "question_counts": question_counts,
+        "estimated_duration_minutes": estimated_duration_minutes,
+        "asset_count": len(assets),
+        "exam_id": exam_id,
+    }
     return markdown_text, assets, meta

@@ -14,7 +14,15 @@ id: common-ability-2025
 title: 共性能力测评
 description: |
   面向候选人的基础能力测评。
+  本试卷共 10 题，其中单选 6 题、多选 2 题、简答 2 题，预计 34 分钟完成。
+schema_version: 2
 format: qml-v2
+question_count: 10
+question_counts:
+  single: 6
+  multiple: 2
+  short: 2
+estimated_duration_minutes: 34
 ---
 ```
 
@@ -22,6 +30,11 @@ format: qml-v2
 
 - `id`：在采用 `quiz-repo-spec` 的仓库中，应与目录名一致
 - `title` / `description` / `format`：按需填写
+- 推荐头部补充：
+  - `schema_version: 2`
+  - `question_count`
+  - `question_counts`
+  - `estimated_duration_minutes`
 - QML 语法层不定义 manifest、repo path、目录结构
 
 ## 题头格式
@@ -102,7 +115,17 @@ prompt_template=请只输出分数数字。
 ---
 id: common-ability-2025
 title: 共性能力测评
+description: |
+  面向候选人的基础能力测评。
+  本试卷共 2 题，其中单选 1 题、多选 0 题、简答 1 题，预计 12 分钟完成。
+schema_version: 2
 format: qml-v2
+question_count: 2
+question_counts:
+  single: 1
+  multiple: 0
+  short: 1
+estimated_duration_minutes: 12
 ---
 
 ![intro](./assets/welcome.png)

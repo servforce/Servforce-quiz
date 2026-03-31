@@ -12,6 +12,8 @@
 - 若存在 Front Matter，必须以 `---` 开始并闭合
 - Front Matter 必须是 YAML mapping
 - 若缺少 `id`，允许 parser 生成临时 id；但接入 quiz 仓库规范的同步器通常不会接受这种 quiz
+- 当前 parser 只把 `id`、`title`、`description`、`format`、`welcome_image`、`end_image`、`llm`、`trait` 纳入结构化输出
+- 诸如 `schema_version`、`question_count`、`question_counts`、`estimated_duration_minutes` 这类头部摘要字段，当前主要用于源文档阅读，不一定进入结构化 spec
 
 ### 题头
 

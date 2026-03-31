@@ -31,7 +31,7 @@
 文件：`md-quiz-repo.yaml`
 
 ```yaml
-schema_version: 1
+schema_version: 2
 kind: md-quiz-repo
 quizzes:
   - path: quizzes/common-ability-2025/quiz.md
@@ -39,11 +39,12 @@ quizzes:
 
 规则：
 
-- `schema_version` 必须为 `1`
+- `schema_version` 必须为 `2`
 - `kind` 必须为 `md-quiz-repo`
 - `quizzes` 必须是非空列表
 - 每个 `path` 只能是 `quizzes/<quiz_id>/quiz.md`
 - `path` 不能重复，不能越界，必须真实存在
+- 当前仓库规范版本号与 QML 头部推荐的 `schema_version: 2` / `format: qml-v2` 保持同一代际
 
 ## Quiz 目录规则
 

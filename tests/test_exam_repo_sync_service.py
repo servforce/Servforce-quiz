@@ -28,7 +28,7 @@ def _write_bytes(path: Path, content: bytes) -> None:
 def _write_manifest(repo_root: Path, *quiz_paths: str) -> None:
     _write_text(repo_root / "README.md", "# demo\n")
     lines = [
-        "schema_version: 1",
+        "schema_version: 2",
         "kind: md-quiz-repo",
         "quizzes:",
     ]
