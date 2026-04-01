@@ -1757,6 +1757,44 @@ SET value=EXCLUDED.value, updated_at=NOW()
             cur.execute(sql, (str(key or "").strip(), _json_param(value or {})))
 
 
+def _delete_exam_domain_rows(cur) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    cur.execute("SELECT COUNT(*) FROM exam_version_asset")
+    row = cur.fetchone()
+    counts["exam_version_asset"] = int((row[0] if row else 0) or 0)
+    for table in ("exam_archive", "exam_paper", "assignment_record", "exam_asset", "exam_version", "exam_definition"):
+        cur.execute(f"DELETE FROM {table}")
+        counts[table] = int(cur.rowcount or 0)
+    return counts
+
+
+def clear_exam_domain_data() -> dict[str, int]:
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            return _delete_exam_domain_rows(cur)
+
+
+def clear_exam_domain_data_and_set_repo_binding(
+    *,
+    binding_key: str,
+    binding_value: dict[str, Any],
+    sync_state_key: str,
+    sync_state_value: dict[str, Any],
+) -> dict[str, int]:
+    upsert_sql = """
+INSERT INTO runtime_kv(key, value, updated_at)
+VALUES (%s, %s, NOW())
+ON CONFLICT (key) DO UPDATE
+SET value=EXCLUDED.value, updated_at=NOW()
+"""
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            counts = _delete_exam_domain_rows(cur)
+            cur.execute(upsert_sql, (str(binding_key or "").strip(), _json_param(binding_value or {})))
+            cur.execute(upsert_sql, (str(sync_state_key or "").strip(), _json_param(sync_state_value or {})))
+            return counts
+
+
 def get_runtime_daily_metric_int(*, day: str, key: str) -> int:
     sql = "SELECT value_int FROM runtime_daily_metric WHERE day=%s::date AND key=%s"
     with conn_scope() as conn:

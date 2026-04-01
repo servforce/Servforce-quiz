@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from backend.md_quiz.services import exam_helpers, runtime_jobs, support_deps as deps
 from backend.md_quiz.services import system_status_helpers, validation_helpers
+from backend.md_quiz.services.exam_repo_sync_service import ExamRepoSyncError
 
 from .deps import get_container
 
@@ -41,6 +42,15 @@ class EnqueueJobPayload(BaseModel):
 
 class SyncExamPayload(BaseModel):
     repo_url: str = ""
+
+
+class RepoBindingPayload(BaseModel):
+    repo_url: str = ""
+
+
+class RepoRebindPayload(BaseModel):
+    repo_url: str = ""
+    confirmation_text: str = ""
 
 
 class PublicInviteTogglePayload(BaseModel):
@@ -145,6 +155,25 @@ def _admin_base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
+def _repo_sync_http_status(exc: Exception) -> int:
+    message = str(exc or "")
+    if any(text in message for text in ("已绑定仓库", "尚未绑定仓库", "同步任务在执行")):
+        return status.HTTP_409_CONFLICT
+    return status.HTTP_400_BAD_REQUEST
+
+
+def _serialize_repo_binding(binding: dict[str, Any] | None) -> dict[str, Any]:
+    current = binding if isinstance(binding, dict) else {}
+    repo_url = str(current.get("repo_url") or "").strip()
+    if not repo_url:
+        return {}
+    return {
+        "repo_url": repo_url,
+        "bound_at": str(current.get("bound_at") or "").strip(),
+        "updated_at": str(current.get("updated_at") or "").strip(),
+    }
+
+
 def _serialize_exam_summary(exam: dict[str, Any], request: Request) -> dict[str, Any]:
     exam_key = str(exam.get("exam_key") or "").strip()
     cfg = exam_helpers.get_public_invite_config(exam_key)
@@ -196,7 +225,8 @@ def _serialize_exam_detail(
     current_version_id = int(exam.get("current_version_id") or 0)
     selected = selected_version or {}
     selected_version_id = int(selected.get("id") or 0)
-    spec = selected.get("spec") if isinstance(selected.get("spec"), dict) else exam.get("spec") or {}
+    raw_spec = selected.get("spec") if isinstance(selected.get("spec"), dict) else exam.get("spec") or {}
+    spec = exam_helpers.build_render_ready_public_spec(raw_spec if isinstance(raw_spec, dict) else {})
     quiz_metadata = exam_helpers.build_quiz_metadata(spec)
     stats = _compute_exam_stats(spec if isinstance(spec, dict) else {})
     cfg = exam_helpers.get_public_invite_config(exam_key)
@@ -871,16 +901,74 @@ def list_exams(request: Request, q: str = "", page: int = 1):
         "per_page": per_page,
         "total": total,
         "total_pages": total_pages,
+        "repo_binding": _serialize_repo_binding(deps.read_exam_repo_binding()),
         "sync_state": deps.read_exam_repo_sync_state(),
     }
+
+
+@router.post("/exams/binding", status_code=status.HTTP_201_CREATED)
+def bind_exam_repo(payload: RepoBindingPayload, request: Request):
+    _require_admin(request)
+    try:
+        result = deps.bind_exam_repo(str(payload.repo_url or "").strip())
+    except ExamRepoSyncError as exc:
+        raise HTTPException(status_code=_repo_sync_http_status(exc), detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"绑定仓库失败：{exc}") from exc
+    try:
+        deps.log_event(
+            "exam.repo.bind",
+            actor="admin",
+            meta={
+                "repo_url": str((result.get("binding") or {}).get("repo_url") or ""),
+                "job_id": str((result.get("sync") or {}).get("job_id") or ""),
+                "sync_created": bool((result.get("sync") or {}).get("created")),
+                "sync_error": str((result.get("sync") or {}).get("error") or ""),
+            },
+        )
+    except Exception:
+        pass
+    return result
+
+
+@router.post("/exams/binding/rebind")
+def rebind_exam_repo(payload: RepoRebindPayload, request: Request):
+    _require_admin(request)
+    if str(payload.confirmation_text or "").strip() != "重新绑定":
+        raise HTTPException(status_code=400, detail="确认词不正确")
+    try:
+        result = deps.rebind_exam_repo(str(payload.repo_url or "").strip())
+    except ExamRepoSyncError as exc:
+        raise HTTPException(status_code=_repo_sync_http_status(exc), detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"重新绑定失败：{exc}") from exc
+    try:
+        deps.log_event(
+            "exam.repo.rebind",
+            actor="admin",
+            meta={
+                "previous_repo_url": str(result.get("previous_repo_url") or ""),
+                "repo_url": str((result.get("binding") or {}).get("repo_url") or ""),
+                "cleanup": result.get("cleanup") if isinstance(result.get("cleanup"), dict) else {},
+                "job_id": str((result.get("sync") or {}).get("job_id") or ""),
+                "sync_created": bool((result.get("sync") or {}).get("created")),
+                "sync_error": str((result.get("sync") or {}).get("error") or ""),
+            },
+        )
+    except Exception:
+        pass
+    return result
 
 
 @router.post("/exams/sync")
 def sync_exams(payload: SyncExamPayload, request: Request):
     _require_admin(request)
-    repo_url = str(payload.repo_url or "").strip()
+    _ = payload
+    binding = _serialize_repo_binding(deps.read_exam_repo_binding())
     try:
-        result = deps.enqueue_exam_repo_sync(repo_url)
+        result = deps.enqueue_exam_repo_sync()
+    except ExamRepoSyncError as exc:
+        raise HTTPException(status_code=_repo_sync_http_status(exc), detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"同步任务创建失败：{exc}") from exc
     try:
@@ -888,7 +976,7 @@ def sync_exams(payload: SyncExamPayload, request: Request):
             "exam.sync.enqueue",
             actor="admin",
             meta={
-                "repo_url": repo_url,
+                "repo_url": str(binding.get("repo_url") or ""),
                 "job_id": str(result.get("job_id") or ""),
                 "created": bool(result.get("created")),
             },

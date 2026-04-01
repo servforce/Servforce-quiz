@@ -102,6 +102,44 @@ trait:
     assert public_exam["trait"] == exam["trait"]
 
 
+def test_parse_qml_trait_single_allows_explicit_zero_points_without_correct_option() -> None:
+    exam, public_exam = parse_qml_markdown(
+        """
+## Q1 [single] (0) {scoring=traits, answer_time=20s}
+我更愿意先独处整理思路，再决定是否表达出来。
+
+- A) 非常同意 {traits=I:2}
+- B) 比较同意 {traits=I:1}
+- C) 中立
+- D) 比较不同意 {traits=E:1}
+- E) 非常不同意 {traits=E:2}
+""".strip()
+    )
+
+    question = exam["questions"][0]
+    public_question = public_exam["questions"][0]
+    assert question["points"] == 0
+    assert question["max_points"] == 0
+    assert question["answer_time_seconds"] == 20
+    assert [option["correct"] for option in question["options"]] == [False, False, False, False, False]
+    assert question["options"][0]["traits"] == {"I": 2}
+    assert public_question["points"] == 0
+    assert public_question["max_points"] == 0
+
+
+def test_parse_qml_trait_single_rejects_correct_marker() -> None:
+    markdown = """
+## Q1 [single] (0) {scoring=traits}
+题目一
+
+- A*) 非常同意 {traits=I:2}
+- B) 非常不同意 {traits=E:2}
+""".strip()
+
+    with pytest.raises(QmlParseError, match="trait single must not use correct option"):
+        parse_qml_markdown(markdown)
+
+
 def test_parse_qml_rejects_non_string_tags() -> None:
     markdown = """
 ---

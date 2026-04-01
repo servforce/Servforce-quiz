@@ -7,6 +7,16 @@
     { key: "assignment", label: "邀约", color: "#7c3aed", hint: "邀约创建、验证与答题过程" },
     { key: "system", label: "系统", color: "#ef4444", hint: "告警与短信相关事件" },
   ];
+  const TRAIT_COLOR_PALETTE = [
+    { accent: "#2563eb", border: "rgba(37,99,235,0.22)", background: "rgba(37,99,235,0.10)", text: "#1d4ed8" },
+    { accent: "#059669", border: "rgba(5,150,105,0.24)", background: "rgba(5,150,105,0.10)", text: "#047857" },
+    { accent: "#7c3aed", border: "rgba(124,58,237,0.22)", background: "rgba(124,58,237,0.10)", text: "#6d28d9" },
+    { accent: "#d97706", border: "rgba(217,119,6,0.24)", background: "rgba(217,119,6,0.10)", text: "#b45309" },
+    { accent: "#db2777", border: "rgba(219,39,119,0.22)", background: "rgba(219,39,119,0.10)", text: "#be185d" },
+    { accent: "#0891b2", border: "rgba(8,145,178,0.22)", background: "rgba(8,145,178,0.10)", text: "#0e7490" },
+    { accent: "#4f46e5", border: "rgba(79,70,229,0.22)", background: "rgba(79,70,229,0.10)", text: "#4338ca" },
+    { accent: "#ea580c", border: "rgba(234,88,12,0.24)", background: "rgba(234,88,12,0.10)", text: "#c2410c" },
+  ];
 
   const register = () => {
     if (!window.Alpine) return;
@@ -30,6 +40,8 @@
         assignments: { q: "" },
       },
       syncForm: { repoUrl: "" },
+      repoBinding: {},
+      rebindForm: { open: false, repoUrl: "", confirmationText: "" },
       candidateForm: { name: "", phone: "" },
       candidateEvaluation: "",
       assignmentForm: {
@@ -52,11 +64,13 @@
       logsChartResizeObserver: null,
       logsChartWindowResize: null,
       syncState: {},
+      syncPollTimer: null,
+      syncPollIntervalMs: 2000,
       statusSummary: {},
       statusRange: { data: {} },
       statusConfig: { llm_tokens_limit: "", sms_calls_limit: "" },
 
-      async init() {
+      async boot() {
         window.addEventListener("popstate", () => this.handleRoute(location.pathname, { replace: true }));
         await this.refreshSession();
         if (this.session.authenticated) {
@@ -70,6 +84,128 @@
 
       pretty(value) {
         return JSON.stringify(value || {}, null, 2);
+      },
+
+      examQuestions() {
+        const questions = this.examDetail?.selected_version?.spec?.questions;
+        return Array.isArray(questions) ? questions : [];
+      },
+
+      questionTypeLabel(value) {
+        const labels = {
+          single: "单选",
+          multiple: "多选",
+          short: "简答",
+          unknown: "其他",
+        };
+        const key = String(value || "").trim().toLowerCase();
+        return labels[key] || String(value || "其他");
+      },
+
+      formatDateTime(value) {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        const date = new Date(text);
+        if (Number.isNaN(date.getTime())) {
+          return text;
+        }
+        return new Intl.DateTimeFormat("zh-CN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).format(date);
+      },
+
+      traitPalette(index) {
+        return TRAIT_COLOR_PALETTE[Math.abs(Number(index || 0)) % TRAIT_COLOR_PALETTE.length];
+      },
+
+      traitDimensions() {
+        const names = [];
+        const seen = new Set();
+        const usedNames = [];
+        const usedSet = new Set();
+        const pushUsedName = (value) => {
+          const name = String(value || "").trim();
+          if (!name || usedSet.has(name)) return;
+          usedSet.add(name);
+          usedNames.push(name);
+        };
+        for (const question of this.examQuestions()) {
+          for (const option of question?.options || []) {
+            for (const traitName of Object.keys(option?.traits || {})) {
+              pushUsedName(traitName);
+            }
+          }
+        }
+        if (!usedNames.length) {
+          return [];
+        }
+        const pushName = (value) => {
+          const name = String(value || "").trim();
+          if (!name || seen.has(name) || !usedSet.has(name)) return;
+          seen.add(name);
+          names.push(name);
+        };
+        const configured = this.examDetail?.selected_version?.trait?.dimensions || this.examDetail?.exam?.trait?.dimensions;
+        if (Array.isArray(configured)) {
+          configured.forEach(pushName);
+        }
+        usedNames.forEach(pushName);
+        return names.map((name, index) => ({
+          name,
+          ...this.traitPalette(index),
+        }));
+      },
+
+      traitMeta(name) {
+        const current = String(name || "").trim();
+        if (!current) {
+          return this.traitPalette(0);
+        }
+        const found = this.traitDimensions().find((item) => item.name === current);
+        if (found) {
+          return found;
+        }
+        const hash = Array.from(current).reduce((sum, char) => sum + (char.codePointAt(0) || 0), 0);
+        return {
+          name: current,
+          ...this.traitPalette(hash),
+        };
+      },
+
+      traitBadgeStyle(name) {
+        const meta = this.traitMeta(name);
+        return {
+          borderColor: meta.border,
+          backgroundColor: meta.background,
+          color: meta.text,
+        };
+      },
+
+      traitDotStyle(name) {
+        const meta = this.traitMeta(name);
+        return { backgroundColor: meta.accent };
+      },
+
+      optionTraits(option) {
+        const traits = option?.traits;
+        if (!traits || typeof traits !== "object") {
+          return [];
+        }
+        return Object.entries(traits)
+          .filter(([name]) => String(name || "").trim())
+          .map(([name, score]) => {
+            const value = Number(score || 0);
+            const text = Number.isFinite(value) && value > 0 ? `+${value}` : String(score ?? "");
+            return {
+              name: String(name || "").trim(),
+              scoreText: text,
+            };
+          });
       },
 
       logCategoryCards() {
@@ -144,6 +280,55 @@
         }, 3600);
       },
 
+      syncStatus() {
+        return String(this.syncState?.status || "").trim().toLowerCase();
+      },
+
+      isSyncBusy() {
+        return ["queued", "running"].includes(this.syncStatus());
+      },
+
+      hasRepoBinding() {
+        return Boolean(String(this.repoBinding?.repo_url || "").trim());
+      },
+
+      resetRebindForm() {
+        this.rebindForm = { open: false, repoUrl: "", confirmationText: "" };
+      },
+
+      openRebindForm() {
+        if (this.isSyncBusy()) return;
+        this.rebindForm.open = true;
+        this.rebindForm.repoUrl = "";
+        this.rebindForm.confirmationText = "";
+      },
+
+      closeRebindForm() {
+        this.resetRebindForm();
+      },
+
+      stopSyncPolling() {
+        if (!this.syncPollTimer) return;
+        window.clearTimeout(this.syncPollTimer);
+        this.syncPollTimer = null;
+      },
+
+      scheduleSyncPolling() {
+        if (this.syncPollTimer || !this.isSyncBusy() || this.route.name !== "exams") return;
+        this.syncPollTimer = window.setTimeout(async () => {
+          this.syncPollTimer = null;
+          if (this.route.name !== "exams" || !this.session.authenticated) return;
+          const previousSyncStatus = this.syncStatus();
+          const previousSyncJobId = String(this.syncState?.last_job_id || "").trim();
+          await this.loadExams({
+            quiet: true,
+            source: "sync-poll",
+            previousSyncStatus,
+            previousSyncJobId,
+          });
+        }, this.syncPollIntervalMs);
+      },
+
       resolveRoute(pathname) {
         const path = pathname || "/admin";
         if (path === "/admin/login") {
@@ -213,11 +398,15 @@
 
       async handleRoute(pathname, { replace = false } = {}) {
         if (!this.session.authenticated && pathname !== "/admin/login") {
+          this.stopSyncPolling();
           history.replaceState({}, "", "/admin/login");
           this.route = this.resolveRoute("/admin/login");
           return;
         }
         this.route = this.resolveRoute(pathname);
+        if (this.route.name !== "exams") {
+          this.stopSyncPolling();
+        }
         if (!replace) {
           history.pushState({}, "", this.route.path);
         }
@@ -274,28 +463,96 @@
 
       async logout() {
         this.destroyLogsChart();
+        this.stopSyncPolling();
         await this.api("/api/admin/session/logout", { method: "POST", quiet: true });
         this.session = { authenticated: false, username: "" };
+        this.repoBinding = {};
+        this.resetRebindForm();
         history.replaceState({}, "", "/admin/login");
         this.route = this.resolveRoute("/admin/login");
       },
 
-      async loadExams({ quiet = false } = {}) {
+      async loadExams({ quiet = false, source = "manual", previousSyncStatus = "", previousSyncJobId = "" } = {}) {
         const query = new URLSearchParams();
         if (this.filters.exams.q) query.set("q", this.filters.exams.q);
         const data = await this.api(`/api/admin/exams?${query.toString()}`, { quiet });
         if (!data) return;
         this.exams = data;
+        this.repoBinding = data.repo_binding || {};
         this.syncState = data.sync_state || {};
+        if (!this.hasRepoBinding() && this.syncState.repo_url && (this.isSyncBusy() || !this.syncForm.repoUrl)) {
+          this.syncForm.repoUrl = this.syncState.repo_url;
+        }
+        if (this.hasRepoBinding()) {
+          this.syncForm.repoUrl = "";
+        } else {
+          this.resetRebindForm();
+        }
+        const currentSyncStatus = this.syncStatus();
+        if (this.route.name === "exams" && this.isSyncBusy()) {
+          this.scheduleSyncPolling();
+        } else {
+          this.stopSyncPolling();
+        }
+        if (
+          source === "sync-poll" &&
+          ["queued", "running"].includes(String(previousSyncStatus || "").trim().toLowerCase()) &&
+          !["queued", "running"].includes(currentSyncStatus)
+        ) {
+          const finishedJobId = String(this.syncState?.last_job_id || "").trim();
+          if (!previousSyncJobId || previousSyncJobId === finishedJobId) {
+            this.showNotice(currentSyncStatus === "done" ? "试卷同步完成，列表已刷新" : "试卷同步失败");
+          }
+        }
       },
 
-      async syncExams() {
-        const result = await this.api("/api/admin/exams/sync", {
+      async bindRepo() {
+        if (this.isSyncBusy() || this.hasRepoBinding()) return;
+        const result = await this.api("/api/admin/exams/binding", {
           method: "POST",
           body: JSON.stringify({ repo_url: this.syncForm.repoUrl || "" }),
           headers: { "Content-Type": "application/json" },
         });
+        this.repoBinding = result.binding || {};
+        this.syncForm.repoUrl = "";
+        if (result.sync?.error) {
+          this.showNotice("仓库已绑定，但自动同步投递失败");
+        } else {
+          this.showNotice("仓库已绑定，已开始同步");
+        }
+        await this.loadExams({ quiet: true });
+      },
+
+      async syncExams() {
+        if (this.isSyncBusy() || !this.hasRepoBinding()) return;
+        const result = await this.api("/api/admin/exams/sync", {
+          method: "POST",
+          body: JSON.stringify({}),
+          headers: { "Content-Type": "application/json" },
+        });
         this.showNotice(result.created ? "试卷同步任务已创建" : "已复用正在运行的同步任务");
+        await this.loadExams({ quiet: true });
+      },
+
+      async confirmRebind() {
+        if (this.isSyncBusy() || !this.hasRepoBinding()) return;
+        const result = await this.api("/api/admin/exams/binding/rebind", {
+          method: "POST",
+          body: JSON.stringify({
+            repo_url: this.rebindForm.repoUrl || "",
+            confirmation_text: this.rebindForm.confirmationText || "",
+          }),
+          headers: { "Content-Type": "application/json" },
+        });
+        this.exams = { items: [], page: 1, per_page: 20, total: 0, total_pages: 1 };
+        this.examDetail = { exam: {}, selected_version: {}, version_history: [], stats: {} };
+        this.repoBinding = result.binding || {};
+        this.resetRebindForm();
+        if (result.sync?.error) {
+          this.showNotice("仓库已重新绑定，现有问卷数据已清空，但自动同步投递失败");
+        } else {
+          this.showNotice("仓库已重新绑定，现有问卷数据已清空并开始同步");
+        }
         await this.loadExams({ quiet: true });
       },
 

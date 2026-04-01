@@ -40,6 +40,7 @@ estimated_duration_minutes: 34
   - `question_counts`
   - `estimated_duration_minutes`
 - `question_count` / `question_counts` / `estimated_duration_minutes` 属于可推导字段；仓库可填写，但外部仓库同步时会按题目内容重算并覆盖
+- 当前服务端重算 `estimated_duration_minutes` 时，若题目里存在 `answer_time`，会优先按所有题目的 `answer_time` 累计秒数向上折算为分钟；若未配置 `answer_time`，才回退为按题型估算
 - QML 语法层不定义 manifest、repo path、目录结构
 
 ## 题头格式

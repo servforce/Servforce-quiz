@@ -93,6 +93,20 @@ def estimate_duration_minutes(question_counts: dict[str, int]) -> int:
     )
 
 
+def compute_answer_time_total_seconds(questions: list[Any]) -> int:
+    total_seconds = 0
+    for item in questions or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            seconds = int(item.get("answer_time_seconds") or 0)
+        except Exception:
+            seconds = 0
+        if seconds > 0:
+            total_seconds += seconds
+    return int(total_seconds)
+
+
 def build_quiz_metadata(spec: dict[str, Any], *, default_schema_version: int | None = None) -> dict[str, Any]:
     doc = spec if isinstance(spec, dict) else {}
     format_value = str(doc.get("format") or "").strip()
@@ -105,7 +119,11 @@ def build_quiz_metadata(spec: dict[str, Any], *, default_schema_version: int | N
 
     question_counts = compute_question_counts(list(doc.get("questions") or []))
     question_count = sum(question_counts.values())
-    estimated_duration_minutes = estimate_duration_minutes(question_counts)
+    answer_time_total_seconds = compute_answer_time_total_seconds(list(doc.get("questions") or []))
+    if answer_time_total_seconds > 0:
+        estimated_duration_minutes = (answer_time_total_seconds + 59) // 60
+    else:
+        estimated_duration_minutes = estimate_duration_minutes(question_counts)
     trait = doc.get("trait") if isinstance(doc.get("trait"), dict) else {}
 
     return {

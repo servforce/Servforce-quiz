@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from time import sleep
 
+from backend.md_quiz.config import logger
 from backend.md_quiz.models import JobRecord
 from backend.md_quiz.storage import JobStore
 
@@ -22,25 +23,29 @@ class JobService:
     def process(self, job: JobRecord) -> JobRecord | None:
         # 第一阶段只实现可验证的演示处理器；
         # 后续迁移真实业务时，再把旧 services/ 逐步接进来。
-        match job.kind:
-            case "git_sync_exams":
-                from backend.md_quiz.services.exam_repo_sync_service import perform_exam_repo_sync
+        try:
+            match job.kind:
+                case "git_sync_exams":
+                    from backend.md_quiz.services.exam_repo_sync_service import perform_exam_repo_sync
 
-                repo_url = str((job.payload or {}).get("repo_url") or "").strip()
-                if not repo_url:
-                    return self.store.fail(job.id, "缺少 repo_url")
-                result = perform_exam_repo_sync(repo_url, job_id=job.id)
-            case "scan_exams":
-                result = {"message": "试卷扫描任务已完成", "count": 0}
-            case "resume_parse":
-                result = {"message": "简历解析任务已完成", "status": "placeholder"}
-            case "grade_attempt":
-                result = {"message": "判卷任务已完成", "status": "placeholder"}
-            case "archive_attempt":
-                result = {"message": "归档任务已完成", "status": "placeholder"}
-            case "sync_metrics":
-                result = {"message": "指标同步完成", "status": "ok"}
-            case _:
-                return self.store.fail(job.id, f"不支持的任务类型: {job.kind}")
+                    repo_url = str((job.payload or {}).get("repo_url") or "").strip()
+                    if not repo_url:
+                        return self.store.fail(job.id, "缺少 repo_url")
+                    result = perform_exam_repo_sync(repo_url, job_id=job.id)
+                case "scan_exams":
+                    result = {"message": "试卷扫描任务已完成", "count": 0}
+                case "resume_parse":
+                    result = {"message": "简历解析任务已完成", "status": "placeholder"}
+                case "grade_attempt":
+                    result = {"message": "判卷任务已完成", "status": "placeholder"}
+                case "archive_attempt":
+                    result = {"message": "归档任务已完成", "status": "placeholder"}
+                case "sync_metrics":
+                    result = {"message": "指标同步完成", "status": "ok"}
+                case _:
+                    return self.store.fail(job.id, f"不支持的任务类型: {job.kind}")
+        except Exception as exc:
+            logger.exception("Job failed: kind=%s id=%s", job.kind, job.id)
+            return self.store.fail(job.id, str(exc) or type(exc).__name__)
         sleep(0.05)
         return self.store.complete(job.id, result)

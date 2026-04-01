@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from backend.md_quiz.services.exam_repo_sync_service import (
     ExamRepoSyncError,
     _build_exam_candidate,
+    _clone_repo,
     _load_assets,
     _load_quiz_repo_manifest,
     _rewrite_archive_asset_urls,
@@ -71,6 +73,21 @@ def test_load_assets_rejects_large_image(tmp_path):
 
     with pytest.raises(ExamRepoSyncError, match="超过 1MB"):
         _load_assets(quiz_root, ["assets/large.png"])
+
+
+def test_clone_repo_surfaces_git_stderr(monkeypatch, tmp_path):
+    def _boom(*args, **kwargs):
+        raise subprocess.CalledProcessError(
+            128,
+            args[0],
+            output="",
+            stderr="fatal: unable to access 'https://example.com/repo.git/': Proxy CONNECT aborted",
+        )
+
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.subprocess.run", _boom)
+
+    with pytest.raises(ExamRepoSyncError, match="Proxy CONNECT aborted"):
+        _clone_repo("https://example.com/repo.git", tmp_path / "repo")
 
 
 def test_rewrite_archive_asset_urls_rewrites_exam_and_question_assets():

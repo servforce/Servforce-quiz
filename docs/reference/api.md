@@ -38,15 +38,43 @@
 
 ### `GET /api/admin/exams`
 
-返回试卷列表、分页信息与当前同步状态。
+返回试卷列表、分页信息、实例级仓库绑定信息与当前同步状态。
 
 ### `GET /api/admin/exams/{exam_key}`
 
 返回试卷详情、版本历史、公开邀约状态与试卷快照。
 
+### `POST /api/admin/exams/binding`
+
+首次绑定试卷仓库，并自动尝试创建同步任务。
+
+请求：
+
+```json
+{ "repo_url": "https://github.com/example/repo.git" }
+```
+
+### `POST /api/admin/exams/binding/rebind`
+
+重新绑定试卷仓库。会删除当前实例中的问卷、版本、邀约与答题归档数据，但保留候选人与简历；成功后自动尝试创建同步任务。
+
+请求：
+
+```json
+{
+  "repo_url": "https://github.com/example/new-repo.git",
+  "confirmation_text": "重新绑定"
+}
+```
+
 ### `POST /api/admin/exams/sync`
 
-创建或复用试卷仓库同步任务。
+为当前已绑定仓库创建或复用同步任务。
+
+说明：
+
+- 未绑定仓库时返回 `409`
+- 请求体中的 `repo_url` 仅为兼容保留，服务端会忽略它，不允许借此覆盖当前绑定仓库
 
 ### `POST /api/admin/exams/{exam_key}/public-invite`
 

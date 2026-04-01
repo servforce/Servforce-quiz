@@ -113,10 +113,13 @@ from backend.md_quiz.services.exam_generation_service import (
 )
 from backend.md_quiz.services.exam_repo_sync_service import (
     EXAM_SYNC_JOB_KIND,
+    bind_exam_repo,
     enqueue_exam_repo_sync,
     migrate_legacy_exam_data,
     perform_exam_repo_sync,
+    read_exam_repo_binding,
     read_exam_repo_sync_state,
+    rebind_exam_repo,
 )
 from backend.md_quiz.services.grading_service import generate_candidate_remark, grade_attempt
 from backend.md_quiz.services.resume_service import (

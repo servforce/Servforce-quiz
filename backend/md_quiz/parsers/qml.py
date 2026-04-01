@@ -244,8 +244,11 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
         seen_qids.add(qid)
 
         qtype = m.group("type")
-        points = int(m.group("points") or 0)
+        raw_points = m.group("points")
+        points = int(raw_points or 0)
         attrs = _parse_attrs(m.group("attrs"))
+        scoring_mode = str(attrs.get("scoring") or "").strip().lower()
+        is_trait_single = qtype == "single" and scoring_mode == "traits"
         partial = bool(attrs.get("partial", False))
         media = attrs.get("media", "")
         max_points = int(attrs.get("max", points if points else 0) or 0)
@@ -255,14 +258,20 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             line=line_no(i),
         )
 
-        if qtype != "short" and points <= 0:
-            raise QmlParseError(
-                f"{qid} missing points, expected (N) for {qtype}",
-                line=line_no(i),
-            )
         if qtype == "short" and max_points <= 0:
             raise QmlParseError(
                 f"{qid} missing max points, expected {{max=N}}",
+                line=line_no(i),
+            )
+        if is_trait_single:
+            if raw_points is None:
+                raise QmlParseError(
+                    f"{qid} missing points, expected (0) for trait single",
+                    line=line_no(i),
+                )
+        elif qtype != "short" and points <= 0:
+            raise QmlParseError(
+                f"{qid} missing points, expected (N) for {qtype}",
                 line=line_no(i),
             )
 
@@ -339,9 +348,15 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             raise QmlParseError(f"{qid} missing options", line=line_no(i))
         if qtype in {"single", "multiple"}:
             correct_keys = [o["key"] for o in options if o["correct"]]
-            if not correct_keys:
+            if is_trait_single:
+                if correct_keys:
+                    raise QmlParseError(
+                        f"{qid} trait single must not use correct option (*)",
+                        line=line_no(i),
+                    )
+            elif not correct_keys:
                 raise QmlParseError(f"{qid} has no correct option (*)", line=line_no(i))
-            if qtype == "single" and len(correct_keys) != 1:
+            if not is_trait_single and qtype == "single" and len(correct_keys) != 1:
                 raise QmlParseError(
                     f"{qid} single must have exactly 1 correct option",
                     line=line_no(i),
@@ -411,9 +426,12 @@ def _parse_traits(text: str) -> dict[str, int]:
         part = part.strip()
         if not part:
             continue
-        if "=" not in part:
+        if ":" in part:
+            k, v = part.split(":", 1)
+        elif "=" in part:
+            k, v = part.split("=", 1)
+        else:
             continue
-        k, v = part.split("=", 1)
         try:
             out[k.strip()] = int(v.strip())
         except ValueError:

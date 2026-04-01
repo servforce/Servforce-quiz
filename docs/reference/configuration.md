@@ -43,6 +43,22 @@
 - `min_submit_seconds`
 - `ui_theme_name`
 
+## 实例级仓库绑定
+
+试卷仓库绑定信息也保存在数据库表 `runtime_kv` 中，但使用独立键 `exam_repo_binding`，不属于 `runtime_config`，也不是环境变量配置。
+
+当前结构最小为：
+
+- `repo_url`
+- `bound_at`
+- `updated_at`
+
+说明：
+
+- 一套 `md-quiz` 实例只绑定一个仓库
+- 首次绑定后，管理端同步按钮只会针对这个已绑定仓库执行
+- 更换仓库必须走显式“重新绑定”流程
+
 ## 集成配置
 
 以下变量仍由服务直接读取，用于外部集成：
