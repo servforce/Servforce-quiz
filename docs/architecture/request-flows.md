@@ -2,15 +2,16 @@
 
 ## 管理员后台
 
-1. 浏览器访问 `/`
-2. FastAPI 将请求委托给挂载在根路径的 Flask 应用
-3. Flask 根据登录态跳转到 `/admin` 或 `/admin/login`
+1. 浏览器访问 `/` 时，请求直接进入 FastAPI。
+2. FastAPI 读取 `api_session` 中的登录态，返回 `307` 跳转到 `/admin` 或 `/admin/login`。
+3. 浏览器访问 `/admin`、`/admin/login` 或 `/admin/{full_path}` 时，FastAPI 统一返回 `static/admin/index.html` 作为后台 SPA 壳。
+4. 后台 Alpine SPA 启动后调用 `/api/admin/session`，再按登录态决定停留在登录页还是继续加载 `/api/admin/*` 数据接口。
 
 ## 旧链接兼容
 
-1. 浏览器访问 `/legacy/admin` 或其他 `/legacy/*`
-2. FastAPI 返回 307 跳转到去掉 `/legacy` 前缀后的真实路径
-3. 浏览器重新访问 `/admin/*` 或对应旧路径
+1. 浏览器访问 `/legacy` 或 `/legacy/{full_path}` 时，请求仍由 FastAPI 直接处理。
+2. FastAPI 返回 `307` 跳转到去掉 `/legacy` 前缀后的当前真实路径。
+3. 其中 `/legacy` 会跳转到 `/admin`；`/legacy/admin/exams?q=tag` 会跳转到 `/admin/exams?q=tag`，查询参数会原样保留。
 
 ## 任务链路
 

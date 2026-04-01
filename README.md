@@ -7,8 +7,6 @@
 - 数据接口：统一走 `/api/admin/*`、`/api/public/*`、`/api/system/*`
 - Python 应用代码：统一放在 `backend/md_quiz/`
 
-旧 Flask、Jinja 页面和 `a2wsgi` 桥接不再是运行时依赖；`/legacy/*` 仅保留 307 跳转兼容面。
-
 ## 架构概览
 
 ### 进程
