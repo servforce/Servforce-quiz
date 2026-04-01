@@ -9,9 +9,10 @@ description: Use this skill when defining, reviewing, migrating, or debugging a 
 
 在以下场景优先使用这个 skill：
 
-- 若任务同时涉及 quiz 仓库规范和 QML 定义，优先先看 [../quiz-workflow/SKILL.md](../quiz-workflow/SKILL.md) 作为总入口
+- 若任务同时涉及 quiz 仓库规范和 QML 定义，优先先看 [../md-quiz/SKILL.md](../md-quiz/SKILL.md) 作为总入口
 - 设计或调整可同步的 quiz 仓库结构
 - 处理 `md-quiz-repo.yaml`、`quizzes/<quiz_id>/quiz.md`、`assets/` 相关问题
+- 评审 `quiz.md` Front Matter 元数据是否符合仓库使用约定，例如 `id`、`tags`
 - 排查 quiz 仓库同步失败、资源路径失败、路径迁移失败
 - 评审“仓库规范”与同步实现是否一致
 
