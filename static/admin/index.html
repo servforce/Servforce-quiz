@@ -255,7 +255,7 @@
                     <p class="mt-1 text-sm text-slate-600">只保留 Git 仓库同步，不再开放 AI 生成、上传、在线编辑与删除。</p>
                   </div>
                   <div class="flex gap-2">
-                    <input x-model="filters.exams.q" @keydown.enter.prevent="loadExams" class="w-52 rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="搜索试卷" />
+                    <input x-model="filters.exams.q" @keydown.enter.prevent="loadExams" class="w-52 rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="搜索标题 / ID / tags" />
                     <button @click="loadExams" type="button" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100">查询</button>
                   </div>
                 </div>
@@ -273,9 +273,11 @@
                         </div>
                         <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                           <span class="rounded-full bg-slate-100 px-2.5 py-1">题目数 <strong x-text="item.question_count"></strong></span>
+                          <span class="rounded-full bg-slate-100 px-2.5 py-1">预计 <strong x-text="item.estimated_duration_minutes || 0"></strong> 分钟</span>
                           <span class="rounded-full bg-slate-100 px-2.5 py-1">版本 <strong x-text="item.current_version_no || '-'"></strong></span>
                           <span class="rounded-full bg-slate-100 px-2.5 py-1">状态 <strong x-text="item.status"></strong></span>
                         </div>
+                        <div x-show="(item.tags || []).length" class="mt-3 text-xs text-slate-500" x-text="(item.tags || []).join(' · ')"></div>
                       </div>
                       <div class="flex items-center gap-2 text-xs text-slate-500">
                         <span x-show="item.public_invite_enabled" class="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-emerald-700">公开邀约</span>
@@ -317,6 +319,13 @@
                     <span class="rounded-full bg-slate-100 px-2.5 py-1">状态 <strong x-text="examDetail.exam?.status"></strong></span>
                     <span class="rounded-full bg-slate-100 px-2.5 py-1">当前版本 <strong x-text="examDetail.exam?.current_version_no || '-'"></strong></span>
                     <span class="rounded-full bg-slate-100 px-2.5 py-1">题目数 <strong x-text="examDetail.stats?.total_questions || 0"></strong></span>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-1">预计 <strong x-text="examDetail.exam?.estimated_duration_minutes || 0"></strong> 分钟</span>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-1">格式 <strong x-text="examDetail.exam?.format || '-'"></strong></span>
+                  </div>
+                  <div x-show="(examDetail.exam?.tags || []).length" class="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                    <template x-for="tag in (examDetail.exam?.tags || [])" :key="tag">
+                      <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1" x-text="tag"></span>
+                    </template>
                   </div>
                 </div>
                 <button @click="togglePublicInvite" type="button" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100">
@@ -324,7 +333,7 @@
                 </button>
               </div>
 
-              <div class="mt-5 grid gap-4 lg:grid-cols-3">
+              <div class="mt-5 grid gap-4 lg:grid-cols-4">
                 <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
                   <div class="text-xs uppercase tracking-[0.18em] text-slate-500">总分</div>
                   <div class="mt-3 text-3xl font-semibold text-slate-900" x-text="examDetail.stats?.total_points || 0"></div>
@@ -332,6 +341,10 @@
                 <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
                   <div class="text-xs uppercase tracking-[0.18em] text-slate-500">资源路径</div>
                   <div class="mt-3 break-all text-sm text-slate-700" x-text="examDetail.exam?.source_path || '-'"></div>
+                </div>
+                <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">Schema</div>
+                  <div class="mt-3 text-3xl font-semibold text-slate-900" x-text="examDetail.exam?.schema_version || '-'"></div>
                 </div>
                 <div class="rounded-3xl border border-blue-100 bg-blue-50/70 p-4">
                   <div class="text-xs uppercase tracking-[0.18em] text-slate-500">公开链接</div>

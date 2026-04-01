@@ -12,8 +12,9 @@
 - 若存在 Front Matter，必须以 `---` 开始并闭合
 - Front Matter 必须是 YAML mapping
 - 若缺少 `id`，允许 parser 生成临时 id；但接入 quiz 仓库规范的同步器通常不会接受这种 quiz
-- 当前 parser 只把 `id`、`title`、`description`、`format`、`welcome_image`、`end_image`、`llm`、`trait` 纳入结构化输出
-- 诸如 `schema_version`、`question_count`、`question_counts`、`estimated_duration_minutes` 这类头部摘要字段，当前主要用于源文档阅读，不一定进入结构化 spec
+- 当前 parser 会把 `id`、`title`、`description`、`tags`、`schema_version`、`format`、`question_count`、`question_counts`、`estimated_duration_minutes`、`welcome_image`、`end_image`、`llm`、`trait` 纳入结构化输出
+- `tags` 若出现，推荐为 YAML 字符串列表；parser 会做 trim、去空、去重、保序
+- `question_count`、`question_counts`、`estimated_duration_minutes` 若出现在 Front Matter 中会进入结构化 spec，但它们在外部仓库同步时仍可能被服务端按题目内容重算覆盖
 
 ### 题头
 
@@ -23,6 +24,7 @@
   - 属性块写在 `{...}`
 - 若 `label` 不符合 `Q...`，parser 会自动生成 `Q1/Q2/...`
 - 重复 QID 会报 `Duplicate QID`
+- 题头属性可包含自定义键值；当前文档显式约定了 `scoring=traits` 这一语义
 
 ### answer_time
 
@@ -32,8 +34,16 @@
 ### 选项题
 
 - `single` / `multiple` 必须有选项
-- `single` 必须恰好一个正确答案
+- `single` 默认必须恰好一个正确答案
+- 当 `single` 的题头属性包含 `scoring=traits` 时，该题表示量表题：
+  - 不需要正确答案
+  - 不得出现 `*`
+  - 得分来自选项上的 `traits`
+  - 仍然只能选择一个选项
 - `multiple` 至少一个正确答案
+- 选项尾部可带属性块
+- `traits` 的约定格式为 `KEY:INT[,KEY:INT...]`
+- trait 量表题的最终人格编码推导属于消费端逻辑，不属于 parser 本身
 
 ### 简答题
 

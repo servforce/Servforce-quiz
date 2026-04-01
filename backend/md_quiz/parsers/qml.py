@@ -9,6 +9,12 @@ from typing import Any
 
 import yaml
 
+from backend.md_quiz.services.quiz_metadata import (
+    coerce_optional_int,
+    normalize_question_counts,
+    normalize_quiz_tags,
+)
+
 
 class QmlParseError(Exception):
     def __init__(self, message: str, line: int | None = None):
@@ -119,13 +125,38 @@ def _extract_edge_image(lines: list[str]) -> str:
 # 解析mardown试卷
 def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, Any]]:
     front_matter, body = _split_front_matter(markdown_text)
+    try:
+        tags = normalize_quiz_tags(front_matter.get("tags"), strict=True)
+        schema_version = coerce_optional_int(
+            front_matter.get("schema_version"),
+            strict=True,
+            field="schema_version",
+        )
+        question_count = coerce_optional_int(
+            front_matter.get("question_count"),
+            strict=True,
+            field="question_count",
+        )
+        question_counts = normalize_question_counts(front_matter.get("question_counts"), strict=True)
+        estimated_duration_minutes = coerce_optional_int(
+            front_matter.get("estimated_duration_minutes"),
+            strict=True,
+            field="estimated_duration_minutes",
+        )
+    except ValueError as exc:
+        raise QmlParseError(str(exc), line=1) from exc
 
     exam_id = str(front_matter.get("id") or f"exam-{uuid.uuid4().hex[:8]}")
     exam: dict[str, Any] = {
         "id": exam_id,
         "title": front_matter.get("title", ""),
         "description": front_matter.get("description", ""),
+        "tags": tags,
+        "schema_version": schema_version,
         "format": front_matter.get("format", ""),
+        "question_count": question_count,
+        "question_counts": question_counts,
+        "estimated_duration_minutes": estimated_duration_minutes,
         "welcome_image": front_matter.get("welcome_image", ""),
         "end_image": front_matter.get("end_image", ""),
         "llm": front_matter.get("llm", {}) or {},
@@ -139,7 +170,12 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             "id",
             "title",
             "description",
+            "tags",
+            "schema_version",
             "format",
+            "question_count",
+            "question_counts",
+            "estimated_duration_minutes",
             "welcome_image",
             "end_image",
             "trait",

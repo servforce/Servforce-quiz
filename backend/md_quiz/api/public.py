@@ -203,6 +203,7 @@ def _bootstrap_attempt(token: str) -> dict[str, Any]:
     if not public_spec:
         raise HTTPException(status_code=404, detail="试卷不存在")
     public_spec = exam_helpers.build_render_ready_public_spec(public_spec)
+    quiz_metadata = exam_helpers.build_quiz_metadata(public_spec)
 
     time_limit_seconds = int(assignment.get("time_limit_seconds") or 0)
     min_submit_seconds = deps.compute_min_submit_seconds(
@@ -225,6 +226,13 @@ def _bootstrap_attempt(token: str) -> dict[str, Any]:
             "exam_key": str(assignment.get("exam_key") or "").strip(),
             "title": str(public_spec.get("title") or "").strip(),
             "description": str(public_spec.get("description") or "").strip(),
+            "tags": list(quiz_metadata["tags"]),
+            "schema_version": quiz_metadata["schema_version"],
+            "format": str(quiz_metadata["format"] or "").strip(),
+            "question_count": int(quiz_metadata["question_count"]),
+            "question_counts": dict(quiz_metadata["question_counts"]),
+            "estimated_duration_minutes": int(quiz_metadata["estimated_duration_minutes"]),
+            "trait": dict(quiz_metadata["trait"]),
             "spec": public_spec,
             "stats": _compute_exam_stats(public_spec),
             "remaining_seconds": runtime_jobs._remaining_seconds(assignment),

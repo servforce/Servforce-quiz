@@ -15,6 +15,7 @@ import yaml
 
 from backend.md_quiz.config import logger
 from backend.md_quiz.parsers.qml import QmlParseError, parse_qml_markdown
+from backend.md_quiz.services.quiz_metadata import QUIZ_SCHEMA_VERSION, apply_quiz_metadata
 from backend.md_quiz.storage import JobStore
 from backend.md_quiz.storage.db import (
     backfill_assignment_exam_version_id,
@@ -43,7 +44,7 @@ EXAM_SYNC_MIGRATION_KEY = "exam_repo_sync_migration"
 IMAGE_MAX_BYTES = 1024 * 1024
 QUIZ_REPO_MANIFEST = "md-quiz-repo.yaml"
 QUIZ_REPO_KIND = "md-quiz-repo"
-QUIZ_REPO_SCHEMA_VERSION = 2
+QUIZ_REPO_SCHEMA_VERSION = QUIZ_SCHEMA_VERSION
 _QUIZ_PATH_RE = re.compile(r"^quizzes/(?P<quiz_id>[A-Za-z0-9_-]+)/quiz\.md$")
 
 _MD_IMAGE_RE = re.compile(r"!\[[^\]]*]\((?P<path>[^)]+)\)")
@@ -427,6 +428,8 @@ def _build_exam_candidate(repo_root: Path, repo_url: str, git_commit: str, sourc
         spec, public_spec = parse_qml_markdown(markdown_text)
     except QmlParseError as exc:
         raise ExamRepoSyncError(f"{exc}（line={exc.line}）") from exc
+    spec = apply_quiz_metadata(spec, default_schema_version=QUIZ_REPO_SCHEMA_VERSION)
+    public_spec = apply_quiz_metadata(public_spec, default_schema_version=QUIZ_REPO_SCHEMA_VERSION)
     if str(spec.get("id") or "").strip() != raw_exam_id:
         raise ExamRepoSyncError("试卷 id 解析异常")
     assets = _load_assets(quiz_root, _collect_assets(markdown_text, spec))

@@ -51,6 +51,9 @@ quizzes:
 - 每份 quiz 一个目录：`quizzes/<quiz_id>/`
 - 试卷入口文件固定名：`quiz.md`
 - `quiz.md` 的 Front Matter `id` 必须等于目录名 `<quiz_id>`
+- `quiz.md` 可包含 `tags`、`schema_version`、`format`、`question_count`、`question_counts`、`estimated_duration_minutes`、`trait` 等 quiz 级元数据；这些字段属于 `quiz.md` Front Matter，不属于 `md-quiz-repo.yaml`
+- 外部仓库同步时会把这些 quiz 元信息写入当前版本快照；其中 `question_count`、`question_counts`、`estimated_duration_minutes` 会按题目内容重算覆盖
+- `tags` 是多值字段，推荐写成 YAML 字符串列表；同步时会做 trim、去空、去重、保序
 - 同步时 `source_path` 保存 repo-relative path，例如 `quizzes/common-ability-2025/quiz.md`
 
 ## 资源规则

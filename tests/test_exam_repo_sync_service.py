@@ -11,6 +11,7 @@ from backend.md_quiz.services.exam_repo_sync_service import (
     _load_quiz_repo_manifest,
     _rewrite_archive_asset_urls,
     _rewrite_asset_paths_for_version,
+    _sync_exam_candidate,
     perform_exam_repo_sync,
 )
 
@@ -140,6 +141,146 @@ format: qml-v2
 
     assert candidate["source_path"] == "quizzes/demo/quiz.md"
     assert set(candidate["assets"].keys()) == {"assets/media.png", "assets/q1.png", "assets/welcome.png"}
+
+
+def test_build_exam_candidate_normalizes_tags_and_rebuilds_quiz_metadata(tmp_path):
+    _write_manifest(tmp_path, "quizzes/demo/quiz.md")
+    _write_text(
+        tmp_path / "quizzes/demo/quiz.md",
+        """
+---
+id: demo
+title: Demo
+tags:
+  - personality
+  - traits
+  - personality
+  - "  self-assessment  "
+  - ""
+question_count: 999
+question_counts:
+  single: 999
+estimated_duration_minutes: 1
+trait:
+  dimensions: [I, E]
+---
+
+## Q1 [single] (5)
+题目一
+
+- A*) 正确
+- B) 错误
+
+## Q2 [short] {max=10}
+题目二
+
+[rubric]
+给出关键点即可。
+[/rubric]
+""".strip()
+        + "\n",
+    )
+
+    candidate = _build_exam_candidate(tmp_path, "https://example.com/repo.git", "deadbeef", "quizzes/demo/quiz.md")
+
+    assert candidate["spec"]["tags"] == ["personality", "traits", "self-assessment"]
+    assert candidate["public_spec"]["tags"] == candidate["spec"]["tags"]
+    assert candidate["spec"]["schema_version"] == 2
+    assert candidate["public_spec"]["schema_version"] == 2
+    assert candidate["spec"]["question_count"] == 2
+    assert candidate["public_spec"]["question_count"] == 2
+    assert candidate["spec"]["question_counts"] == {"single": 1, "multiple": 0, "short": 1}
+    assert candidate["public_spec"]["question_counts"] == {"single": 1, "multiple": 0, "short": 1}
+    assert candidate["spec"]["estimated_duration_minutes"] == 12
+    assert candidate["public_spec"]["estimated_duration_minutes"] == 12
+    assert candidate["spec"]["trait"] == {"dimensions": ["I", "E"]}
+
+
+def test_build_exam_candidate_rejects_non_string_tags(tmp_path):
+    _write_manifest(tmp_path, "quizzes/demo/quiz.md")
+    _write_text(
+        tmp_path / "quizzes/demo/quiz.md",
+        """
+---
+id: demo
+tags:
+  - demo
+  - 1
+---
+
+## Q1 [single] (5)
+题目一
+
+- A*) 正确
+- B) 错误
+""".strip()
+        + "\n",
+    )
+
+    with pytest.raises(ExamRepoSyncError, match="tags"):
+        _build_exam_candidate(tmp_path, "https://example.com/repo.git", "deadbeef", "quizzes/demo/quiz.md")
+
+
+def test_sync_exam_candidate_persists_quiz_metadata(monkeypatch):
+    captured: dict[str, dict[str, object]] = {}
+    candidate = {
+        "exam_key": "demo",
+        "title": "Demo",
+        "source_path": "quizzes/demo/quiz.md",
+        "git_repo_url": "https://example.com/repo.git",
+        "git_commit": "deadbeef",
+        "markdown_text": "---\nid: demo\n---\n",
+        "spec": {
+            "id": "demo",
+            "title": "Demo",
+            "tags": ["traits", "personality"],
+            "schema_version": 2,
+            "format": "qml-v2",
+            "question_count": 1,
+            "question_counts": {"single": 1, "multiple": 0, "short": 0},
+            "estimated_duration_minutes": 2,
+            "trait": {"dimensions": ["I", "E"]},
+            "questions": [{"qid": "Q1", "type": "single", "max_points": 5, "stem_md": "题目一"}],
+        },
+        "public_spec": {
+            "id": "demo",
+            "title": "Demo",
+            "tags": ["traits", "personality"],
+            "schema_version": 2,
+            "format": "qml-v2",
+            "question_count": 1,
+            "question_counts": {"single": 1, "multiple": 0, "short": 0},
+            "estimated_duration_minutes": 2,
+            "trait": {"dimensions": ["I", "E"]},
+            "questions": [{"qid": "Q1", "type": "single", "max_points": 5, "stem_md": "题目一"}],
+        },
+        "assets": {},
+        "content_hash": "hash-demo",
+    }
+
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.find_exam_version_by_hash", lambda *args, **kwargs: None)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_exam_versions", lambda exam_key: [])
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.create_exam_version", lambda **kwargs: 9)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.replace_exam_version_assets", lambda *args, **kwargs: None)
+
+    def _capture_payload(version_id, *, title, source_md, spec, public_spec):
+        captured["payload"] = {"spec": spec, "public_spec": public_spec, "title": title, "source_md": source_md}
+        return 1
+
+    def _capture_definition(**kwargs):
+        captured["definition"] = {"spec": kwargs["spec"], "public_spec": kwargs["public_spec"], "title": kwargs["title"]}
+
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.update_exam_version_payload", _capture_payload)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.save_exam_definition", _capture_definition)
+
+    result = _sync_exam_candidate(candidate, synced_at="2026-04-01T00:00:00+00:00")
+
+    assert result["action"] == "created"
+    assert captured["payload"]["spec"]["tags"] == ["traits", "personality"]
+    assert captured["payload"]["spec"]["question_counts"] == {"single": 1, "multiple": 0, "short": 0}
+    assert captured["payload"]["spec"]["estimated_duration_minutes"] == 2
+    assert captured["definition"]["public_spec"]["tags"] == ["traits", "personality"]
+    assert captured["definition"]["public_spec"]["trait"] == {"dimensions": ["I", "E"]}
 
 
 def test_build_exam_candidate_rejects_cross_quiz_asset(tmp_path):

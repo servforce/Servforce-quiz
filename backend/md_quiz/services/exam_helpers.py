@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import mimetypes
 
+from backend.md_quiz.services.quiz_metadata import build_quiz_metadata
 from backend.md_quiz.services.support_deps import *
 from backend.md_quiz.services.validation_helpers import *
 
@@ -451,6 +452,7 @@ def _list_exams():
     out = []
     for row in list_exam_definitions():
         spec = row.get("spec") or {}
+        metadata = build_quiz_metadata(spec)
         updated_at = row.get("last_sync_at") or row.get("updated_at") or row.get("created_at")
         mtime = 0.0
         try:
@@ -462,7 +464,15 @@ def _list_exams():
             {
                 "exam_key": str(row.get("exam_key") or "").strip(),
                 "title": spec.get("title", ""),
-                "count": len(spec.get("questions", [])),
+                "description": str(spec.get("description") or "").strip(),
+                "count": int(metadata["question_count"]),
+                "question_count": int(metadata["question_count"]),
+                "question_counts": dict(metadata["question_counts"]),
+                "estimated_duration_minutes": int(metadata["estimated_duration_minutes"]),
+                "tags": list(metadata["tags"]),
+                "schema_version": metadata["schema_version"],
+                "format": str(metadata["format"] or "").strip(),
+                "trait": dict(metadata["trait"]),
                 "status": str(row.get("status") or "").strip() or "active",
                 "current_version_id": int(row.get("current_version_id") or 0),
                 "current_version_no": int(row.get("current_version_no") or 0),

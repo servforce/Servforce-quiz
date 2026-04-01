@@ -149,12 +149,23 @@ def _serialize_exam_summary(exam: dict[str, Any], request: Request) -> dict[str,
     exam_key = str(exam.get("exam_key") or "").strip()
     cfg = exam_helpers.get_public_invite_config(exam_key)
     public_token = str(cfg.get("token") or "").strip()
+    question_count = int(exam.get("question_count") or exam.get("count") or 0)
+    question_counts = exam.get("question_counts") if isinstance(exam.get("question_counts"), dict) else {}
+    tags = exam.get("tags") if isinstance(exam.get("tags"), list) else []
+    trait = exam.get("trait") if isinstance(exam.get("trait"), dict) else {}
     return {
         "id": int(exam.get("id") or 0),
         "exam_key": exam_key,
         "title": str(exam.get("title") or "").strip(),
+        "description": str(exam.get("description") or "").strip(),
         "status": str(exam.get("status") or "").strip() or "active",
-        "question_count": int(exam.get("count") or 0),
+        "question_count": question_count,
+        "question_counts": question_counts,
+        "estimated_duration_minutes": int(exam.get("estimated_duration_minutes") or 0),
+        "tags": tags,
+        "schema_version": exam.get("schema_version"),
+        "format": str(exam.get("format") or "").strip(),
+        "trait": trait,
         "current_version_id": int(exam.get("current_version_id") or 0),
         "current_version_no": int(exam.get("current_version_no") or 0),
         "source_path": str(exam.get("source_path") or "").strip(),
@@ -186,6 +197,7 @@ def _serialize_exam_detail(
     selected = selected_version or {}
     selected_version_id = int(selected.get("id") or 0)
     spec = selected.get("spec") if isinstance(selected.get("spec"), dict) else exam.get("spec") or {}
+    quiz_metadata = exam_helpers.build_quiz_metadata(spec)
     stats = _compute_exam_stats(spec if isinstance(spec, dict) else {})
     cfg = exam_helpers.get_public_invite_config(exam_key)
     public_token = str(cfg.get("token") or "").strip()
@@ -208,7 +220,15 @@ def _serialize_exam_detail(
             "id": int(exam_helpers._sort_id_from_exam_key(exam_key) or 0),
             "exam_key": exam_key,
             "title": str((spec or {}).get("title") or exam.get("title") or "").strip(),
+            "description": str((spec or {}).get("description") or "").strip(),
             "status": str(exam.get("status") or "").strip() or "active",
+            "tags": list(quiz_metadata["tags"]),
+            "schema_version": quiz_metadata["schema_version"],
+            "format": str(quiz_metadata["format"] or "").strip(),
+            "question_count": int(quiz_metadata["question_count"]),
+            "question_counts": dict(quiz_metadata["question_counts"]),
+            "estimated_duration_minutes": int(quiz_metadata["estimated_duration_minutes"]),
+            "trait": dict(quiz_metadata["trait"]),
             "current_version_id": current_version_id,
             "current_version_no": int(exam.get("current_version_no") or 0),
             "source_path": str(exam.get("source_path") or "").strip(),
@@ -232,6 +252,13 @@ def _serialize_exam_detail(
             "version_no": int(selected.get("version_no") or 0),
             "git_commit": str(selected.get("git_commit") or "").strip(),
             "source_path": str(selected.get("source_path") or "").strip(),
+            "tags": list(quiz_metadata["tags"]),
+            "schema_version": quiz_metadata["schema_version"],
+            "format": str(quiz_metadata["format"] or "").strip(),
+            "question_count": int(quiz_metadata["question_count"]),
+            "question_counts": dict(quiz_metadata["question_counts"]),
+            "estimated_duration_minutes": int(quiz_metadata["estimated_duration_minutes"]),
+            "trait": dict(quiz_metadata["trait"]),
             "spec": spec if isinstance(spec, dict) else {},
         },
         "version_history": versions,
@@ -829,6 +856,7 @@ def list_exams(request: Request, q: str = "", page: int = 1):
             if query in str(item.get("exam_key") or "").lower()
             or query in str(item.get("title") or "").lower()
             or query in str(item.get("id") or "")
+            or any(query in str(tag or "").lower() for tag in (item.get("tags") or []))
         ]
     exams.sort(key=lambda item: float(item.get("_mtime") or 0), reverse=True)
     per_page = 20

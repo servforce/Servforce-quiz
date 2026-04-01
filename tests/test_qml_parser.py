@@ -56,6 +56,72 @@ def test_parse_qml_intro_and_outro_blocks() -> None:
     assert public_exam["end_image"] == exam["end_image"]
 
 
+def test_parse_qml_frontmatter_metadata_and_tags_are_normalized() -> None:
+    exam, public_exam = parse_qml_markdown(
+        """
+---
+id: personality-demo
+title: 人格测试
+description: |
+  描述文本
+tags:
+  - personality
+  - traits
+  - personality
+  - "  self-assessment  "
+  - ""
+schema_version: 2
+format: qml-v2
+question_count: 99
+question_counts:
+  single: 80
+estimated_duration_minutes: 27
+trait:
+  dimensions: [I, E]
+---
+
+## Q1 [single] (5)
+题目一
+
+- A*) 正确
+- B) 错误
+""".strip()
+    )
+
+    assert exam["tags"] == ["personality", "traits", "self-assessment"]
+    assert public_exam["tags"] == exam["tags"]
+    assert exam["schema_version"] == 2
+    assert public_exam["schema_version"] == 2
+    assert exam["question_count"] == 99
+    assert public_exam["question_count"] == 99
+    assert exam["question_counts"] == {"single": 80}
+    assert public_exam["question_counts"] == {"single": 80}
+    assert exam["estimated_duration_minutes"] == 27
+    assert public_exam["estimated_duration_minutes"] == 27
+    assert exam["trait"] == {"dimensions": ["I", "E"]}
+    assert public_exam["trait"] == exam["trait"]
+
+
+def test_parse_qml_rejects_non_string_tags() -> None:
+    markdown = """
+---
+id: demo
+tags:
+  - ok
+  - 1
+---
+
+## Q1 [single] (5)
+题目一
+
+- A*) 正确
+- B) 错误
+""".strip()
+
+    with pytest.raises(QmlParseError, match="tags"):
+        parse_qml_markdown(markdown)
+
+
 @pytest.mark.parametrize("raw", ["0", "0s", "3601", "61m", "bad"])
 def test_parse_qml_answer_time_invalid(raw: str) -> None:
     markdown = f"""
