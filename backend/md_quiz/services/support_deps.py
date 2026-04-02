@@ -127,6 +127,7 @@ from backend.md_quiz.services.resume_service import (
     extract_resume_text,
     extract_resume_section,
     extract_experience_raw,
+    parse_resume_all_llm,
     parse_resume_details_llm,
     parse_resume_identity_fast,
     parse_resume_identity_llm,

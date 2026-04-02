@@ -1,6 +1,7 @@
 fastapi==0.116.1
 uvicorn==0.35.0
 httpx==0.28.1
+openai==1.108.1
 itsdangerous==2.2.0
 markupsafe==3.0.3
 python-multipart==0.0.20

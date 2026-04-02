@@ -978,42 +978,34 @@ def _read_resume_bytes(file: UploadFile) -> bytes:
 
 def _parse_resume_payload(*, data: bytes, filename: str, mime: str, current_phone: str) -> dict[str, Any]:
     try:
-        text = deps.extract_resume_text(data, filename)
+        with deps.audit_context(meta={}):
+            parsed = deps.parse_resume_all_llm(data=data, filename=filename, mime=mime) or {}
+            ctx = deps.get_audit_context()
+            meta = ctx.get("meta")
+            llm_total_tokens = int(meta.get("llm_total_tokens_sum") or 0) if isinstance(meta, dict) else 0
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"简历解析失败：{type(exc).__name__}") from exc
+        raise HTTPException(status_code=400, detail=str(exc) or f"简历解析失败：{type(exc).__name__}") from exc
 
-    parsed_phone = ""
-    parsed_name = ""
-    name_conf = 0
-    phone_conf = 0
-    llm_total_tokens = 0
-    try:
-        ident = deps.parse_resume_identity_fast(text or "") or {}
-        parsed_name = str(ident.get("name") or "").strip()
-        parsed_phone = validation_helpers._normalize_phone(str(ident.get("phone") or "").strip())
-        conf = ident.get("confidence") or {}
-        if isinstance(conf, dict):
-            name_conf = validation_helpers._safe_int(conf.get("name") or 0, 0)
-            phone_conf = validation_helpers._safe_int(conf.get("phone") or 0, 0)
-    except Exception:
-        pass
+    parsed_phone = validation_helpers._normalize_phone(str(parsed.get("phone") or "").strip())
+    parsed_name = str(parsed.get("name") or "").strip()
+    conf = parsed.get("confidence") or {}
+    if not isinstance(conf, dict):
+        conf = {}
+    name_conf = validation_helpers._safe_int(conf.get("name") or 0, 0)
+    phone_conf = validation_helpers._safe_int(conf.get("phone") or 0, 0)
 
     if validation_helpers._is_valid_phone(parsed_phone) and parsed_phone != current_phone:
         raise HTTPException(status_code=400, detail="简历手机号与验证手机号不一致，请检查后重试")
 
-    details: dict[str, Any] = {}
-    details_error = ""
-    try:
-        with deps.audit_context(meta={}):
-            parsed_details = deps.parse_resume_details_llm(text or "")
-            if isinstance(parsed_details, dict):
-                details = parsed_details
-            ctx = deps.get_audit_context()
-            meta = ctx.get("meta")
-            if isinstance(meta, dict):
-                llm_total_tokens += int(meta.get("llm_total_tokens_sum") or 0)
-    except Exception as exc:
-        details_error = f"{type(exc).__name__}: {exc}"
+    details = parsed.get("details") or {}
+    if not isinstance(details, dict):
+        details = {}
+    details_status = str(parsed.get("details_status") or ("done" if details else "empty")).strip() or "empty"
+    method = parsed.get("method") if isinstance(parsed.get("method"), dict) else {
+        "identity": "llm_attachment",
+        "name": "llm_attachment",
+        "details": "llm_attachment",
+    }
 
     return {
         "resume_parsed": {
@@ -1024,13 +1016,14 @@ def _parse_resume_payload(*, data: bytes, filename: str, mime: str, current_phon
             },
             "source_filename": filename,
             "source_mime": mime,
+            "method": method,
             "details": {
-                "status": "failed" if details_error else ("done" if details else "empty"),
+                "status": details_status,
                 "data": details,
                 "parsed_at": datetime.now(timezone.utc).isoformat(),
-                **({"error": details_error} if details_error else {}),
             },
         },
         "parsed_name": parsed_name,
+        "parsed_phone": parsed_phone,
         "llm_total_tokens": llm_total_tokens,
     }

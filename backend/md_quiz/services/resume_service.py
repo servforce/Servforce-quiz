@@ -9,9 +9,11 @@ from typing import Any
 
 from backend.md_quiz.config import logger
 from backend.md_quiz.services.llm_client import (
+    call_llm_file_structured_ex,
     call_llm_structured,
     call_llm_structured_ex,
     call_llm_vision_text,
+    call_llm_vision_structured_ex,
 )
 
 
@@ -105,17 +107,7 @@ def _extract_image_text_llm(data: bytes, filename: str) -> str:
         raise RuntimeError(f"Image decode failed: {type(e).__name__}({e})") from e
 
     try:
-        if ext in _DIRECT_IMAGE_MIME_BY_EXT:
-            mime = _DIRECT_IMAGE_MIME_BY_EXT[ext]
-            payload = data
-        else:
-            if img.mode not in {"RGB", "L"}:
-                img = img.convert("RGB")
-            buf = BytesIO()
-            img.save(buf, format="PNG")
-            mime = "image/png"
-            payload = buf.getvalue()
-        image_url = f"data:{mime};base64," + base64.b64encode(payload).decode("ascii")
+        image_url = _image_data_url_from_bytes(data, filename, image=img)
     finally:
         try:
             img.close()
@@ -190,6 +182,395 @@ def extract_resume_text(data: bytes, filename: str) -> str:
         return "\n".join(parts)
 
     raise ValueError("unsupported_file_type")
+
+
+def _image_data_url_from_bytes(data: bytes, filename: str, image: Any | None = None) -> str:
+    ext = os.path.splitext(str(filename or "").lower())[1]
+    img = image
+    opened_here = False
+    try:
+        from PIL import Image  # type: ignore
+    except Exception as e:
+        raise RuntimeError("Missing dependency: pillow. Please install requirements.txt") from e
+
+    try:
+        if img is None:
+            img = Image.open(BytesIO(data))
+            opened_here = True
+        if ext in _DIRECT_IMAGE_MIME_BY_EXT:
+            mime = _DIRECT_IMAGE_MIME_BY_EXT[ext]
+            payload = data
+        else:
+            if img.mode not in {"RGB", "L"}:
+                img = img.convert("RGB")
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+            mime = "image/png"
+            payload = buf.getvalue()
+        return f"data:{mime};base64," + base64.b64encode(payload).decode("ascii")
+    finally:
+        if opened_here and img is not None:
+            try:
+                img.close()
+            except Exception:
+                pass
+
+
+def _normalize_resume_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except Exception:
+        return 0
+
+
+def _resume_string(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _resume_unique_str_list(value: Any, *, limit: int = 30) -> list[str]:
+    items: list[str]
+    if isinstance(value, list):
+        items = [_resume_string(item) for item in value]
+    elif isinstance(value, str):
+        items = [part.strip() for part in re.split(r"[\n\r•·\-–—\u2022]+", value) if part.strip()]
+    else:
+        items = []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _resume_num_or_none(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
+def _normalize_resume_degree(value: Any) -> str:
+    text = _resume_string(value)
+    if not text:
+        return ""
+    mappings = {
+        "本科": "本科",
+        "学士": "本科",
+        "硕士": "硕士",
+        "研究生": "硕士",
+        "博士": "博士",
+        "大专": "大专",
+        "专科": "大专",
+        "高中": "高中",
+        "中专": "高中",
+        "未知": "未知",
+    }
+    for key, target in mappings.items():
+        if key in text:
+            return target
+    return text
+
+
+def _normalize_resume_gender(value: Any) -> str:
+    text = _resume_string(value)
+    if not text:
+        return ""
+    lowered = text.lower()
+    if text in {"男", "女", "未知"}:
+        return text
+    if lowered in {"m", "male"}:
+        return "男"
+    if lowered in {"f", "female"}:
+        return "女"
+    return "未知"
+
+
+def _normalize_resume_summary(value: Any) -> str:
+    text = re.sub(r"\s+", " ", _resume_string(value)).strip()
+    if not text:
+        return ""
+    if len(text) > 120:
+        text = text[:120].rstrip(" ,，;；.。")
+        if text:
+            text += "…"
+    return text
+
+
+def _parse_llm_json_object(raw: str, *, label: str) -> dict[str, Any]:
+    text = str(raw or "").strip()
+    if not text:
+        raise RuntimeError(f"{label} 返回为空")
+    if not (text.startswith("{") and text.endswith("}")):
+        left = text.find("{")
+        right = text.rfind("}")
+        if left != -1 and right != -1 and right > left:
+            text = text[left : right + 1]
+    try:
+        obj = json.loads(text)
+    except Exception as exc:
+        logger.warning("%s output parse failed: %r", label, raw[:400])
+        raise RuntimeError(f"{label} 输出不是有效 JSON") from exc
+    if not isinstance(obj, dict):
+        raise RuntimeError(f"{label} 输出不是 JSON 对象")
+    return obj
+
+
+def _normalize_resume_details_from_obj(obj: dict[str, Any]) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "summary": _normalize_resume_summary(obj.get("summary")),
+        "gender": _normalize_resume_gender(obj.get("gender")),
+        "emails": _resume_unique_str_list(obj.get("emails"), limit=10),
+        "skills": _resume_unique_str_list(obj.get("skills"), limit=40),
+        "highest_education": _normalize_resume_degree(obj.get("highest_education")),
+        "awards": _resume_unique_str_list(obj.get("awards"), limit=20),
+        "certifications": _resume_unique_str_list(obj.get("certifications"), limit=20),
+        "publications": _resume_unique_str_list(obj.get("publications"), limit=20),
+        "experience_years": _resume_num_or_none(obj.get("experience_years")),
+    }
+
+    english_obj = obj.get("english") or {}
+    english: dict[str, Any] = {}
+    if isinstance(english_obj, dict):
+        for key in ("cet4", "cet6"):
+            item = english_obj.get(key)
+            if item is None:
+                english[key] = None
+                continue
+            if isinstance(item, dict):
+                english[key] = {"score": _resume_num_or_none(item.get("score"))}
+    details["english"] = english
+
+    educations = obj.get("educations") or []
+    normalized_educations: list[dict[str, Any]] = []
+    if isinstance(educations, list):
+        for item in educations[:10]:
+            if not isinstance(item, dict):
+                continue
+            row = {
+                "degree": _normalize_resume_degree(item.get("degree")),
+                "school": _resume_string(item.get("school")),
+                "major": _resume_string(item.get("major")),
+                "start": _resume_string(item.get("start")),
+                "end": _resume_string(item.get("end")),
+            }
+            if any(row.values()):
+                normalized_educations.append(row)
+    details["educations"] = normalized_educations
+
+    work_experiences = obj.get("work_experiences") or []
+    normalized_work: list[dict[str, Any]] = []
+    if isinstance(work_experiences, list):
+        for item in work_experiences[:6]:
+            if not isinstance(item, dict):
+                continue
+            row = {
+                "company": _resume_string(item.get("company")),
+                "title": _resume_string(item.get("title")),
+                "period": _resume_string(item.get("period")),
+                "description": _resume_unique_str_list(item.get("description"), limit=8),
+            }
+            if any([row["company"], row["title"], row["period"], row["description"]]):
+                normalized_work.append(row)
+    details["work_experiences"] = normalized_work
+
+    projects = obj.get("projects") or []
+    normalized_projects: list[dict[str, Any]] = []
+    if isinstance(projects, list):
+        for item in projects[:6]:
+            if not isinstance(item, dict):
+                continue
+            row = {
+                "name": _resume_string(item.get("name")),
+                "role": _resume_string(item.get("role")),
+                "period": _resume_string(item.get("period")),
+                "description": _resume_unique_str_list(item.get("description"), limit=8),
+            }
+            if any([row["name"], row["role"], row["period"], row["description"]]):
+                normalized_projects.append(row)
+    details["projects"] = normalized_projects
+
+    experience_blocks = obj.get("experience_blocks") or []
+    normalized_blocks: list[dict[str, Any]] = []
+    if isinstance(experience_blocks, list):
+        for item in experience_blocks[:20]:
+            if not isinstance(item, dict):
+                continue
+            kind = _resume_string(item.get("kind")).lower()
+            if kind not in {"work", "project"}:
+                kind = ""
+            row = {
+                "kind": kind,
+                "title": _resume_string(item.get("title")),
+                "period": _resume_string(item.get("period")),
+                "body": re.sub(r"\n{4,}", "\n\n\n", _resume_string(item.get("body"))).strip(),
+            }
+            if row["title"] or row["body"]:
+                normalized_blocks.append(row)
+    details["experience_blocks"] = normalized_blocks
+    details["projects_raw"] = _build_projects_raw_from_blocks(normalized_blocks)
+    return details
+
+
+def _build_projects_raw_from_blocks(blocks: list[dict[str, Any]] | Any) -> str:
+    if not isinstance(blocks, list):
+        return ""
+    parts: list[str] = []
+    for item in blocks[:20]:
+        if not isinstance(item, dict):
+            continue
+        title = _resume_string(item.get("title"))
+        period = _resume_string(item.get("period"))
+        body = _resume_string(item.get("body"))
+        if not title and not body:
+            continue
+        head = " ".join(part for part in [title, period] if part).strip()
+        block = "\n".join(part for part in [head, body] if part).strip()
+        if block:
+            parts.append(block)
+    return "\n\n".join(parts).strip()
+
+
+def _resume_details_has_content(details: dict[str, Any]) -> bool:
+    if not isinstance(details, dict):
+        return False
+    for key, value in details.items():
+        if key in {"summary", "gender", "highest_education", "projects_raw"} and _resume_string(value):
+            return True
+        if isinstance(value, list) and any(bool(_resume_string(item)) or isinstance(item, dict) for item in value):
+            return True
+        if isinstance(value, dict) and any(v not in (None, "", [], {}) for v in value.values()):
+            return True
+        if key == "experience_years" and value is not None:
+            return True
+    return False
+
+
+def _resume_parse_system_prompt() -> str:
+    return """
+你是一个“候选人简历结构化解析助手”。请直接阅读用户提供的简历附件或简历图片，只依据附件内容输出一个 JSON 对象。
+
+硬性要求：
+1) 只能输出 JSON，不要 Markdown，不要解释，不要代码块。
+2) 不要编造；无法确定就输出空字符串 ""、空数组 [] 或 null。
+3) name 只填候选人真实姓名；找不到就输出空字符串。
+4) phone 必须是 11 位中国大陆手机号，只输出数字；找不到或不确定就输出空字符串。
+5) confidence.name 和 confidence.phone 都是 0-100 的整数，表示可信度。
+6) 工作经历、项目经历尽量按简历原意归类；description/body 优先保留原句或原要点，不要过度总结改写。
+
+输出 JSON schema（字段名必须一致）：
+{
+  "name": string,
+  "phone": string,
+  "confidence": {"name": number, "phone": number},
+  "summary": string,
+  "gender": "男"|"女"|"未知"|"",
+  "emails": string[],
+  "skills": string[],
+  "highest_education": "本科"|"硕士"|"博士"|"大专"|"高中"|"未知"|"",
+  "educations": [
+    {"degree": string, "school": string, "major": string, "start": string, "end": string}
+  ],
+  "english": {"cet4": {"score": number|null}|null, "cet6": {"score": number|null}|null},
+  "work_experiences": [
+    {"company": string, "title": string, "period": string, "description": string[]}
+  ],
+  "projects": [
+    {"name": string, "role": string, "period": string, "description": string[]}
+  ],
+  "experience_blocks": [
+    {"kind": "work"|"project", "title": string, "period": string, "body": string}
+  ],
+  "awards": string[],
+  "certifications": string[],
+  "publications": string[],
+  "experience_years": number|null
+}
+
+补充标准：
+- summary 用中文写 80-120 字候选人概览，不要换行。
+- educations 按时间从早到晚排序。
+- work_experiences 最多 6 条，按时间从近到远。
+- projects 最多 6 条。
+- experience_blocks 最多 20 条，body 尽量保留原文内容和换行结构。
+- skills 只提取简历明确写出的技能、工具、技术栈、关键词。
+- english 识别四级/六级分数，例如 CET-4 510、四级 560。
+""".strip()
+
+
+def _resume_parse_prompt(filename: str) -> str:
+    return (
+        f"请解析附件简历《{str(filename or '').strip() or 'resume'}》。"
+        "请一次性抽取候选人的姓名、手机号以及所有结构化简历信息，并严格按要求输出 JSON。"
+    )
+
+
+def parse_resume_all_llm(*, data: bytes, filename: str, mime: str = "") -> dict[str, Any]:
+    """
+    Parse all required resume fields in a single LLM call.
+
+    This path does not use local text extraction, regex identity parsing, or
+    multi-stage fallback chains.
+    """
+    if not data:
+        raise RuntimeError("简历文件为空")
+
+    use_llm = os.getenv("RESUME_USE_LLM", "").strip().lower()
+    if use_llm in {"0", "false", "no"}:
+        raise RuntimeError("RESUME_USE_LLM 已禁用")
+
+    system = _resume_parse_system_prompt()
+    prompt = _resume_parse_prompt(filename)
+    ext = os.path.splitext(str(filename or "").lower())[1]
+    if ext in _IMAGE_RESUME_EXTS:
+        image_url = _image_data_url_from_bytes(data, filename)
+        raw, err = call_llm_vision_structured_ex(
+            image_url=image_url,
+            prompt=prompt,
+            system=system,
+        )
+    else:
+        raw, err = call_llm_file_structured_ex(
+            file_bytes=data,
+            filename=filename,
+            prompt=prompt,
+            system=system,
+        )
+    raw = str(raw or "").strip()
+    if not raw:
+        hint = str(err or "").strip() or "empty output"
+        if ext == ".docx" and ("file type not supported" in hint.lower() or "mime type" in hint.lower()):
+            raise RuntimeError("当前模型服务不支持 DOCX 附件直传解析，请改传 PDF 或图片，或切换支持 DOCX 文件输入的模型服务")
+        raise RuntimeError(
+            "LLM call failed: "
+            + hint
+            + ". Check OPENAI_API_KEY/OPENAI_BASE_URL/OPENAI_MODEL and confirm the API key has permission for file inputs."
+        )
+
+    obj = _parse_llm_json_object(raw, label="resume_all_llm")
+    parsed_name = _resume_string(obj.get("name"))
+    parsed_phone = _normalize_phone(_resume_string(obj.get("phone")))
+    confidence = obj.get("confidence") or {}
+    if not isinstance(confidence, dict):
+        confidence = {}
+    details = _normalize_resume_details_from_obj(obj)
+    return {
+        "name": parsed_name,
+        "phone": parsed_phone,
+        "confidence": {
+            "name": max(0, min(100, _normalize_resume_int(confidence.get("name")))),
+            "phone": max(0, min(100, _normalize_resume_int(confidence.get("phone")))),
+        },
+        "details": details,
+        "details_status": "done" if _resume_details_has_content(details) else "empty",
+        "method": {"identity": "llm_attachment", "name": "llm_attachment", "details": "llm_attachment"},
+    }
 
 
 def extract_resume_section(

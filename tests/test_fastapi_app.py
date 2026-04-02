@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
+from backend.md_quiz.api import admin as admin_api
 from backend.md_quiz.app import create_app
 from backend.md_quiz.storage.db import (
     conn_scope,
@@ -253,6 +254,50 @@ def _set_repo_binding(repo_url: str) -> None:
     )
 
 
+def _stub_admin_resume_parsing(monkeypatch, *, parsed_name: str, parsed_phone: str) -> None:
+    monkeypatch.setattr(
+        admin_api.deps,
+        "parse_resume_all_llm",
+        lambda data, filename, mime="": {
+            "name": parsed_name,
+            "phone": parsed_phone,
+            "confidence": {"name": 96, "phone": 98},
+            "details": {"skills": ["python"], "experience_blocks": [], "projects_raw": ""},
+            "details_status": "done",
+            "method": {
+                "identity": "llm_attachment",
+                "name": "llm_attachment",
+                "details": "llm_attachment",
+            },
+        },
+    )
+    monkeypatch.setattr(
+        admin_api.deps,
+        "extract_resume_text",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not call extract_resume_text")),
+    )
+    monkeypatch.setattr(
+        admin_api.deps,
+        "parse_resume_identity_fast",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not call parse_resume_identity_fast")),
+    )
+    monkeypatch.setattr(
+        admin_api.deps,
+        "parse_resume_identity_llm",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not call parse_resume_identity_llm")),
+    )
+    monkeypatch.setattr(
+        admin_api.deps,
+        "parse_resume_name_llm",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not call parse_resume_name_llm")),
+    )
+    monkeypatch.setattr(
+        admin_api.deps,
+        "parse_resume_details_llm",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not call parse_resume_details_llm")),
+    )
+
+
 def test_system_health_smoke(monkeypatch, tmp_path):
     client = _build_client(monkeypatch, tmp_path)
 
@@ -436,6 +481,49 @@ def test_admin_exam_estimated_duration_prefers_answer_time_total(monkeypatch, tm
     version_response = client.get(f"/api/admin/exam-versions/{version_id}")
     assert version_response.status_code == 200
     assert version_response.json()["selected_version"]["estimated_duration_minutes"] == 3
+
+
+def test_admin_candidate_resume_upload_returns_created_flag_for_new_candidate(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    _stub_admin_resume_parsing(monkeypatch, parsed_name="新候选人", parsed_phone="13912345678")
+
+    login_response = client.post("/api/admin/session/login", json={"username": "admin", "password": "password"})
+    assert login_response.status_code == 200
+
+    response = client.post(
+        "/api/admin/candidates/resume/upload",
+        files={"file": ("resume.pdf", b"%PDF-1.4 demo", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["created"] is True
+    assert payload["candidate"]["name"] == "新候选人"
+    assert payload["candidate"]["phone"] == "13912345678"
+    assert payload["candidate"]["resume_filename"] == "resume.pdf"
+    assert _count_rows("candidate") == 1
+
+
+def test_admin_candidate_resume_upload_marks_existing_candidate_as_updated(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    create_candidate("现有候选人", "13912345678")
+    _stub_admin_resume_parsing(monkeypatch, parsed_name="简历里的名字", parsed_phone="13912345678")
+
+    login_response = client.post("/api/admin/session/login", json={"username": "admin", "password": "password"})
+    assert login_response.status_code == 200
+
+    response = client.post(
+        "/api/admin/candidates/resume/upload",
+        files={"file": ("resume.pdf", b"%PDF-1.4 demo", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["created"] is False
+    assert payload["candidate"]["name"] == "现有候选人"
+    assert payload["candidate"]["phone"] == "13912345678"
+    assert payload["candidate"]["resume_filename"] == "resume.pdf"
+    assert _count_rows("candidate") == 1
 
 
 def test_public_attempt_bootstrap_exposes_quiz_metadata(monkeypatch, tmp_path):

@@ -1,32 +1,58 @@
 """
-LLM client helpers used by grading and evaluation.
+LLM client helpers used by grading, evaluation and resume parsing.
 
-All vendors are accessed via an OpenAI-compatible Responses API.
+All vendors are accessed via the official OpenAI Python SDK against an
+OpenAI-compatible Responses API.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import time
+from io import BytesIO
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
+import httpx
+from openai import OpenAI
 
 from backend.md_quiz.config import OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL, logger
 from backend.md_quiz.services.audit_context import get_audit_context, incr_audit_meta_int
 from backend.md_quiz.services.system_metrics import incr_llm_tokens_and_alert, record_llm_usage
 
 
-def _extract_llm_usage(obj: dict[str, Any]) -> tuple[int | None, int | None, int | None]:
-    try:
+_OPENAI_CLIENT: OpenAI | None = None
+
+
+def _as_dict(obj: Any) -> dict[str, Any]:
+    if isinstance(obj, dict):
+        return obj
+    if hasattr(obj, "model_dump"):
+        try:
+            dumped = obj.model_dump(mode="json")
+            if isinstance(dumped, dict):
+                return dumped
+        except Exception:
+            pass
+    return {}
+
+
+def _extract_llm_usage(obj: Any) -> tuple[int | None, int | None, int | None]:
+    usage = None
+    if isinstance(obj, dict):
         usage = obj.get("usage")
-    except Exception:
-        usage = None
+    else:
+        usage = getattr(obj, "usage", None)
+        if usage is None:
+            usage = _as_dict(obj).get("usage")
+    if usage is None:
+        return None, None, None
+
+    if not isinstance(usage, dict):
+        usage = _as_dict(usage)
     if not isinstance(usage, dict):
         return None, None, None
 
-    def _int(v):
+    def _int(v: Any) -> int | None:
         if v is None or v == "":
             return None
         try:
@@ -34,11 +60,9 @@ def _extract_llm_usage(obj: dict[str, Any]) -> tuple[int | None, int | None, int
         except Exception:
             return None
 
-    # OpenAI Responses style: input_tokens/output_tokens/total_tokens.
     inp = _int(usage.get("input_tokens"))
     out = _int(usage.get("output_tokens"))
     tot = _int(usage.get("total_tokens"))
-    # ChatCompletions style fallback.
     if inp is None:
         inp = _int(usage.get("prompt_tokens"))
     if out is None:
@@ -48,7 +72,18 @@ def _extract_llm_usage(obj: dict[str, Any]) -> tuple[int | None, int | None, int
     return inp, out, tot
 
 
-def _accumulate_llm_usage(obj: dict[str, Any]) -> None:
+def _response_model_name(obj: Any) -> str | None:
+    model = getattr(obj, "model", None)
+    if isinstance(model, str) and model.strip():
+        return model.strip()
+    data = _as_dict(obj)
+    model = data.get("model")
+    if isinstance(model, str) and model.strip():
+        return model.strip()
+    return None
+
+
+def _accumulate_llm_usage(obj: Any) -> None:
     """
     Track total token usage in the current audit context meta without writing system_log rows.
     """
@@ -62,7 +97,7 @@ def _accumulate_llm_usage(obj: dict[str, Any]) -> None:
     except Exception:
         pass
     try:
-        record_llm_usage(total_tokens=ttk, ctx=get_audit_context(), model=str(obj.get("model") or "").strip() or None)
+        record_llm_usage(total_tokens=ttk, ctx=get_audit_context(), model=_response_model_name(obj))
     except Exception:
         pass
 
@@ -82,6 +117,33 @@ def _env_timeout(name: str, default: int) -> int:
     return max(5, min(600, n))
 
 
+def _env_max_retries() -> int:
+    try:
+        max_retries = int(os.getenv("LLM_RETRY_MAX", "2") or "2")
+    except Exception:
+        max_retries = 2
+    return max(0, min(6, max_retries))
+
+
+def _request_timeout(timeout_seconds: int) -> httpx.Timeout:
+    total = float(max(5, int(timeout_seconds or 60)))
+    connect = min(20.0, total)
+    return httpx.Timeout(total, connect=connect, read=total, write=total)
+
+
+def _get_openai_client() -> OpenAI:
+    global _OPENAI_CLIENT
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is empty")
+    if _OPENAI_CLIENT is None:
+        _OPENAI_CLIENT = OpenAI(
+            api_key=OPENAI_API_KEY,
+            base_url=OPENAI_BASE_URL.rstrip("/"),
+            max_retries=_env_max_retries(),
+        )
+    return _OPENAI_CLIENT
+
+
 def _responses_api_request(
     *,
     input_messages: list[dict[str, Any]],
@@ -90,112 +152,42 @@ def _responses_api_request(
     top_p: float,
     timeout_seconds: int = 60,
     response_format_json: bool = False,
-) -> dict[str, Any]:
-    if not OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is empty")
-
-    url = f"{OPENAI_BASE_URL.rstrip('/')}/responses"
+    instructions: str | None = None,
+) -> Any:
+    client = _get_openai_client().with_options(
+        timeout=_request_timeout(timeout_seconds),
+        max_retries=_env_max_retries(),
+    )
     payload: dict[str, Any] = {
         "model": model,
         "input": input_messages,
         "temperature": temperature,
         "top_p": top_p,
     }
-    # Best-effort: some OpenAI-compatible providers support response_format for JSON.
+    if str(instructions or "").strip():
+        payload["instructions"] = str(instructions or "").strip()
     if response_format_json:
-        payload["response_format"] = {"type": "json_object"}
-
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = Request(
-        url,
-        data=body,
-        headers={
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    # Retry on transient errors (rate limit / gateway / network).
-    try:
-        max_retries = int(os.getenv("LLM_RETRY_MAX", "2") or "2")
-    except Exception:
-        max_retries = 2
-    max_retries = max(0, min(6, max_retries))
-
-    try:
-        backoff = float(os.getenv("LLM_RETRY_BACKOFF", "0.9") or "0.9")
-    except Exception:
-        backoff = 0.9
-    backoff = max(0.2, min(5.0, backoff))
-
-    raw = ""
-    last_err: Exception | None = None
-    for attempt in range(max_retries + 1):
-        try:
-            with urlopen(req, timeout=timeout_seconds) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
-            last_err = None
-            break
-        except HTTPError as e:
-            last_err = e
-            code = int(getattr(e, "code", 0) or 0)
-            retryable = code in {429, 500, 502, 503, 504}
-            try:
-                body_txt = e.read().decode("utf-8", errors="replace")
-            except Exception:
-                body_txt = ""
-            if attempt >= max_retries or not retryable:
-                raise RuntimeError(f"LLM HTTP {code}: {(body_txt or str(e))[:400]}") from e
-            logger.warning(
-                "LLM HTTP %s (attempt %s/%s): %s",
-                code,
-                attempt + 1,
-                max_retries + 1,
-                (body_txt or str(e))[:240],
-            )
-            time.sleep(backoff * (attempt + 1))
-        except URLError as e:
-            last_err = e
-            if attempt >= max_retries:
-                raise
-            logger.warning(
-                "LLM network error (attempt %s/%s): %s",
-                attempt + 1,
-                max_retries + 1,
-                str(e)[:240],
-            )
-            time.sleep(backoff * (attempt + 1))
-        except Exception as e:
-            last_err = e
-            if attempt >= max_retries:
-                raise
-            logger.warning(
-                "LLM transient error (attempt %s/%s): %s",
-                attempt + 1,
-                max_retries + 1,
-                str(e)[:240],
-            )
-            time.sleep(backoff * (attempt + 1))
-
-    if last_err is not None:
-        raise last_err
-    try:
-        return json.loads(raw)
-    except Exception as e:
-        raise RuntimeError(f"LLM /responses returned non-JSON: {raw[:400]}") from e
+        payload["text"] = {"format": {"type": "json_object"}}
+    return client.responses.create(**payload)
 
 
-def _extract_output_text(obj: dict[str, Any]) -> str:
+def _extract_output_text(obj: Any) -> str:
     """
     Try a few common OpenAI Responses-compatible shapes.
     """
-    if not isinstance(obj, dict):
-        return ""
-    t = obj.get("output_text")
+    t = getattr(obj, "output_text", None)
     if isinstance(t, str) and t.strip():
         return t.strip()
 
-    out = obj.get("output")
+    data = _as_dict(obj)
+    if not data:
+        return ""
+
+    t = data.get("output_text")
+    if isinstance(t, str) and t.strip():
+        return t.strip()
+
+    out = data.get("output")
     if isinstance(out, list):
         parts: list[str] = []
         for item in out:
@@ -213,9 +205,8 @@ def _extract_output_text(obj: dict[str, Any]) -> str:
         if txt:
             return txt
 
-    # Some gateways may still return chat.completions-like shape.
     try:
-        choices = obj.get("choices")
+        choices = data.get("choices")
         if isinstance(choices, list) and choices:
             msg = (choices[0] or {}).get("message") or {}
             if isinstance(msg, dict):
@@ -232,7 +223,7 @@ def _to_text_parts(prompt: str) -> list[dict[str, Any]]:
 def call_llm_json(prompt: str, model: str | None = None) -> str:
     """
     Structured output call used by short-answer grading.
-    Expected to return a JSON object string with score + explanation (and optional guard-rail fields).
+    Expected to return a JSON object string with score + explanation.
     """
     try:
         start = time.time()
@@ -247,16 +238,12 @@ def call_llm_json(prompt: str, model: str | None = None) -> str:
             "   - reason: 1-3 句简短理由\n"
             "   - relevance: 0..3（0=完全无关/无意义）\n"
             "   - contradiction: true/false（关键事实说反/矛盾时为 true，且应 score=0）\n"
-            "示例：{\"score\":3,\"reason\":\"...\",\"relevance\":2,\"contradiction\":false}\n"
+            '示例：{"score":3,"reason":"...","relevance":2,"contradiction":false}\n'
         )
         use_model = (model or "").strip() or OPENAI_MODEL
         obj = _responses_api_request(
-            input_messages=[
-                {
-                    "role": "user",
-                    "content": _to_text_parts(system + "\n" + str(prompt or "")),
-                },
-            ],
+            input_messages=[{"role": "user", "content": _to_text_parts(str(prompt or ""))}],
+            instructions=system,
             model=use_model,
             temperature=0.0,
             top_p=1.0,
@@ -281,12 +268,8 @@ def call_llm_text(prompt: str, model: str | None = None) -> str:
         system = "你是一名资深面试官与能力评估专家。"
         use_model = (model or "").strip() or OPENAI_MODEL
         obj = _responses_api_request(
-            input_messages=[
-                {
-                    "role": "user",
-                    "content": _to_text_parts(system + "\n" + str(prompt or "")),
-                },
-            ],
+            input_messages=[{"role": "user", "content": _to_text_parts(str(prompt or ""))}],
+            instructions=system,
             model=use_model,
             temperature=0.2,
             top_p=1.0,
@@ -321,12 +304,8 @@ def call_llm_structured_ex(
         start = time.time()
         use_model = (model or "").strip() or OPENAI_MODEL
         obj = _responses_api_request(
-            input_messages=[
-                {
-                    "role": "user",
-                    "content": _to_text_parts(str(system or "") + "\n" + str(prompt or "")),
-                },
-            ],
+            input_messages=[{"role": "user", "content": _to_text_parts(str(prompt or ""))}],
+            instructions=system,
             model=use_model,
             temperature=0.0,
             top_p=1.0,
@@ -342,6 +321,62 @@ def call_llm_structured_ex(
         return "", f"{type(e).__name__}: {e}"
 
 
+def call_llm_file_structured_ex(
+    *,
+    file_bytes: bytes,
+    filename: str,
+    prompt: str,
+    system: str,
+    model: str | None = None,
+) -> tuple[str, str]:
+    """
+    Structured Responses call using an attached file input.
+    """
+    uploaded_file_id = ""
+    try:
+        start = time.time()
+        use_model = (model or "").strip() or OPENAI_MODEL
+        client = _get_openai_client().with_options(
+            timeout=_request_timeout(_env_timeout("LLM_TIMEOUT_STRUCTURED", 120)),
+            max_retries=_env_max_retries(),
+        )
+        file_obj = BytesIO(bytes(file_bytes or b""))
+        file_obj.name = str(filename or "resume.bin")
+        uploaded = client.files.create(file=file_obj, purpose="user_data")
+        uploaded_file_id = str(getattr(uploaded, "id", "") or "").strip()
+        if not uploaded_file_id:
+            raise RuntimeError("Files API returned empty file id")
+        parts: list[dict[str, Any]] = [
+            {
+                "type": "input_file",
+                "file_id": uploaded_file_id,
+            },
+            {"type": "input_text", "text": str(prompt or "")},
+        ]
+        obj = _responses_api_request(
+            input_messages=[{"role": "user", "content": parts}],
+            instructions=system,
+            model=use_model,
+            temperature=0.0,
+            top_p=1.0,
+            timeout_seconds=_env_timeout("LLM_TIMEOUT_STRUCTURED", 120),
+            response_format_json=_supports_response_format_json(),
+        )
+        dt = time.time() - start
+        logger.debug("LLM(file-structured) ok in %.2fs", dt)
+        _accumulate_llm_usage(obj)
+        return _extract_output_text(obj), ""
+    except Exception as e:
+        logger.error("LLM call failed (file-structured): %s", e)
+        return "", f"{type(e).__name__}: {e}"
+    finally:
+        if uploaded_file_id:
+            try:
+                _get_openai_client().files.delete(uploaded_file_id)
+            except Exception:
+                logger.warning("Failed to cleanup uploaded LLM file: %s", uploaded_file_id)
+
+
 def call_llm_vision_text(
     *,
     image_url: str,
@@ -350,19 +385,18 @@ def call_llm_vision_text(
     model: str | None = None,
 ) -> str:
     """
-    Vision call using the /responses "input_image" + "input_text" format (as in the user's curl example).
-
-    Note: you still need to provide a reachable URL or data URL.
+    Vision call using Responses API "input_image" + "input_text".
     """
     try:
         start = time.time()
         use_model = (model or "").strip() or OPENAI_MODEL
         parts: list[dict[str, Any]] = [
             {"type": "input_image", "image_url": str(image_url or "")},
-            {"type": "input_text", "text": ((str(system or "") + "\n") if system else "") + str(prompt or "")},
+            {"type": "input_text", "text": str(prompt or "")},
         ]
         obj = _responses_api_request(
             input_messages=[{"role": "user", "content": parts}],
+            instructions=(str(system or "").strip() or None),
             model=use_model,
             temperature=0.0,
             top_p=1.0,
@@ -376,3 +410,38 @@ def call_llm_vision_text(
     except Exception as e:
         logger.error("LLM call failed (vision): %s", e)
         return ""
+
+
+def call_llm_vision_structured_ex(
+    *,
+    image_url: str,
+    prompt: str,
+    system: str,
+    model: str | None = None,
+) -> tuple[str, str]:
+    """
+    Structured Responses call using an image input.
+    """
+    try:
+        start = time.time()
+        use_model = (model or "").strip() or OPENAI_MODEL
+        parts: list[dict[str, Any]] = [
+            {"type": "input_image", "image_url": str(image_url or "")},
+            {"type": "input_text", "text": str(prompt or "")},
+        ]
+        obj = _responses_api_request(
+            input_messages=[{"role": "user", "content": parts}],
+            instructions=system,
+            model=use_model,
+            temperature=0.0,
+            top_p=1.0,
+            timeout_seconds=_env_timeout("LLM_TIMEOUT_VISION", 120),
+            response_format_json=_supports_response_format_json(),
+        )
+        dt = time.time() - start
+        logger.debug("LLM(vision-structured) ok in %.2fs", dt)
+        _accumulate_llm_usage(obj)
+        return _extract_output_text(obj), ""
+    except Exception as e:
+        logger.error("LLM call failed (vision-structured): %s", e)
+        return "", f"{type(e).__name__}: {e}"

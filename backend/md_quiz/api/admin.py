@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 import os
 import re
+import time
 from datetime import date, datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any
@@ -684,105 +685,144 @@ def _read_resume_bytes(file: UploadFile) -> bytes:
     return data
 
 
+def _log_resume_parse_stage(
+    stage: str,
+    *,
+    flow: str,
+    candidate_id: int | None = None,
+    size_bytes: int | None = None,
+    mime: str = "",
+    elapsed_ms: float | None = None,
+    text_chars: int | None = None,
+    phone_valid: bool | None = None,
+    name_valid: bool | None = None,
+    details_status: str = "",
+    llm_tokens: int | None = None,
+    error: str = "",
+) -> None:
+    fields: list[str] = [f"stage={stage}", f"flow={flow}"]
+    if candidate_id:
+        fields.append(f"candidate_id={candidate_id}")
+    if size_bytes is not None:
+        fields.append(f"size_bytes={int(size_bytes)}")
+    if mime:
+        fields.append(f"mime={mime}")
+    if elapsed_ms is not None:
+        fields.append(f"elapsed_ms={elapsed_ms:.1f}")
+    if text_chars is not None:
+        fields.append(f"text_chars={int(text_chars)}")
+    if phone_valid is not None:
+        fields.append(f"phone_valid={str(bool(phone_valid)).lower()}")
+    if name_valid is not None:
+        fields.append(f"name_valid={str(bool(name_valid)).lower()}")
+    if details_status:
+        fields.append(f"details_status={details_status}")
+    if llm_tokens is not None:
+        fields.append(f"llm_tokens={int(llm_tokens)}")
+    if error:
+        fields.append(f"error={error[:240]}")
+    deps.logger.info("resume_parse %s", " ".join(fields))
+
+
 def _parse_resume_payload(
     *,
     data: bytes,
     filename: str,
     mime: str,
     current_phone: str | None = None,
+    flow: str = "candidate_upload",
+    candidate_id: int | None = None,
 ) -> dict[str, Any]:
-    try:
-        text = deps.extract_resume_text(data, filename)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"简历解析失败：{type(exc).__name__}") from exc
-
-    parsed_name = ""
-    parsed_phone = ""
-    name_conf = 0
-    phone_conf = 0
-    method: dict[str, str] = {"identity": "fast", "name": "fast"}
+    parse_started_at = time.perf_counter()
+    size_bytes = len(data or b"")
+    _log_resume_parse_stage(
+        "start",
+        flow=flow,
+        candidate_id=candidate_id,
+        size_bytes=size_bytes,
+        mime=mime,
+    )
+    llm_started_at = time.perf_counter()
     llm_total_tokens = 0
     try:
-        fast = deps.parse_resume_identity_fast(text or "") or {}
-        parsed_name = str(fast.get("name") or "").strip()
-        parsed_phone = validation_helpers._normalize_phone(str(fast.get("phone") or "").strip())
-        conf = fast.get("confidence") or {}
-        if isinstance(conf, dict):
-            name_conf = validation_helpers._safe_int(conf.get("name") or 0, 0)
-            phone_conf = validation_helpers._safe_int(conf.get("phone") or 0, 0)
-    except Exception:
-        pass
+        with deps.audit_context(meta={}):
+            parsed = deps.parse_resume_all_llm(data=data, filename=filename, mime=mime) or {}
+            ctx = deps.get_audit_context()
+            meta = ctx.get("meta")
+            if isinstance(meta, dict):
+                llm_total_tokens = int(meta.get("llm_total_tokens_sum") or 0)
+    except Exception as exc:
+        _log_resume_parse_stage(
+            "llm.parse.failed",
+            flow=flow,
+            candidate_id=candidate_id,
+            size_bytes=size_bytes,
+            mime=mime,
+            elapsed_ms=(time.perf_counter() - llm_started_at) * 1000,
+            llm_tokens=llm_total_tokens,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        raise HTTPException(status_code=400, detail=str(exc) or f"简历解析失败：{type(exc).__name__}") from exc
 
-    if not validation_helpers._is_valid_phone(parsed_phone):
-        try:
-            with deps.audit_context(meta={}):
-                ident = deps.parse_resume_identity_llm(text or "") or {}
-                parsed_name = str(ident.get("name") or "").strip()
-                parsed_phone = validation_helpers._normalize_phone(str(ident.get("phone") or "").strip())
-                conf = ident.get("confidence") or {}
-                if isinstance(conf, dict):
-                    name_conf = validation_helpers._safe_int(conf.get("name") or 0, 0)
-                    phone_conf = validation_helpers._safe_int(conf.get("phone") or 0, 0)
-                method["identity"] = "llm"
-                method["name"] = "llm"
-                ctx = deps.get_audit_context()
-                meta = ctx.get("meta")
-                if isinstance(meta, dict):
-                    llm_total_tokens += int(meta.get("llm_total_tokens_sum") or 0)
-        except Exception:
-            pass
-
-    if validation_helpers._is_valid_phone(parsed_phone) and not validation_helpers._is_valid_name(parsed_name):
-        try:
-            with deps.audit_context(meta={}):
-                name_info = deps.parse_resume_name_llm(text or "") or {}
-                candidate_name = str(name_info.get("name") or "").strip()
-                confidence = validation_helpers._safe_int(name_info.get("confidence") or 0, 0)
-                if validation_helpers._is_valid_name(candidate_name):
-                    parsed_name = candidate_name
-                    name_conf = max(name_conf, confidence)
-                    method["name"] = "llm"
-                ctx = deps.get_audit_context()
-                meta = ctx.get("meta")
-                if isinstance(meta, dict):
-                    llm_total_tokens += int(meta.get("llm_total_tokens_sum") or 0)
-        except Exception:
-            pass
+    parsed_name = str(parsed.get("name") or "").strip()
+    parsed_phone = validation_helpers._normalize_phone(str(parsed.get("phone") or "").strip())
+    confidence = parsed.get("confidence") or {}
+    if not isinstance(confidence, dict):
+        confidence = {}
+    name_conf = validation_helpers._safe_int(confidence.get("name") or 0, 0)
+    phone_conf = validation_helpers._safe_int(confidence.get("phone") or 0, 0)
+    details = parsed.get("details") or {}
+    if not isinstance(details, dict):
+        details = {}
+    details_status = str(parsed.get("details_status") or ("done" if details else "empty")).strip() or "empty"
+    method = parsed.get("method") if isinstance(parsed.get("method"), dict) else {
+        "identity": "llm_attachment",
+        "name": "llm_attachment",
+        "details": "llm_attachment",
+    }
+    phone_is_valid = validation_helpers._is_valid_phone(parsed_phone)
+    name_is_valid = validation_helpers._is_valid_name(parsed_name)
+    _log_resume_parse_stage(
+        "llm.parse.done",
+        flow=flow,
+        candidate_id=candidate_id,
+        size_bytes=size_bytes,
+        mime=mime,
+        elapsed_ms=(time.perf_counter() - llm_started_at) * 1000,
+        phone_valid=phone_is_valid,
+        name_valid=name_is_valid,
+        details_status=details_status,
+        llm_tokens=llm_total_tokens,
+    )
 
     if current_phone:
         normalized_current_phone = validation_helpers._normalize_phone(current_phone)
         if validation_helpers._is_valid_phone(parsed_phone) and normalized_current_phone and parsed_phone != normalized_current_phone:
+            _log_resume_parse_stage(
+                "phone_mismatch",
+                flow=flow,
+                candidate_id=candidate_id,
+                phone_valid=True,
+                name_valid=name_is_valid,
+            )
             raise HTTPException(status_code=400, detail="简历手机号与候选人手机号不一致")
-
-    details: dict[str, Any] = {}
-    details_error = ""
-    try:
-        with deps.audit_context(meta={}):
-            parsed_details = deps.parse_resume_details_llm(text or "")
-            if isinstance(parsed_details, dict):
-                details = parsed_details
-            ctx = deps.get_audit_context()
-            meta = ctx.get("meta")
-            if isinstance(meta, dict):
-                llm_total_tokens += int(meta.get("llm_total_tokens_sum") or 0)
-    except Exception as exc:
-        deps.logger.exception("Resume details parse failed")
-        details_error = f"{type(exc).__name__}: {exc}"
-
-    try:
-        experience_raw = deps.extract_experience_raw(text or "", max_chars=20000)
-        if experience_raw:
-            details["projects_raw"] = deps.clean_projects_raw_for_display(experience_raw)
-    except Exception:
-        pass
-
     details_block: dict[str, Any] = {
-        "status": "failed" if details_error else ("done" if details else "empty"),
+        "status": details_status,
         "data": details,
         "parsed_at": datetime.now(timezone.utc).isoformat(),
     }
-    if details_error:
-        details_block["error"] = details_error
+    _log_resume_parse_stage(
+        "done",
+        flow=flow,
+        candidate_id=candidate_id,
+        size_bytes=size_bytes,
+        mime=mime,
+        elapsed_ms=(time.perf_counter() - parse_started_at) * 1000,
+        phone_valid=phone_is_valid,
+        name_valid=name_is_valid,
+        details_status=str(details_block.get("status") or ""),
+        llm_tokens=llm_total_tokens,
+    )
 
     return {
         "resume_parsed": {
@@ -1112,9 +1152,22 @@ def upload_candidate_resume(request: Request, file: UploadFile = File(...)):
     data = _read_resume_bytes(file)
     filename = str(file.filename or "")
     mime = str(file.content_type or "")
-    payload = _parse_resume_payload(data=data, filename=filename, mime=mime)
+    _log_resume_parse_stage("request.accepted", flow="candidate_upload", size_bytes=len(data), mime=mime)
+    payload = _parse_resume_payload(
+        data=data,
+        filename=filename,
+        mime=mime,
+        flow="candidate_upload",
+    )
     parsed_phone = validation_helpers._normalize_phone(str(payload.get("parsed_phone") or ""))
     if not validation_helpers._is_valid_phone(parsed_phone):
+        _log_resume_parse_stage(
+            "request.rejected",
+            flow="candidate_upload",
+            size_bytes=len(data),
+            mime=mime,
+            error="invalid_phone",
+        )
         raise HTTPException(status_code=400, detail="未能从简历中识别有效手机号")
     parsed_name = str(payload.get("parsed_name") or "").strip()
     candidate_name = parsed_name if validation_helpers._is_valid_name(parsed_name) else "未知"
@@ -1153,7 +1206,19 @@ def upload_candidate_resume(request: Request, file: UploadFile = File(...)):
     except Exception:
         pass
     candidate = deps.get_candidate(candidate_id) or {"id": candidate_id, "name": candidate_name, "phone": parsed_phone}
-    return _serialize_candidate_detail(candidate_id, candidate)
+    _log_resume_parse_stage(
+        "request.completed",
+        flow="candidate_upload",
+        candidate_id=candidate_id,
+        size_bytes=len(data),
+        mime=mime,
+        details_status=str(((payload.get("resume_parsed") or {}).get("details") or {}).get("status") or ""),
+        llm_tokens=int(payload.get("llm_total_tokens") or 0),
+    )
+    return {
+        "created": created,
+        **_serialize_candidate_detail(candidate_id, candidate),
+    }
 
 
 @router.get("/candidates/{candidate_id}")
@@ -1263,7 +1328,21 @@ def reparse_candidate_resume(candidate_id: int, request: Request, file: UploadFi
     filename = str(file.filename or "")
     mime = str(file.content_type or "")
     current_phone = str(candidate.get("phone") or "").strip()
-    payload = _parse_resume_payload(data=data, filename=filename, mime=mime, current_phone=current_phone)
+    _log_resume_parse_stage(
+        "request.accepted",
+        flow="candidate_reparse",
+        candidate_id=candidate_id,
+        size_bytes=len(data),
+        mime=mime,
+    )
+    payload = _parse_resume_payload(
+        data=data,
+        filename=filename,
+        mime=mime,
+        current_phone=current_phone,
+        flow="candidate_reparse",
+        candidate_id=candidate_id,
+    )
     parsed_name = str(payload.get("parsed_name") or "").strip()
     if str(candidate.get("name") or "").strip() in {"", "未知"} and validation_helpers._is_valid_name(parsed_name):
         deps.update_candidate(candidate_id, name=parsed_name, phone=current_phone)
@@ -1285,6 +1364,15 @@ def reparse_candidate_resume(candidate_id: int, request: Request, file: UploadFi
         )
     except Exception:
         pass
+    _log_resume_parse_stage(
+        "request.completed",
+        flow="candidate_reparse",
+        candidate_id=candidate_id,
+        size_bytes=len(data),
+        mime=mime,
+        details_status=str(((payload.get("resume_parsed") or {}).get("details") or {}).get("status") or ""),
+        llm_tokens=int(payload.get("llm_total_tokens") or 0),
+    )
     return _serialize_candidate_detail(candidate_id, deps.get_candidate(candidate_id) or candidate)
 
 
