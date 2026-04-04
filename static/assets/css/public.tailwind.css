@@ -12,6 +12,8 @@
   --public-accent: #2563eb;
   --public-danger: #e11d48;
   --public-shadow: 0 28px 72px rgba(15, 23, 42, 0.08);
+  --radius-2xl: 0.875rem;
+  --radius-3xl: 1rem;
 }
 
 @layer base {

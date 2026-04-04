@@ -10,7 +10,6 @@ ProcessKind = Literal["api", "worker", "scheduler"]
 
 
 class RuntimeConfig(BaseModel):
-    sms_enabled: bool = False
     token_daily_threshold: int = 500000
     sms_daily_threshold: int = 500
     allow_public_assignments: bool = True

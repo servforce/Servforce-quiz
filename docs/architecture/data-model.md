@@ -5,7 +5,7 @@
 后续正式迁移时，以下业务概念保持不变：
 
 - `candidate`
-- `exam_definition`
+- `quiz_definition`
 - `assignment`
 - `attempt`
 - `archive/result`
@@ -20,7 +20,6 @@
 
 用于保存运行时行为开关，例如：
 
-- 是否启用短信验证
 - token / 短信阈值
 - 是否允许公开邀约
 - 最短交卷时长
@@ -55,7 +54,7 @@
 
 - `runtime_kv`
   - 保存 `runtime_config`
-  - 保存 exam repo sync 状态、运行时迁移标记等键值数据
+  - 保存测验仓库同步状态、运行时迁移标记等键值数据
 - `runtime_daily_metric`
   - 保存系统状态页按日聚合指标与告警快照
 - `runtime_job`

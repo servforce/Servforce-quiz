@@ -12,22 +12,22 @@
 - SessionMiddleware
 - API 路由注册
 - SPA 入口路由
-- 静态资源与试卷资源路由
+- 静态资源与测验资源路由
 - `/legacy/*` 兼容跳转
 
 ### `backend/md_quiz/api/`
 
 - `system.py`：健康检查、进程状态、系统 bootstrap
-- `admin.py`：后台会话、试卷、候选人、邀约、日志、系统状态
+- `admin.py`：后台会话、测验、候选人、邀约、日志、系统状态
 - `public.py`：公开邀约、短信验证、简历上传、答题保存、提交、完成态
 
 ### `backend/md_quiz/services/`
 
 - `runtime_service.py`：runtime config 与进程心跳
 - `job_service.py`：job 投递、领取与处理
-- `exam_helpers.py` / `runtime_jobs.py`：试卷资源、答题状态机与归档
+- `exam_helpers.py` / `runtime_jobs.py`：测验资源、答题状态机与归档
 - `resume_service.py` / `grading_service.py`：简历解析与判卷
-- `exam_repo_sync_service.py`：试卷仓库同步
+- `exam_repo_sync_service.py`：测验仓库同步
 - `runtime_bootstrap.py`：运行时启动准备
 
 ### `backend/md_quiz/storage/`
@@ -46,4 +46,4 @@
 
 ### `backend/md_quiz/parsers/`
 
-- `qml.py`：QML 试卷格式解析
+- `qml.py`：QML 测验格式解析

@@ -12,7 +12,7 @@ def log_event(
     *,
     actor: str | None = None,
     candidate_id: int | None = None,
-    exam_key: str | None = None,
+    quiz_key: str | None = None,
     token: str | None = None,
     llm_prompt_tokens: int | None = None,
     llm_completion_tokens: int | None = None,
@@ -25,7 +25,7 @@ def log_event(
     ctx = get_audit_context()
     a = str(actor or ctx.get("actor") or "system")
     cid = candidate_id if candidate_id is not None else ctx.get("candidate_id")
-    ek = exam_key if exam_key is not None else ctx.get("exam_key")
+    ek = quiz_key if quiz_key is not None else ctx.get("quiz_key")
     t = token if token is not None else ctx.get("token")
     ip2 = str(ip or ctx.get("ip") or "").strip() or None
     ua2 = str(user_agent or ctx.get("user_agent") or "").strip() or None
@@ -57,7 +57,7 @@ def log_event(
                 actor=a,
                 event_type=str(event_type or "").strip(),
                 candidate_id=(int(cid) if cid is not None else None),
-                exam_key=(str(ek).strip() if ek else None),
+                quiz_key=(str(ek).strip() if ek else None),
                 token=(str(t).strip() if t else None),
                 llm_prompt_tokens=llm_prompt_tokens,
                 llm_completion_tokens=llm_completion_tokens,

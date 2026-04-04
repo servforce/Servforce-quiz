@@ -88,17 +88,19 @@ def create_app() -> FastAPI:
     def _healthz():
         return {"ok": True}
 
-    @app.get("/exams/{exam_key}/assets/{relpath:path}", include_in_schema=False)
-    def public_exam_asset(exam_key: str, relpath: str):
-        asset = exam_helpers._resolve_exam_asset_payload(exam_key, relpath)
+    @app.get("/quizzes/{quiz_key}/assets/{relpath:path}", include_in_schema=False)
+    @app.get("/exams/{quiz_key}/assets/{relpath:path}", include_in_schema=False)
+    def public_quiz_asset(quiz_key: str, relpath: str):
+        asset = exam_helpers._resolve_quiz_asset_payload(quiz_key, relpath)
         if not asset:
             return Response(status_code=404)
         content, mime = asset
         return Response(content=content, media_type=mime)
 
+    @app.get("/quizzes/versions/{version_id}/assets/{relpath:path}", include_in_schema=False)
     @app.get("/exams/versions/{version_id}/assets/{relpath:path}", include_in_schema=False)
-    def public_exam_version_asset(version_id: int, relpath: str):
-        asset = exam_helpers._resolve_exam_asset_payload_by_version(version_id, relpath)
+    def public_quiz_version_asset(version_id: int, relpath: str):
+        asset = exam_helpers._resolve_quiz_asset_payload_by_version(version_id, relpath)
         if not asset:
             return Response(status_code=404)
         content, mime = asset
@@ -136,6 +138,7 @@ def create_app() -> FastAPI:
     @app.get("/p/{token:path}", include_in_schema=False)
     @app.get("/t/{token:path}", include_in_schema=False)
     @app.get("/resume/{token:path}", include_in_schema=False)
+    @app.get("/quiz/{token:path}", include_in_schema=False)
     @app.get("/exam/{token:path}", include_in_schema=False)
     @app.get("/done/{token:path}", include_in_schema=False)
     @app.get("/a/{token:path}", include_in_schema=False)

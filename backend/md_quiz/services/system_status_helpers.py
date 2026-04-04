@@ -2,6 +2,32 @@ from __future__ import annotations
 
 from backend.md_quiz.services.support_deps import *
 from backend.md_quiz.services.validation_helpers import *
+from urllib.parse import urlsplit
+
+_SYSTEM_STATUS_LEVEL_SEVERITY = {
+    "ok": 0,
+    "warn": 1,
+    "danger": 2,
+    "critical": 3,
+}
+_SYSTEM_STATUS_REQUIRED_ENV_FIELDS = {
+    "llm": {
+        "label": "LLM",
+        "fields": ["OPENAI_API_KEY", "OPENAI_MODEL"],
+    },
+    "sms": {
+        "label": "短信认证",
+        "fields": [
+            "ALIYUN_ACCESS_KEY_ID",
+            "ALIYUN_ACCESS_KEY_SECRET",
+            "ALIYUN_PNVS_SIGN_NAME",
+            "ALIYUN_PNVS_TEMPLATE_CODE",
+        ],
+    },
+}
+
+_DEFAULT_OPENAI_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+_DEFAULT_ALIYUN_PNVS_ENDPOINT = "dypnsapi.aliyuncs.com"
 
 
 # 系统状态：读取阈值配置（大模型 token / 短信调用）。
@@ -65,6 +91,88 @@ def _status_overall_level(items: list[tuple[str, int]]) -> str:
         if int(s) > int(best[1]):
             best = (str(k), int(s))
     return str(best[0])
+
+
+def _missing_required_env_fields(fields: list[str]) -> list[str]:
+    return [field for field in fields if not str(os.getenv(field) or "").strip()]
+
+
+def _display_summary_value(value: object, *, default: str = "未设置") -> str:
+    text = str(value or "").strip()
+    return text or default
+
+
+def _extract_host_label(raw: object, *, default: str = "") -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return default
+    try:
+        parsed = urlsplit(text)
+    except Exception:
+        return text
+    host = str(parsed.netloc or parsed.path or "").strip()
+    if "@" in host:
+        host = host.rsplit("@", 1)[-1]
+    return host or text
+
+
+def _build_llm_integration_summary() -> dict[str, str]:
+    model = str(os.getenv("OPENAI_MODEL") or "").strip()
+    base_url = str(os.getenv("OPENAI_BASE_URL") or _DEFAULT_OPENAI_BASE_URL).strip()
+    endpoint_host = _extract_host_label(base_url, default=_extract_host_label(_DEFAULT_OPENAI_BASE_URL))
+    return {
+        "title": "OpenAI 兼容 Responses API",
+        "summary": f"模型 {_display_summary_value(model)} · 接口 {_display_summary_value(endpoint_host)}",
+    }
+
+
+def _build_sms_integration_summary() -> dict[str, str]:
+    sign_name = str(os.getenv("ALIYUN_PNVS_SIGN_NAME") or "").strip()
+    template_code = str(os.getenv("ALIYUN_PNVS_TEMPLATE_CODE") or "").strip()
+    endpoint = str(os.getenv("ALIYUN_PNVS_ENDPOINT") or _DEFAULT_ALIYUN_PNVS_ENDPOINT).strip()
+    region_id = str(os.getenv("ALIYUN_PNVS_REGION_ID") or "").strip()
+    summary_parts = [
+        f"签名 {_display_summary_value(sign_name)}",
+        f"模板 {_display_summary_value(template_code)}",
+        f"接口 {_display_summary_value(endpoint)}",
+    ]
+    if region_id:
+        summary_parts.append(f"地域 {region_id}")
+    return {
+        "title": "阿里云 PNVS 短信认证",
+        "summary": " · ".join(summary_parts),
+    }
+
+
+def _build_system_status_config_summary() -> dict[str, object]:
+    modules: dict[str, dict[str, object]] = {}
+    alerts: list[dict[str, object]] = []
+    for key, meta in _SYSTEM_STATUS_REQUIRED_ENV_FIELDS.items():
+        label = str(meta.get("label") or key)
+        fields = list(meta.get("fields") or [])
+        missing_fields = _missing_required_env_fields(fields)
+        configured = not missing_fields
+        item = {
+            "configured": configured,
+            "missing_fields": missing_fields,
+        }
+        modules[key] = item
+        if configured:
+            continue
+        alerts.append(
+            {
+                "key": key,
+                "label": label,
+                "level": "danger",
+                "missing_fields": missing_fields,
+                "message": f"{label} 缺少 {'、'.join(missing_fields)}，请先在 .env 中完成配置并重启服务。",
+            }
+        )
+    return {
+        "llm": modules.get("llm") or {"configured": True, "missing_fields": []},
+        "sms": modules.get("sms") or {"configured": True, "missing_fields": []},
+        "config_alerts": alerts,
+    }
 
 
 def _compute_system_status_range(*, start_day: date, end_day: date) -> dict[str, object]:
@@ -153,6 +261,9 @@ def _compute_system_status_range(*, start_day: date, end_day: date) -> dict[str,
 
 def _compute_system_status_summary() -> dict[str, object]:
     cfg = _load_system_status_cfg()
+    config_summary = _build_system_status_config_summary()
+    llm_integration = _build_llm_integration_summary()
+    sms_integration = _build_sms_integration_summary()
     today = datetime.now().astimezone().date()
     data = _compute_system_status_range(start_day=today, end_day=today)
     it0 = (data.get("items") or [{}])[0] if isinstance(data.get("items"), list) else {}
@@ -165,18 +276,52 @@ def _compute_system_status_summary() -> dict[str, object]:
     llm_ratio = _safe_ratio(used_llm, llm_limit)
     sms_ratio = _safe_ratio(used_sms, sms_limit)
 
-    llm_level, llm_sev = _level_from_ratio(llm_ratio)
-    sms_level, sms_sev = _level_from_ratio(sms_ratio)
-    overall = _status_overall_level([(llm_level, llm_sev), (sms_level, sms_sev)])
+    llm_ratio_level, llm_ratio_sev = _level_from_ratio(llm_ratio)
+    sms_ratio_level, sms_ratio_sev = _level_from_ratio(sms_ratio)
+
+    llm_items = [(llm_ratio_level, llm_ratio_sev)]
+    sms_items = [(sms_ratio_level, sms_ratio_sev)]
+    if not bool((config_summary.get("llm") or {}).get("configured")):
+        llm_items.append(("danger", _SYSTEM_STATUS_LEVEL_SEVERITY["danger"]))
+    if not bool((config_summary.get("sms") or {}).get("configured")):
+        sms_items.append(("danger", _SYSTEM_STATUS_LEVEL_SEVERITY["danger"]))
+
+    llm_level = _status_overall_level(llm_items)
+    sms_level = _status_overall_level(sms_items)
+    overall = _status_overall_level(
+        [
+            (llm_level, _SYSTEM_STATUS_LEVEL_SEVERITY.get(llm_level, 0)),
+            (sms_level, _SYSTEM_STATUS_LEVEL_SEVERITY.get(sms_level, 0)),
+        ]
+    )
 
     day = str(today.isoformat())
+    llm_config = dict(config_summary.get("llm") or {})
+    sms_config = dict(config_summary.get("sms") or {})
 
     return {
         "day": day,
         "config": cfg,
         "overall_level": overall,
-        "llm": {"used": used_llm, "limit": llm_limit, "ratio": llm_ratio, "level": llm_level},
-        "sms": {"used": used_sms, "limit": sms_limit, "ratio": sms_ratio, "level": sms_level},
+        "config_alerts": list(config_summary.get("config_alerts") or []),
+        "llm": {
+            "used": used_llm,
+            "limit": llm_limit,
+            "ratio": llm_ratio,
+            "level": llm_level,
+            "configured": bool(llm_config.get("configured")),
+            "missing_fields": list(llm_config.get("missing_fields") or []),
+            "integration": llm_integration,
+        },
+        "sms": {
+            "used": used_sms,
+            "limit": sms_limit,
+            "ratio": sms_ratio,
+            "level": sms_level,
+            "configured": bool(sms_config.get("configured")),
+            "missing_fields": list(sms_config.get("missing_fields") or []),
+            "integration": sms_integration,
+        },
     }
 
 
@@ -259,7 +404,7 @@ def _oplog_type_label_v2(et: str) -> tuple[str, str]:
     if et == "system.alert" or et.startswith("sms."):
         return "system", "系统"
     if et.startswith("exam."):
-        return "exam", "试卷操作"
+        return "exam", "测验操作"
     return "system", "系统"
 
 
@@ -342,16 +487,16 @@ def _oplog_pick_name_phone2(it: dict[str, Any], meta: dict[str, Any]) -> tuple[s
     return n, p
 
 
-def _oplog_exam_id_text2(meta: dict[str, Any], exam_key: str) -> str:
-    # User requirement: "试卷id" means exam_key (not sort-id).
-    return str(exam_key or "").strip() or "未知试卷"
+def _oplog_exam_id_text2(meta: dict[str, Any], quiz_key: str) -> str:
+    # User requirement: "测验id" means quiz_key (not sort-id).
+    return str(quiz_key or "").strip() or "未知测验"
 
 
 def _oplog_detail_text_v2(it: dict[str, Any]) -> str:
     et = str(it.get("event_type") or "").strip()
     meta = it.get("meta") if isinstance(it.get("meta"), dict) else {}
-    exam_key = str(it.get("exam_key") or "").strip()
-    exam_id = _oplog_exam_id_text2(meta, exam_key)
+    quiz_key = str(it.get("quiz_key") or "").strip()
+    exam_id = _oplog_exam_id_text2(meta, quiz_key)
     name, phone = _oplog_pick_name_phone2(it, meta)
     who_plus = _oplog_join_plus2(name, phone, exam_id)
     public_invite = bool(meta.get("public_invite"))
@@ -431,21 +576,21 @@ def _oplog_detail_text_v2(it: dict[str, Any]) -> str:
             if view == "paper":
                 return f"查看候选人视图详情{exam_id}".strip()
             if view == "edit":
-                return f"编辑试卷{exam_id}".strip()
-            return f"查看试卷详情{exam_id}".strip()
+                return f"编辑测验{exam_id}".strip()
+            return f"查看测验详情{exam_id}".strip()
         if op == "result":
             return f"查看{_oplog_join_plus2(name, phone, exam_id)}的结果".strip("+")
         if op == "upload":
-            return f"上传试卷{exam_id}".strip()
+            return f"上传测验{exam_id}".strip()
         if op == "update":
-            return f"修改试卷{exam_id}".strip()
+            return f"修改测验{exam_id}".strip()
         if op == "delete":
-            return f"删除试卷{exam_id}".strip()
+            return f"删除测验{exam_id}".strip()
         if op == "public_invite.enable":
-            return f"试卷{exam_id}开启公开邀约".strip()
+            return f"测验{exam_id}开启公开邀约".strip()
         if op == "public_invite.disable":
-            return f"试卷{exam_id}关闭公开邀约".strip()
-        return f"试卷操作{op}({exam_id})".strip()
+            return f"测验{exam_id}关闭公开邀约".strip()
+        return f"测验操作{op}({exam_id})".strip()
 
     if et == "assignment.create":
         return f"答题邀约{_oplog_join_plus2(name, phone, exam_id)}".strip("+")

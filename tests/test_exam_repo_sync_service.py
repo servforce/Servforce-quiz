@@ -46,23 +46,23 @@ def test_rewrite_asset_paths_for_version_rewrites_local_and_legacy_urls():
         "questions": [
             {
                 "qid": "Q1",
-                "media": "/exams/demo/assets/assets/q1.png",
-                "stem_md": "题干 ![](assets/q1.png) 和 ![](/exams/demo/assets/assets/q2.png)",
+                "media": "/quizzes/demo/assets/assets/q1.png",
+                "stem_md": "题干 ![](assets/q1.png) 和 ![](/quizzes/demo/assets/assets/q2.png)",
             }
         ],
     }
     public_spec = {
-        "end_image": "/exams/demo/assets/assets/end.png",
+        "end_image": "/quizzes/demo/assets/assets/end.png",
         "questions": [{"qid": "Q1", "stem_md": "![](assets/q1.png)"}],
     }
 
     out_spec, out_public = _rewrite_asset_paths_for_version(12, spec, public_spec)
 
-    assert out_spec["welcome_image"] == "/exams/versions/12/assets/assets/welcome.png"
-    assert out_spec["questions"][0]["media"] == "/exams/versions/12/assets/assets/q1.png"
-    assert "/exams/versions/12/assets/assets/q1.png" in out_spec["questions"][0]["stem_md"]
-    assert "/exams/versions/12/assets/assets/q2.png" in out_spec["questions"][0]["stem_md"]
-    assert out_public["end_image"] == "/exams/versions/12/assets/assets/end.png"
+    assert out_spec["welcome_image"] == "/quizzes/versions/12/assets/assets/welcome.png"
+    assert out_spec["questions"][0]["media"] == "/quizzes/versions/12/assets/assets/q1.png"
+    assert "/quizzes/versions/12/assets/assets/q1.png" in out_spec["questions"][0]["stem_md"]
+    assert "/quizzes/versions/12/assets/assets/q2.png" in out_spec["questions"][0]["stem_md"]
+    assert out_public["end_image"] == "/quizzes/versions/12/assets/assets/end.png"
 
 
 def test_load_assets_rejects_large_image(tmp_path):
@@ -90,27 +90,47 @@ def test_clone_repo_surfaces_git_stderr(monkeypatch, tmp_path):
         _clone_repo("https://example.com/repo.git", tmp_path / "repo")
 
 
+def test_clone_repo_passes_explicit_git_proxy_config(monkeypatch, tmp_path):
+    calls: list[list[str]] = []
+
+    def _ok(cmd, **kwargs):
+        calls.append(list(cmd))
+        if "rev-parse" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.EXAM_REPO_SYNC_PROXY", "http://10.0.6.20:8888")
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.subprocess.run", _ok)
+
+    commit = _clone_repo("https://example.com/repo.git", tmp_path / "repo")
+
+    assert commit == "deadbeef"
+    assert calls[0][:3] == ["git", "-c", "http.proxy=http://10.0.6.20:8888"]
+    assert calls[0][3:] == ["clone", "--depth", "1", "https://example.com/repo.git", str(tmp_path / "repo")]
+    assert calls[1][:4] == ["git", "-C", str(tmp_path / "repo"), "rev-parse"]
+
+
 def test_rewrite_archive_asset_urls_rewrites_exam_and_question_assets():
     archive = {
         "exam": {
-            "welcome_image": "/exams/demo/assets/assets/welcome.png",
-            "end_image": "/exams/demo/assets/assets/end.png",
+            "welcome_image": "/quizzes/demo/assets/assets/welcome.png",
+            "end_image": "/quizzes/demo/assets/assets/end.png",
         },
         "questions": [
             {
-                "media": "/exams/demo/assets/assets/q1.png",
-                "stem_md": "题干 ![](/exams/demo/assets/assets/q2.png)",
+                "media": "/quizzes/demo/assets/assets/q1.png",
+                "stem_md": "题干 ![](/quizzes/demo/assets/assets/q2.png)",
             }
         ],
     }
 
     out = _rewrite_archive_asset_urls(archive, version_id=9)
 
-    assert out["exam"]["exam_version_id"] == 9
-    assert out["exam"]["welcome_image"] == "/exams/versions/9/assets/assets/welcome.png"
-    assert out["exam"]["end_image"] == "/exams/versions/9/assets/assets/end.png"
-    assert out["questions"][0]["media"] == "/exams/versions/9/assets/assets/q1.png"
-    assert "/exams/versions/9/assets/assets/q2.png" in out["questions"][0]["stem_md"]
+    assert out["exam"]["quiz_version_id"] == 9
+    assert out["exam"]["welcome_image"] == "/quizzes/versions/9/assets/assets/welcome.png"
+    assert out["exam"]["end_image"] == "/quizzes/versions/9/assets/assets/end.png"
+    assert out["questions"][0]["media"] == "/quizzes/versions/9/assets/assets/q1.png"
+    assert "/quizzes/versions/9/assets/assets/q2.png" in out["questions"][0]["stem_md"]
 
 
 def test_load_quiz_repo_manifest_requires_manifest(tmp_path):
@@ -145,7 +165,7 @@ format: qml-v2
 
 ![intro](./assets/welcome.png)
 
-## Q1 [single] (5) {media=assets/media.png}
+## Q1 [single] (5) {media=assets/media.png, answer_time=60s}
 题干 ![](assets/q1.png)
 
 - A*) 正确
@@ -182,13 +202,13 @@ trait:
   dimensions: [I, E]
 ---
 
-## Q1 [single] (5)
+## Q1 [single] (5) {answer_time=120s}
 题目一
 
 - A*) 正确
 - B) 错误
 
-## Q2 [short] {max=10}
+## Q2 [short] {max=10, answer_time=600s}
 题目二
 
 [rubric]
@@ -225,7 +245,7 @@ tags:
   - 1
 ---
 
-## Q1 [single] (5)
+## Q1 [single] (5) {answer_time=60s}
 题目一
 
 - A*) 正确
@@ -241,7 +261,7 @@ tags:
 def test_sync_exam_candidate_persists_quiz_metadata(monkeypatch):
     captured: dict[str, dict[str, object]] = {}
     candidate = {
-        "exam_key": "demo",
+        "quiz_key": "demo",
         "title": "Demo",
         "source_path": "quizzes/demo/quiz.md",
         "git_repo_url": "https://example.com/repo.git",
@@ -257,7 +277,7 @@ def test_sync_exam_candidate_persists_quiz_metadata(monkeypatch):
             "question_counts": {"single": 1, "multiple": 0, "short": 0},
             "estimated_duration_minutes": 2,
             "trait": {"dimensions": ["I", "E"]},
-            "questions": [{"qid": "Q1", "type": "single", "max_points": 5, "stem_md": "题目一"}],
+            "questions": [{"qid": "Q1", "type": "single", "max_points": 5, "stem_md": "题目一", "answer_time_seconds": 120}],
         },
         "public_spec": {
             "id": "demo",
@@ -269,16 +289,16 @@ def test_sync_exam_candidate_persists_quiz_metadata(monkeypatch):
             "question_counts": {"single": 1, "multiple": 0, "short": 0},
             "estimated_duration_minutes": 2,
             "trait": {"dimensions": ["I", "E"]},
-            "questions": [{"qid": "Q1", "type": "single", "max_points": 5, "stem_md": "题目一"}],
+            "questions": [{"qid": "Q1", "type": "single", "max_points": 5, "stem_md": "题目一", "answer_time_seconds": 120}],
         },
         "assets": {},
         "content_hash": "hash-demo",
     }
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.find_exam_version_by_hash", lambda *args, **kwargs: None)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_exam_versions", lambda exam_key: [])
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.create_exam_version", lambda **kwargs: 9)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.replace_exam_version_assets", lambda *args, **kwargs: None)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.find_quiz_version_by_hash", lambda *args, **kwargs: None)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_quiz_versions", lambda quiz_key: [])
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.create_quiz_version", lambda **kwargs: 9)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.replace_quiz_version_assets", lambda *args, **kwargs: None)
 
     def _capture_payload(version_id, *, title, source_md, spec, public_spec):
         captured["payload"] = {"spec": spec, "public_spec": public_spec, "title": title, "source_md": source_md}
@@ -287,8 +307,8 @@ def test_sync_exam_candidate_persists_quiz_metadata(monkeypatch):
     def _capture_definition(**kwargs):
         captured["definition"] = {"spec": kwargs["spec"], "public_spec": kwargs["public_spec"], "title": kwargs["title"]}
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.update_exam_version_payload", _capture_payload)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.save_exam_definition", _capture_definition)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.update_quiz_version_payload", _capture_payload)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.save_quiz_definition", _capture_definition)
 
     result = _sync_exam_candidate(candidate, synced_at="2026-04-01T00:00:00+00:00")
 
@@ -310,7 +330,7 @@ id: demo
 title: Demo
 ---
 
-## Q1 [single] (5)
+## Q1 [single] (5) {answer_time=60s}
 题干 ![](../other/assets/q1.png)
 
 - A*) 正确
@@ -333,7 +353,7 @@ id: other
 title: Demo
 ---
 
-## Q1 [single] (5)
+## Q1 [single] (5) {answer_time=60s}
 题目一
 
 - A*) 正确
@@ -360,7 +380,7 @@ id: demo
 title: Demo
 ---
 
-## Q1 [single] (5)
+## Q1 [single] (5) {answer_time=60s}
 题干 ![](./assets/q1.png)
 
 - A*) 正确
@@ -372,12 +392,12 @@ title: Demo
 
     def _fake_sync(candidate, *, synced_at):
         captured.append(candidate)
-        return {"exam_key": "demo", "version_id": 1, "version_no": 1, "action": "created"}
+        return {"quiz_key": "demo", "version_id": 1, "version_no": 1, "action": "created"}
 
     monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._clone_repo", _fake_clone)
     monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._sync_exam_candidate", _fake_sync)
     monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._write_git_sync_state", lambda **kwargs: kwargs)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_exam_definitions", lambda: [])
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_quiz_definitions", lambda: [])
 
     result = perform_exam_repo_sync("https://example.com/repo.git")
 
@@ -395,7 +415,7 @@ def test_perform_exam_repo_sync_marks_invalid_existing_source_as_sync_error(monk
         return "deadbeef"
 
     existing_exam = {
-        "exam_key": "demo",
+        "quiz_key": "demo",
         "title": "Demo",
         "source_md": "---\nid: demo\n---\n",
         "spec": {"title": "Demo", "questions": []},
@@ -417,14 +437,14 @@ def test_perform_exam_repo_sync_marks_invalid_existing_source_as_sync_error(monk
         lambda *args, **kwargs: (_ for _ in ()).throw(ExamRepoSyncError("Front matter 缺少 id")),
     )
     monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._write_git_sync_state", lambda **kwargs: kwargs)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_exam_definitions", lambda: [existing_exam])
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.get_exam_definition", lambda exam_key: dict(existing_exam) if exam_key == "demo" else None)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_quiz_definitions", lambda: [existing_exam])
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.get_quiz_definition", lambda quiz_key: dict(existing_exam) if quiz_key == "demo" else None)
     monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.set_exam_public_invite", lambda *args, **kwargs: None)
 
     def _record_save(**kwargs):
         saved_statuses.append(str(kwargs.get("status") or ""))
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.save_exam_definition", _record_save)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.save_quiz_definition", _record_save)
 
     result = perform_exam_repo_sync("https://example.com/repo.git")
 

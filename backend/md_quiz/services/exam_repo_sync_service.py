@@ -13,30 +13,30 @@ from urllib.parse import urlsplit
 
 import yaml
 
-from backend.md_quiz.config import logger
+from backend.md_quiz.config import EXAM_REPO_SYNC_PROXY, logger
 from backend.md_quiz.parsers.qml import QmlParseError, parse_qml_markdown
 from backend.md_quiz.services.quiz_metadata import QUIZ_SCHEMA_VERSION, apply_quiz_metadata
 from backend.md_quiz.storage import JobStore
 from backend.md_quiz.storage.db import (
-    backfill_assignment_exam_version_id,
-    backfill_exam_archive_version_id,
-    backfill_exam_paper_version_id,
+    backfill_assignment_quiz_version_id,
+    backfill_quiz_archive_version_id,
+    backfill_quiz_paper_version_id,
     clear_exam_domain_data_and_set_repo_binding,
-    create_exam_version,
-    find_exam_version_by_hash,
-    get_exam_definition,
+    create_quiz_version,
+    find_quiz_version_by_hash,
+    get_quiz_definition,
     get_runtime_kv,
-    list_exam_archives_by_exam_key,
-    list_exam_assets,
-    list_exam_definitions,
-    list_exam_versions,
-    replace_exam_version_assets,
-    save_exam_archive,
-    save_exam_definition,
+    list_quiz_archives_by_quiz_key,
+    list_quiz_assets,
+    list_quiz_definitions,
+    list_quiz_versions,
+    replace_quiz_version_assets,
+    save_quiz_archive,
+    save_quiz_definition,
     set_exam_public_invite,
     set_runtime_kv,
-    update_exam_version_metadata,
-    update_exam_version_payload,
+    update_quiz_version_metadata,
+    update_quiz_version_payload,
 )
 
 EXAM_SYNC_JOB_KIND = "git_sync_exams"
@@ -56,12 +56,12 @@ _HTML_IMG_SRC_RE = re.compile(
 )
 _MD_LINK_RE = re.compile(r"(?<!\!)\[[^\]]*]\((?P<path>[^)]+)\)")
 _FRONTMATTER_ID_RE = re.compile(r"(?mi)^id:\s*(?P<id>[A-Za-z0-9_-]+)\s*$")
-_VERSION_ASSET_RE = re.compile(r"\(/exams/(?:versions/[^/]+|[^/]+)/assets/(?P<path>[^)]+)\)")
+_VERSION_ASSET_RE = re.compile(r"\(/quizzes/(?:versions/[^/]+|[^/]+)/assets/(?P<path>[^)]+)\)")
 _HTML_VERSION_ASSET_RE = re.compile(
-    r"""<img\b(?P<before>[^>]*?)\bsrc\s*=\s*(?P<quote>["']?)/exams/(?:versions/[^/\s"'>]+|[^/\s"'>]+)/assets/(?P<path>[^"'>\s]+)(?P=quote)(?P<after>[^>]*)>""",
+    r"""<img\b(?P<before>[^>]*?)\bsrc\s*=\s*(?P<quote>["']?)/quizzes/(?:versions/[^/\s"'>]+|[^/\s"'>]+)/assets/(?P<path>[^"'>\s]+)(?P=quote)(?P<after>[^>]*)>""",
     re.IGNORECASE,
 )
-_LEGACY_ASSET_URL_RE = re.compile(r"^/exams/[^/]+/assets/(?P<path>.+)$")
+_LEGACY_ASSET_URL_RE = re.compile(r"^/quizzes/[^/]+/assets/(?P<path>.+)$")
 _SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp"}
 
 
@@ -93,7 +93,7 @@ def _is_local_asset_path(path: str) -> bool:
 
 
 def _version_asset_url(version_id: int, relpath: str) -> str:
-    return f"/exams/versions/{int(version_id)}/assets/{_safe_relpath(relpath)}"
+    return f"/quizzes/versions/{int(version_id)}/assets/{_safe_relpath(relpath)}"
 
 
 def _rewrite_asset_paths_for_version(version_id: int, spec: dict[str, Any], public_spec: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -164,7 +164,7 @@ def _rewrite_asset_paths_for_version(version_id: int, spec: dict[str, Any], publ
 def _rewrite_archive_asset_urls(archive: dict[str, Any], *, version_id: int) -> dict[str, Any]:
     out = copy.deepcopy(archive or {})
     exam = out.get("exam") if isinstance(out.get("exam"), dict) else {}
-    exam["exam_version_id"] = int(version_id)
+    exam["quiz_version_id"] = int(version_id)
     for key in ("welcome_image", "end_image"):
         raw = str(exam.get(key) or "").strip()
         match = _LEGACY_ASSET_URL_RE.match(raw)
@@ -209,7 +209,7 @@ def _find_existing_exam_by_source_path(repo_url: str, source_path: str) -> dict[
     target_path = str(source_path or "").strip()
     if not target_repo or not target_path:
         return None
-    for row in list_exam_definitions():
+    for row in list_quiz_definitions():
         if str(row.get("git_repo_url") or "").strip() != target_repo:
             continue
         if str(row.get("source_path") or "").strip() != target_path:
@@ -356,9 +356,13 @@ def _snapshot_hash(markdown_text: str, assets: dict[str, tuple[bytes, str]]) -> 
 
 
 def _clone_repo(repo_url: str, workdir: Path) -> str:
+    git_args = ["git"]
+    proxy = str(EXAM_REPO_SYNC_PROXY or "").strip()
+    if proxy:
+        git_args.extend(["-c", f"http.proxy={proxy}"])
     try:
         subprocess.run(
-            ["git", "clone", "--depth", "1", repo_url, str(workdir)],
+            [*git_args, "clone", "--depth", "1", repo_url, str(workdir)],
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -575,11 +579,11 @@ def _build_exam_candidate(repo_root: Path, repo_url: str, git_commit: str, sourc
     spec = apply_quiz_metadata(spec, default_schema_version=QUIZ_REPO_SCHEMA_VERSION)
     public_spec = apply_quiz_metadata(public_spec, default_schema_version=QUIZ_REPO_SCHEMA_VERSION)
     if str(spec.get("id") or "").strip() != raw_exam_id:
-        raise ExamRepoSyncError("试卷 id 解析异常")
+        raise ExamRepoSyncError("测验 id 解析异常")
     assets = _load_assets(quiz_root, _collect_assets(markdown_text, spec))
     content_hash = _snapshot_hash(markdown_text, assets)
     return {
-        "exam_key": raw_exam_id,
+        "quiz_key": raw_exam_id,
         "title": str(spec.get("title") or "").strip(),
         "source_path": normalized_path,
         "git_repo_url": repo_url,
@@ -593,7 +597,7 @@ def _build_exam_candidate(repo_root: Path, repo_url: str, git_commit: str, sourc
 
 
 def _sync_exam_candidate(candidate: dict[str, Any], *, synced_at) -> dict[str, Any]:
-    exam_key = str(candidate.get("exam_key") or "").strip()
+    quiz_key = str(candidate.get("quiz_key") or "").strip()
     title = str(candidate.get("title") or "").strip()
     source_path = str(candidate.get("source_path") or "").strip()
     repo_url = str(candidate.get("git_repo_url") or "").strip()
@@ -604,11 +608,11 @@ def _sync_exam_candidate(candidate: dict[str, Any], *, synced_at) -> dict[str, A
     assets = dict(candidate.get("assets") or {})
     content_hash = str(candidate.get("content_hash") or "").strip()
 
-    existing_version = find_exam_version_by_hash(exam_key, content_hash)
+    existing_version = find_quiz_version_by_hash(quiz_key, content_hash)
     if existing_version:
         version_id = int(existing_version.get("id") or 0)
         version_no = int(existing_version.get("version_no") or 0)
-        update_exam_version_metadata(
+        update_quiz_version_metadata(
             version_id,
             title=title,
             source_path=source_path,
@@ -618,10 +622,10 @@ def _sync_exam_candidate(candidate: dict[str, Any], *, synced_at) -> dict[str, A
         version = existing_version
         action = "unchanged"
     else:
-        versions = list_exam_versions(exam_key)
+        versions = list_quiz_versions(quiz_key)
         version_no = (max((int(item.get("version_no") or 0) for item in versions), default=0) + 1)
-        version_id = create_exam_version(
-            exam_key=exam_key,
+        version_id = create_quiz_version(
+            quiz_key=quiz_key,
             version_no=version_no,
             title=title,
             source_path=source_path,
@@ -632,20 +636,20 @@ def _sync_exam_candidate(candidate: dict[str, Any], *, synced_at) -> dict[str, A
             spec=spec,
             public_spec=public_spec,
         )
-        replace_exam_version_assets(version_id, assets)
+        replace_quiz_version_assets(version_id, assets)
         version = {"id": version_id, "version_no": version_no}
         action = "created" if version_no == 1 else "updated"
 
     rewritten_spec, rewritten_public = _rewrite_asset_paths_for_version(version_id, spec, public_spec)
-    update_exam_version_payload(
+    update_quiz_version_payload(
         version_id,
         title=title,
         source_md=markdown_text,
         spec=rewritten_spec,
         public_spec=rewritten_public,
     )
-    save_exam_definition(
-        exam_key=exam_key,
+    save_quiz_definition(
+        quiz_key=quiz_key,
         title=title,
         source_md=markdown_text,
         spec=rewritten_spec,
@@ -660,23 +664,23 @@ def _sync_exam_candidate(candidate: dict[str, Any], *, synced_at) -> dict[str, A
         last_sync_at=synced_at,
     )
     return {
-        "exam_key": exam_key,
+        "quiz_key": quiz_key,
         "version_id": version_id,
         "version_no": version_no,
         "action": action,
     }
 
 
-def _mark_exam_sync_error(*, exam_key: str, source_path: str, repo_url: str, git_commit: str, message: str, synced_at) -> None:
-    existing = get_exam_definition(exam_key)
+def _mark_exam_sync_error(*, quiz_key: str, source_path: str, repo_url: str, git_commit: str, message: str, synced_at) -> None:
+    existing = get_quiz_definition(quiz_key)
     title = str((existing or {}).get("title") or "").strip()
     source_md = str((existing or {}).get("source_md") or "")
     spec = (existing or {}).get("spec") or {}
     public_spec = (existing or {}).get("public_spec") or {}
     current_version_id = int((existing or {}).get("current_version_id") or 0) or None
     current_version_no = int((existing or {}).get("current_version_no") or 0) or None
-    save_exam_definition(
-        exam_key=exam_key,
+    save_quiz_definition(
+        quiz_key=quiz_key,
         title=title,
         source_md=source_md,
         spec=spec,
@@ -691,7 +695,7 @@ def _mark_exam_sync_error(*, exam_key: str, source_path: str, repo_url: str, git
         last_sync_at=synced_at,
     )
     if existing and bool(existing.get("public_invite_enabled")):
-        set_exam_public_invite(exam_key, enabled=False, token=str(existing.get("public_invite_token") or "").strip() or None)
+        set_exam_public_invite(quiz_key, enabled=False, token=str(existing.get("public_invite_token") or "").strip() or None)
 
 
 def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[str, Any]:
@@ -722,7 +726,7 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
                 if exam_id:
                     other = duplicate_guard.get(exam_id)
                     if other:
-                        raise ExamRepoSyncError(f"仓库内存在重复试卷 id：{exam_id}（{other} / {source_path}）")
+                        raise ExamRepoSyncError(f"仓库内存在重复测验 id：{exam_id}（{other} / {source_path}）")
                     duplicate_guard[exam_id] = source_path
                 candidates.append(
                     {
@@ -731,8 +735,8 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
                     }
                 )
 
-            seen_exam_keys: set[str] = set()
-            discovered_exam_keys: set[str] = set()
+            seen_quiz_keys: set[str] = set()
+            discovered_quiz_keys: set[str] = set()
             created_count = 0
             updated_count = 0
             unchanged_count = 0
@@ -743,11 +747,11 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
                 source_path = str(entry.get("source_path") or "").strip()
                 raw_exam_id = str(entry.get("raw_exam_id") or "").strip()
                 if raw_exam_id:
-                    discovered_exam_keys.add(raw_exam_id)
+                    discovered_quiz_keys.add(raw_exam_id)
                 try:
                     candidate = _build_exam_candidate(repo_root, normalized_url, git_commit, source_path)
                     result = _sync_exam_candidate(candidate, synced_at=synced_at)
-                    seen_exam_keys.add(str(result["exam_key"]))
+                    seen_quiz_keys.add(str(result["quiz_key"]))
                     if result["action"] == "created":
                         created_count += 1
                     elif result["action"] == "updated":
@@ -756,15 +760,15 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
                         unchanged_count += 1
                 except Exception as exc:
                     error_count += 1
-                    exam_key = raw_exam_id
-                    if not exam_key:
+                    quiz_key = raw_exam_id
+                    if not quiz_key:
                         existing_by_path = _find_existing_exam_by_source_path(normalized_url, source_path)
-                        exam_key = str((existing_by_path or {}).get("exam_key") or "").strip()
+                        quiz_key = str((existing_by_path or {}).get("quiz_key") or "").strip()
                     message = str(exc)
-                    repo_errors.append({"source_path": source_path, "exam_key": exam_key, "error": message})
-                    if exam_key:
+                    repo_errors.append({"source_path": source_path, "quiz_key": quiz_key, "error": message})
+                    if quiz_key:
                         _mark_exam_sync_error(
-                            exam_key=exam_key,
+                            quiz_key=quiz_key,
                             source_path=source_path,
                             repo_url=normalized_url,
                             git_commit=git_commit,
@@ -773,13 +777,13 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
                         )
 
             retired_count = 0
-            for exam in list_exam_definitions():
-                exam_key = str(exam.get("exam_key") or "").strip()
-                if not exam_key:
+            for exam in list_quiz_definitions():
+                quiz_key = str(exam.get("quiz_key") or "").strip()
+                if not quiz_key:
                     continue
                 if str(exam.get("git_repo_url") or "").strip() != normalized_url:
                     continue
-                if exam_key in discovered_exam_keys:
+                if quiz_key in discovered_quiz_keys:
                     continue
                 source_path = str(exam.get("source_path") or "").strip()
                 if source_path and source_path in discovered_source_paths:
@@ -787,8 +791,8 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
                 status = str(exam.get("status") or "").strip() or "active"
                 if status != "retired":
                     retired_count += 1
-                save_exam_definition(
-                    exam_key=exam_key,
+                save_quiz_definition(
+                    quiz_key=quiz_key,
                     title=str(exam.get("title") or "").strip(),
                     source_md=str(exam.get("source_md") or ""),
                     spec=exam.get("spec") or {},
@@ -803,7 +807,7 @@ def perform_exam_repo_sync(repo_url: str, *, job_id: str | None = None) -> dict[
                     last_sync_at=synced_at,
                 )
                 if bool(exam.get("public_invite_enabled")):
-                    set_exam_public_invite(exam_key, enabled=False, token=str(exam.get("public_invite_token") or "").strip() or None)
+                    set_exam_public_invite(quiz_key, enabled=False, token=str(exam.get("public_invite_token") or "").strip() or None)
 
             finished_at = _utc_now()
             result = {
@@ -848,11 +852,11 @@ def migrate_legacy_exam_data() -> None:
     if bool(marker.get("done")):
         return
     migrated = 0
-    for exam in list_exam_definitions():
-        exam_key = str(exam.get("exam_key") or "").strip()
-        if not exam_key:
+    for exam in list_quiz_definitions():
+        quiz_key = str(exam.get("quiz_key") or "").strip()
+        if not quiz_key:
             continue
-        if list_exam_versions(exam_key):
+        if list_quiz_versions(quiz_key):
             continue
         title = str(exam.get("title") or "").strip()
         source_md = str(exam.get("source_md") or "")
@@ -860,12 +864,12 @@ def migrate_legacy_exam_data() -> None:
         public_spec = exam.get("public_spec") or {}
         legacy_assets = {
             str(item.get("relpath") or "").strip(): (bytes(item.get("content") or b""), str(item.get("mime") or "application/octet-stream"))
-            for item in list_exam_assets(exam_key)
+            for item in list_quiz_assets(quiz_key)
             if str(item.get("relpath") or "").strip()
         }
         content_hash = _snapshot_hash(source_md, legacy_assets)
-        version_id = create_exam_version(
-            exam_key=exam_key,
+        version_id = create_quiz_version(
+            quiz_key=quiz_key,
             version_no=1,
             title=title,
             source_path=None,
@@ -877,17 +881,17 @@ def migrate_legacy_exam_data() -> None:
             public_spec=public_spec,
         )
         if legacy_assets:
-            replace_exam_version_assets(version_id, legacy_assets)
+            replace_quiz_version_assets(version_id, legacy_assets)
         rewritten_spec, rewritten_public = _rewrite_asset_paths_for_version(version_id, spec, public_spec)
-        update_exam_version_payload(
+        update_quiz_version_payload(
             version_id,
             title=title,
             source_md=source_md,
             spec=rewritten_spec,
             public_spec=rewritten_public,
         )
-        save_exam_definition(
-            exam_key=exam_key,
+        save_quiz_definition(
+            quiz_key=quiz_key,
             title=title,
             source_md=source_md,
             spec=rewritten_spec,
@@ -901,18 +905,18 @@ def migrate_legacy_exam_data() -> None:
             last_sync_error=str(exam.get("last_sync_error") or ""),
             last_sync_at=exam.get("last_sync_at"),
         )
-        backfill_assignment_exam_version_id(exam_key, version_id)
-        backfill_exam_paper_version_id(exam_key, version_id)
-        backfill_exam_archive_version_id(exam_key, version_id)
-        for row in list_exam_archives_by_exam_key(exam_key):
+        backfill_assignment_quiz_version_id(quiz_key, version_id)
+        backfill_quiz_paper_version_id(quiz_key, version_id)
+        backfill_quiz_archive_version_id(quiz_key, version_id)
+        for row in list_quiz_archives_by_quiz_key(quiz_key):
             archive_payload = row.get("archive") if isinstance(row.get("archive"), dict) else {}
             rewritten_archive = _rewrite_archive_asset_urls(archive_payload, version_id=version_id)
-            save_exam_archive(
+            save_quiz_archive(
                 archive_name=str(row.get("archive_name") or "").strip(),
                 token=str(row.get("token") or "").strip(),
                 candidate_id=(int(row.get("candidate_id")) if row.get("candidate_id") else None),
-                exam_key=exam_key,
-                exam_version_id=version_id,
+                quiz_key=quiz_key,
+                quiz_version_id=version_id,
                 phone=str(row.get("phone") or "").strip(),
                 archive=rewritten_archive,
             )

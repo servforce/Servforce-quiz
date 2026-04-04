@@ -14,7 +14,6 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from backend.md_quiz.config import logger
-from backend.md_quiz.services.system_log import log_event
 
 
 def _mask_value(key: str, value: Any) -> Any:
@@ -61,8 +60,8 @@ def _rpc_call(action: str, *, extra: dict[str, Any]) -> dict[str, Any]:
     if not access_key_id or not access_key_secret:
         raise RuntimeError("Missing ALIYUN_ACCESS_KEY_ID/ALIYUN_ACCESS_KEY_SECRET")
 
-    endpoint = (os.getenv("ALIYUN_DYPNS_ENDPOINT") or "dypnsapi.aliyuncs.com").strip()
-    region_id = (os.getenv("ALIYUN_DYPNS_REGION_ID") or "").strip()
+    endpoint = (os.getenv("ALIYUN_PNVS_ENDPOINT") or "dypnsapi.aliyuncs.com").strip()
+    region_id = (os.getenv("ALIYUN_PNVS_REGION_ID") or "").strip()
 
     params: dict[str, Any] = {
         "Action": action,
@@ -123,20 +122,18 @@ def _rpc_call(action: str, *, extra: dict[str, Any]) -> dict[str, Any]:
 
 
 def send_sms_verify_code(phone: str) -> dict[str, Any]:
-    sign_name = (os.getenv("ALIYUN_SMS_SIGN_NAME") or "").strip()
-    template_code = (os.getenv("ALIYUN_SMS_TEMPLATE_CODE") or "").strip()
+    sign_name = (os.getenv("ALIYUN_PNVS_SIGN_NAME") or "").strip()
+    template_code = (os.getenv("ALIYUN_PNVS_TEMPLATE_CODE") or "").strip()
     if not sign_name or not template_code:
-        raise RuntimeError("Missing ALIYUN_SMS_SIGN_NAME/ALIYUN_SMS_TEMPLATE_CODE")
+        raise RuntimeError("Missing ALIYUN_PNVS_SIGN_NAME/ALIYUN_PNVS_TEMPLATE_CODE")
 
-    template_param = (os.getenv("ALIYUN_SMS_TEMPLATE_PARAM") or "").strip()
+    template_param = (os.getenv("ALIYUN_PNVS_TEMPLATE_PARAM") or "").strip()
     if not template_param:
-        # Default matches the console example.
         template_param = json.dumps({"code": "##code##", "min": "5"}, ensure_ascii=False)
 
-    scheme_name = (os.getenv("ALIYUN_SMS_SCHEME_NAME") or "").strip()
-    country_code = (os.getenv("ALIYUN_SMS_COUNTRY_CODE") or "").strip()
-    out_id = (os.getenv("ALIYUN_SMS_OUT_ID") or "").strip()
-    sms_up_extend_code = (os.getenv("ALIYUN_SMS_UP_EXTEND_CODE") or "").strip()
+    scheme_name = (os.getenv("ALIYUN_PNVS_SCHEME_NAME") or "").strip()
+    country_code = (os.getenv("ALIYUN_PNVS_COUNTRY_CODE") or "").strip()
+    out_id = (os.getenv("ALIYUN_PNVS_OUT_ID") or "").strip()
 
     extra: dict[str, Any] = {
         "PhoneNumber": str(phone or "").strip(),
@@ -150,28 +147,18 @@ def send_sms_verify_code(phone: str) -> dict[str, Any]:
         extra["CountryCode"] = country_code
     if out_id:
         extra["OutId"] = out_id
-    if sms_up_extend_code:
-        extra["SmsUpExtendCode"] = sms_up_extend_code
 
-    # Optional knobs.
-    code_len = (os.getenv("ALIYUN_SMS_CODE_LENGTH") or "").strip()
-    valid_time = (os.getenv("ALIYUN_SMS_VALID_TIME") or "").strip()
-    if code_len:
-        extra["CodeLength"] = code_len
+    valid_time = (os.getenv("ALIYUN_PNVS_VALID_TIME") or "").strip()
     if valid_time:
         extra["ValidTime"] = valid_time
 
-    try:
-        res = _rpc_call("SendSmsVerifyCode", extra=extra)
-    except Exception as e:
-        raise
-    return res
+    return _rpc_call("SendSmsVerifyCode", extra=extra)
 
 
 def check_sms_verify_code(phone: str, code: str) -> dict[str, Any]:
-    scheme_name = (os.getenv("ALIYUN_SMS_SCHEME_NAME") or "").strip()
-    country_code = (os.getenv("ALIYUN_SMS_COUNTRY_CODE") or "").strip()
-    out_id = (os.getenv("ALIYUN_SMS_OUT_ID") or "").strip()
+    scheme_name = (os.getenv("ALIYUN_PNVS_SCHEME_NAME") or "").strip()
+    country_code = (os.getenv("ALIYUN_PNVS_COUNTRY_CODE") or "").strip()
+    out_id = (os.getenv("ALIYUN_PNVS_OUT_ID") or "").strip()
 
     extra: dict[str, Any] = {
         "PhoneNumber": str(phone or "").strip(),
@@ -184,12 +171,8 @@ def check_sms_verify_code(phone: str, code: str) -> dict[str, Any]:
     if out_id:
         extra["OutId"] = out_id
 
-    case_auth_policy = (os.getenv("ALIYUN_SMS_CASE_AUTH_POLICY") or "").strip()
+    case_auth_policy = (os.getenv("ALIYUN_PNVS_CASE_AUTH_POLICY") or "").strip()
     if case_auth_policy:
         extra["CaseAuthPolicy"] = case_auth_policy
 
-    try:
-        res = _rpc_call("CheckSmsVerifyCode", extra=extra)
-    except Exception as e:
-        raise
-    return res
+    return _rpc_call("CheckSmsVerifyCode", extra=extra)

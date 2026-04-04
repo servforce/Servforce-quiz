@@ -120,10 +120,7 @@ def build_quiz_metadata(spec: dict[str, Any], *, default_schema_version: int | N
     question_counts = compute_question_counts(list(doc.get("questions") or []))
     question_count = sum(question_counts.values())
     answer_time_total_seconds = compute_answer_time_total_seconds(list(doc.get("questions") or []))
-    if answer_time_total_seconds > 0:
-        estimated_duration_minutes = (answer_time_total_seconds + 59) // 60
-    else:
-        estimated_duration_minutes = estimate_duration_minutes(question_counts)
+    estimated_duration_minutes = (answer_time_total_seconds + 59) // 60 if answer_time_total_seconds > 0 else 0
     trait = doc.get("trait") if isinstance(doc.get("trait"), dict) else {}
 
     return {
@@ -133,6 +130,7 @@ def build_quiz_metadata(spec: dict[str, Any], *, default_schema_version: int | N
         "question_count": int(question_count),
         "question_counts": question_counts,
         "estimated_duration_minutes": int(estimated_duration_minutes),
+        "answer_time_total_seconds": int(answer_time_total_seconds),
         "trait": dict(trait),
     }
 
@@ -146,5 +144,6 @@ def apply_quiz_metadata(spec: dict[str, Any], *, default_schema_version: int | N
     out["question_count"] = metadata["question_count"]
     out["question_counts"] = metadata["question_counts"]
     out["estimated_duration_minutes"] = metadata["estimated_duration_minutes"]
+    out["answer_time_total_seconds"] = metadata["answer_time_total_seconds"]
     out["trait"] = metadata["trait"]
     return out

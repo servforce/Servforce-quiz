@@ -339,7 +339,7 @@ def record_llm_usage(*, total_tokens: int | None, ctx: dict[str, Any] | None = N
         candidate_id = int(c.get("candidate_id") or 0)
     except Exception:
         candidate_id = 0
-    exam_key = str(c.get("exam_key") or "").strip()
+    quiz_key = str(c.get("quiz_key") or "").strip()
     token = str(c.get("token") or "").strip()
     actor = str(c.get("actor") or "").strip() or "system"
     day = _today_local_day()
@@ -352,7 +352,7 @@ def record_llm_usage(*, total_tokens: int | None, ctx: dict[str, Any] | None = N
             "model": (str(model or "").strip() or None),
             "actor": actor,
             "candidate_id": (candidate_id if candidate_id > 0 else None),
-            "exam_key": (exam_key or None),
+            "quiz_key": (quiz_key or None),
             "token": (token or None),
         },
     )

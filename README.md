@@ -3,7 +3,7 @@
 `md-quiz` 已收敛为 `FastAPI + Worker + Scheduler` 单栈服务：
 
 - 管理端：`/admin*` Alpine SPA
-- 候选人端：`/p/*`、`/t/*`、`/resume/*`、`/exam/*`、`/done/*`、`/a/*` Alpine SPA
+- 候选人端：`/p/*`、`/t/*`、`/resume/*`、`/quiz/*`、`/done/*`、`/a/*` Alpine SPA
 - 数据接口：统一走 `/api/admin/*`、`/api/public/*`、`/api/system/*`
 - Python 应用代码：统一放在 `backend/md_quiz/`
 
@@ -11,8 +11,8 @@
 
 ### 进程
 
-- `API`：FastAPI，负责会话、SPA 入口、业务 API、静态资源与试卷资源路由
-- `Worker`：后台任务执行器，处理试卷同步、判卷等异步任务
+- `API`：FastAPI，负责会话、SPA 入口、业务 API、静态资源与测验资源路由
+- `Worker`：后台任务执行器，处理测验同步、判卷等异步任务
 - `Scheduler`：周期任务投递器，负责指标同步等定时工作
 
 ### 目录
@@ -98,14 +98,14 @@ scripts/dev/run-scheduler.sh
 - 系统健康检查：`http://127.0.0.1:8000/api/system/health`
 - 兼容跳转：`http://127.0.0.1:8000/legacy/admin`
 
-## 试卷仓库绑定
+## 测验仓库绑定
 
 管理端现在采用“单实例单仓库”模型：
 
-- 首次在 `/admin/exams` 输入仓库地址后，会保存为实例级绑定仓库，并自动尝试同步
+- 首次在 `/admin/quizzes` 输入仓库地址后，会保存为实例级绑定仓库，并自动尝试同步
 - 之后“立即同步”只针对当前绑定仓库执行
 - 若要切换到其他仓库，必须走“重新绑定”流程
-- 重新绑定会删除当前实例中的问卷、版本、邀约与答题归档数据，但保留候选人与简历
+- 重新绑定会删除当前实例中的测验、版本、邀约与答题归档数据，但保留候选人与简历
 
 ## 测试
 

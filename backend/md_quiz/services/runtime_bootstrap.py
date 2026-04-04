@@ -16,15 +16,15 @@ class RuntimeBootstrapError(RuntimeError):
     """Raised when app bootstrap cannot prepare required runtime dependencies."""
 
 
-def _ensure_exam_paper_for_token(token: str, assignment: dict) -> dict[str, Any] | None:
+def _ensure_quiz_paper_for_token(token: str, assignment: dict) -> dict[str, Any] | None:
     """
-    Ensure exam_paper exists for a token once candidate identity is available.
+    Ensure quiz_paper exists for a token once candidate identity is available.
     """
     t = str(token or "").strip()
     if not t:
         return None
     try:
-        ep = get_exam_paper_by_token(t)
+        ep = get_quiz_paper_by_token(t)
     except Exception:
         ep = None
     if ep:
@@ -38,20 +38,20 @@ def _ensure_exam_paper_for_token(token: str, assignment: dict) -> dict[str, Any]
         return None
 
     c = get_candidate(candidate_id) or {}
-    exam_key = str(assignment.get("exam_key") or "").strip()
+    quiz_key = str(assignment.get("quiz_key") or "").strip()
     try:
-        exam_version_id = int(assignment.get("exam_version_id") or 0)
+        quiz_version_id = int(assignment.get("quiz_version_id") or 0)
     except Exception:
-        exam_version_id = 0
+        quiz_version_id = 0
     phone = str(c.get("phone") or "").strip()
-    if not exam_key or not phone:
+    if not quiz_key or not phone:
         return None
 
     a_status = str(assignment.get("status") or "").strip()
     status_map = {
         "invited": "invited",
         "verified": "verified",
-        "in_exam": "in_exam",
+        "in_quiz": "in_quiz",
         "grading": "grading",
         "graded": "finished",
     }
@@ -64,12 +64,13 @@ def _ensure_exam_paper_for_token(token: str, assignment: dict) -> dict[str, Any]
     invite_end_date = str(inv.get("end_date") or "").strip() or None
 
     try:
-        create_exam_paper(
+        create_quiz_paper(
             candidate_id=candidate_id,
             phone=phone,
-            exam_key=exam_key,
-            exam_version_id=(exam_version_id or None),
+            quiz_key=quiz_key,
+            quiz_version_id=(quiz_version_id or None),
             token=t,
+            source_kind=("public" if assignment.get("public_invite") else "direct"),
             invite_start_date=invite_start_date,
             invite_end_date=invite_end_date,
             status=status,
@@ -77,7 +78,7 @@ def _ensure_exam_paper_for_token(token: str, assignment: dict) -> dict[str, Any]
     except Exception:
         pass
     try:
-        return get_exam_paper_by_token(t)
+        return get_quiz_paper_by_token(t)
     except Exception:
         return None
 
@@ -176,4 +177,4 @@ def bootstrap_runtime() -> None:
         logger.exception("Legacy exam version migration failed")
 
 
-__all__ = ["RuntimeBootstrapError", "_ensure_exam_paper_for_token", "bootstrap_runtime"]
+__all__ = ["RuntimeBootstrapError", "_ensure_quiz_paper_for_token", "bootstrap_runtime"]

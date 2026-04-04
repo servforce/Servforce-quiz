@@ -127,6 +127,15 @@ def _estimate_duration_minutes(question_counts: dict[str, int]) -> int:
     )
 
 
+def _default_answer_time_seconds(qtype: str) -> int:
+    mapping = {
+        "single": 120,
+        "multiple": 180,
+        "short": 600,
+    }
+    return int(mapping.get(str(qtype or "").strip().lower(), 120))
+
+
 def _safe_svg_text(raw: Any) -> str:
     s = str(raw or "").strip()
     if not s:
@@ -830,11 +839,11 @@ def _extract_target_question_count(prompt: str) -> int | None:
 def _build_generation_prompt_body(user_prompt: str, include_diagrams: bool, target_count: int | None, *, retry: bool) -> str:
     if target_count:
         count_rule = (
-            f"请生成一份完整试卷，必须恰好 {target_count} 题；"
+            f"请生成一份完整测验，必须恰好 {target_count} 题；"
             "题数必须与要求完全一致，不能少、不能多；并尽量覆盖 single/multiple/short 三类题型。"
         )
     else:
-        count_rule = "请生成一份完整试卷，至少 5 题，并尽量覆盖 single/multiple/short 三类题型。"
+        count_rule = "请生成一份完整测验，至少 5 题，并尽量覆盖 single/multiple/short 三类题型。"
 
     retry_rule = ""
     if retry and target_count:
@@ -870,7 +879,7 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
 
     diagram_mode = _diagram_mode()
     system = """
-你是“试卷生成助手”。请严格输出 JSON（不要 Markdown、不要解释）。目标：根据用户提示词生成可被 QML 解析器解析的试卷草案。
+你是“测验生成助手”。请严格输出 JSON（不要 Markdown、不要解释）。目标：根据用户提示词生成可被 QML 解析器解析的测验草案。
 输出 JSON schema:
 {
   "exam": {"id": "exam-xxx", "title": "...", "description": "..."},
@@ -936,7 +945,7 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
         raise RuntimeError(last_err or "生成失败")
 
     exam = obj.get("exam") if isinstance(obj.get("exam"), dict) else {}
-    title = str(exam.get("title") or "自动生成试卷").strip()
+    title = str(exam.get("title") or "自动生成测验").strip()
     description = str(exam.get("description") or "").strip()
     exam_id = _safe_exam_id(str(exam.get("id") or ""))
 
@@ -953,9 +962,14 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
 
     question_counts = _count_question_types(raw_questions)
     question_count = sum(question_counts.values())
-    estimated_duration_minutes = _estimate_duration_minutes(question_counts)
+    answer_time_total_seconds = 0
+    for item in raw_questions:
+        if not isinstance(item, dict):
+            continue
+        answer_time_total_seconds += _default_answer_time_seconds(_normalize_question_type(item.get("type")))
+    estimated_duration_minutes = (answer_time_total_seconds + 59) // 60 if answer_time_total_seconds > 0 else 0
     summary_line = (
-        f"本试卷共 {question_count} 题，"
+        f"本测验共 {question_count} 题，"
         f"其中单选 {question_counts['single']} 题、多选 {question_counts['multiple']} 题、简答 {question_counts['short']} 题，"
         f"预计 {estimated_duration_minutes} 分钟完成。"
     )
@@ -1006,14 +1020,18 @@ def generate_exam_from_prompt(prompt: str, *, include_diagrams: bool) -> tuple[s
             except Exception:
                 max_points = 10
             max_points = max(1, min(100, max_points))
-            lines.append(f"## {qid} [short] {{max={max_points}}}")
+            lines.append(f"## {qid} [short] {{max={max_points}, answer_time={_default_answer_time_seconds(qtype)}s}}")
         else:
             try:
                 points = int(item.get("points") or item.get("max_points") or 5)
             except Exception:
                 points = 5
             points = max(1, min(100, points))
-            attrs = " {partial=true}" if partial else ""
+            attrs_parts = []
+            if partial:
+                attrs_parts.append("partial=true")
+            attrs_parts.append(f"answer_time={_default_answer_time_seconds(qtype)}s")
+            attrs = f" {{{', '.join(attrs_parts)}}}" if attrs_parts else ""
             lines.append(f"## {qid} [{qtype}] ({points}){attrs}")
         lines.append(stem)
 

@@ -33,9 +33,79 @@ class JobService:
                         return self.store.fail(job.id, "缺少 repo_url")
                     result = perform_exam_repo_sync(repo_url, job_id=job.id)
                 case "scan_exams":
-                    result = {"message": "试卷扫描任务已完成", "count": 0}
+                    result = {"message": "测验扫描任务已完成", "count": 0}
                 case "resume_parse":
-                    result = {"message": "简历解析任务已完成", "status": "placeholder"}
+                    from backend.md_quiz.services.audit_context import audit_context, get_audit_context
+                    from backend.md_quiz.services.resume_service import (
+                        build_resume_parsed_payload,
+                        parse_resume_all_llm,
+                    )
+                    from backend.md_quiz.services.system_log import log_event
+                    from backend.md_quiz.storage.db import (
+                        get_candidate,
+                        get_candidate_resume,
+                        update_candidate,
+                        update_candidate_resume_parsed,
+                    )
+
+                    payload = job.payload or {}
+                    candidate_id = int(payload.get("candidate_id") or 0)
+                    expected_phone = str(payload.get("expected_phone") or "").strip()
+                    token = str(payload.get("token") or "").strip()
+                    quiz_key = str(payload.get("quiz_key") or "").strip()
+                    if candidate_id <= 0:
+                        return self.store.fail(job.id, "缺少 candidate_id")
+                    resume = get_candidate_resume(candidate_id)
+                    if not resume or not resume.get("resume_bytes"):
+                        return self.store.fail(job.id, "候选人缺少简历文件")
+
+                    with audit_context(meta={}):
+                        parsed = parse_resume_all_llm(
+                            data=resume.get("resume_bytes") or b"",
+                            filename=str(resume.get("resume_filename") or ""),
+                            mime=str(resume.get("resume_mime") or ""),
+                        ) or {}
+                        ctx = get_audit_context()
+                        meta = ctx.get("meta") if isinstance(ctx, dict) else {}
+                        llm_total_tokens = int(meta.get("llm_total_tokens_sum") or 0) if isinstance(meta, dict) else 0
+
+                    built = build_resume_parsed_payload(
+                        parsed,
+                        filename=str(resume.get("resume_filename") or ""),
+                        mime=str(resume.get("resume_mime") or ""),
+                        current_phone=expected_phone,
+                    )
+                    parsed_phone = str(built.get("parsed_phone") or "").strip()
+                    if expected_phone and parsed_phone and parsed_phone != expected_phone:
+                        return self.store.fail(job.id, "简历手机号与验证手机号不一致")
+
+                    update_candidate_resume_parsed(candidate_id, resume_parsed=built["resume_parsed"])
+
+                    parsed_name = str(built.get("parsed_name") or "").strip()
+                    if parsed_name:
+                        current = get_candidate(candidate_id) or {}
+                        current_name = str(current.get("name") or "").strip()
+                        if current_name in {"", "未知"}:
+                            update_candidate(candidate_id, name=parsed_name, phone=expected_phone or str(current.get("phone") or ""))
+
+                    try:
+                        log_event(
+                            "candidate.resume.parse",
+                            actor="system",
+                            candidate_id=candidate_id,
+                            quiz_key=(quiz_key or None),
+                            token=(token or None),
+                            llm_total_tokens=(llm_total_tokens or None),
+                            meta={"public_invite": True},
+                        )
+                    except Exception:
+                        logger.exception("Resume parse log failed: candidate_id=%s", candidate_id)
+
+                    result = {
+                        "message": "简历解析任务已完成",
+                        "status": str(((built["resume_parsed"].get("details") or {}).get("status")) or "done"),
+                        "candidate_id": candidate_id,
+                    }
                 case "grade_attempt":
                     result = {"message": "判卷任务已完成", "status": "placeholder"}
                 case "archive_attempt":

@@ -9,8 +9,11 @@ description: Use this skill when authoring, reviewing, fixing, or documenting QM
 
 在以下场景优先使用这个 skill：
 
+- 若任务同时涉及 quiz 仓库规范和 QML 定义，优先先看 [../md-quiz/SKILL.md](../md-quiz/SKILL.md) 作为总入口
 - 编写或修订 `quiz.md` 内容
 - 维护 `quiz.md` Front Matter，包括 `title`、`description`、`tags`
+- 维护 traits 量表问卷的维度说明、分析建议与 Front Matter 解释口径
+- 维护问卷 `intro` / `outro` 图片及其展示约定
 - 排查 QML 解析错误
 - 更新 `qml.md` 或 QML 示例
 - 评审 QML 语法与 parser 行为是否一致
@@ -29,6 +32,8 @@ description: Use this skill when authoring, reviewing, fixing, or documenting QM
 - 若拿得到本地 parser 实现，优先以本地 parser 和测试为准
 - 若拿不到本地 parser 实现，优先以 `parser-truth.md` 中写明的契约和边界为准
 - QML 语法与 quiz 仓库规范分层维护，不混写
+- `trait` 元数据必须与题面实际使用保持一致；没有 traits 量表题时应移除 `trait` 段
+- `intro` / `outro` 图片是可选项；若添加，优先建议使用约 `2:1` 的横幅比例
 
 ## 参考资料
 

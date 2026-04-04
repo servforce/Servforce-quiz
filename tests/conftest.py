@@ -22,13 +22,13 @@ TRUNCATE TABLE
   runtime_job,
   runtime_daily_metric,
   runtime_kv,
-  exam_version_asset,
-  exam_archive,
-  exam_paper,
+  quiz_version_asset,
+  quiz_archive,
+  quiz_paper,
   assignment_record,
-  exam_version,
-  exam_asset,
-  exam_definition,
+  quiz_version,
+  quiz_asset,
+  quiz_definition,
   candidate
 RESTART IDENTITY CASCADE
 """

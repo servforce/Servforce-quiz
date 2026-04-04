@@ -9,34 +9,6 @@ _FULLWIDTH_DIGITS = str.maketrans("０１２３４５６７８９", "0123456789"
 _ALLOWED_RESUME_EXTS = {".pdf", ".docx", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 
 
-def _sms_code_length() -> int:
-    raw = str(os.getenv("ALIYUN_SMS_CODE_LENGTH") or "").strip()
-    try:
-        n = int(raw or 6)
-    except Exception:
-        n = 6
-    return min(8, max(4, n))
-
-
-def _sms_code_ttl_seconds() -> int:
-    raw = str(os.getenv("ALIYUN_SMS_CODE_TTL_SECONDS") or "").strip()
-    try:
-        n = int(raw or 300)
-    except Exception:
-        n = 300
-    return min(3600, max(60, n))
-
-
-def _generate_sms_code(length: int) -> str:
-    n = min(8, max(4, int(length or 6)))
-    v = secrets.randbelow(10**n)
-    return str(v).zfill(n)
-
-
-def _hash_sms_code(code: str, salt: str) -> str:
-    return hmac.new(str(salt or "").encode("utf-8"), str(code or "").encode("utf-8"), hashlib.sha256).hexdigest()
-
-
 def _parse_iso_datetime(s: str) -> datetime | None:
     text = str(s or "").strip()
     if not text:
@@ -80,6 +52,13 @@ def _normalize_phone(value: str) -> str:
     return digits
 
 
+def _require_phone_verification(assignment: dict[str, Any] | None) -> bool:
+    current = assignment if isinstance(assignment, dict) else {}
+    if "require_phone_verification" in current:
+        return bool(current.get("require_phone_verification"))
+    return bool(current.get("public_invite"))
+
+
 def _normalize_exam_status(value: str) -> str:
     """Normalize exam/assignment status values to canonical keys."""
     s = str(value or "").strip()
@@ -91,8 +70,8 @@ def _normalize_exam_status(value: str) -> str:
         "验证通过": "verified",
         "invited": "invited",
         "已邀约": "invited",
-        "in_exam": "in_exam",
-        "正在答题": "in_exam",
+        "in_quiz": "in_quiz",
+        "正在答题": "in_quiz",
         "grading": "grading",
         "正在判卷": "grading",
         "finished": "finished",

@@ -38,7 +38,7 @@ def test_parse_qml_intro_and_outro_blocks() -> None:
         """
 ![intro](./assets/welcome.png)
 
-## Q1 [single] (5)
+## Q1 [single] (5) {answer_time=60s}
 题目一
 
 - A*) 正确
@@ -80,7 +80,7 @@ trait:
   dimensions: [I, E]
 ---
 
-## Q1 [single] (5)
+## Q1 [single] (5) {answer_time=60s}
 题目一
 
 - A*) 正确
@@ -99,6 +99,40 @@ trait:
     assert exam["estimated_duration_minutes"] == 27
     assert public_exam["estimated_duration_minutes"] == 27
     assert exam["trait"] == {"dimensions": ["I", "E"]}
+    assert public_exam["trait"] == exam["trait"]
+
+
+def test_parse_qml_trait_analysis_guidance_is_preserved() -> None:
+    exam, public_exam = parse_qml_markdown(
+        """
+---
+id: traits-guidance-demo
+trait:
+  dimensions: [I, E, S, N]
+  dimension_meanings:
+    I: 内向
+    E: 外向
+  analysis_guidance:
+    paired_dimensions:
+      - I/E：比较独处内化与外向互动
+      - [S, N]
+    scoring_method:
+      - 若同组平分，则依次比较 +2 次数、+1 次数；若仍平分，固定落位 I/S。
+    interpretation:
+      - 若差值较小，更适合解释为情境依赖。
+---
+
+## Q1 [single] (0) {scoring=traits, answer_time=20s}
+题目一
+
+- A) 同意 {traits=I:2}
+- B) 不同意 {traits=E:2}
+""".strip()
+    )
+
+    guidance = exam["trait"]["analysis_guidance"]
+    assert guidance["paired_dimensions"] == ["I/E：比较独处内化与外向互动", ["S", "N"]]
+    assert guidance["scoring_method"][0].startswith("若同组平分")
     assert public_exam["trait"] == exam["trait"]
 
 
@@ -129,7 +163,7 @@ def test_parse_qml_trait_single_allows_explicit_zero_points_without_correct_opti
 
 def test_parse_qml_trait_single_rejects_correct_marker() -> None:
     markdown = """
-## Q1 [single] (0) {scoring=traits}
+## Q1 [single] (0) {scoring=traits, answer_time=20s}
 题目一
 
 - A*) 非常同意 {traits=I:2}
@@ -149,7 +183,7 @@ tags:
   - 1
 ---
 
-## Q1 [single] (5)
+## Q1 [single] (5) {answer_time=60s}
 题目一
 
 - A*) 正确
@@ -171,4 +205,17 @@ def test_parse_qml_answer_time_invalid(raw: str) -> None:
 """.strip()
 
     with pytest.raises(QmlParseError, match="answer_time"):
+        parse_qml_markdown(markdown)
+
+
+def test_parse_qml_requires_answer_time() -> None:
+    markdown = """
+## Q1 [single] (5)
+题目一
+
+- A*) 正确
+- B) 错误
+""".strip()
+
+    with pytest.raises(QmlParseError, match="缺少 answer_time"):
         parse_qml_markdown(markdown)

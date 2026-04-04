@@ -4,7 +4,13 @@ from backend.md_quiz.services.exam_helpers import *
 from backend.md_quiz.services.support_deps import *
 from backend.md_quiz.services.validation_helpers import *
 
+def _timing_ignored(assignment: dict) -> bool:
+    return bool((assignment or {}).get("ignore_timing"))
+
+
 def _remaining_seconds(assignment: dict) -> int:
+    if _timing_ignored(assignment):
+        return 0
     limit = int(assignment.get("time_limit_seconds") or 0)
     start = (assignment.get("timing") or {}).get("start_at")
     if not start or limit <= 0:
@@ -18,6 +24,8 @@ def _remaining_seconds(assignment: dict) -> int:
 
 
 def _is_time_up(assignment: dict, *, now: datetime | None = None) -> bool:
+    if _timing_ignored(assignment):
+        return False
     limit = int(assignment.get("time_limit_seconds") or 0)
     if limit <= 0:
         return False
@@ -82,7 +90,7 @@ def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) 
     started_at = _parse_iso_dt(timing.get("start_at"))
     submitted_at = _parse_iso_dt(timing.get("end_at"))
     try:
-        update_exam_paper_result(
+        update_quiz_paper_result(
             token,
             status="grading",
             score=None,
@@ -90,14 +98,14 @@ def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) 
             finished_at=submitted_at,
         )
     except Exception:
-        logger.exception("Update exam_paper grading state failed (token=%s)", token)
+        logger.exception("Update quiz_paper grading state failed (token=%s)", token)
 
     try:
         cid2 = int(assignment.get("candidate_id") or 0)
     except Exception:
         cid2 = 0
     try:
-        ek2 = str(assignment.get("exam_key") or "").strip()
+        ek2 = str(assignment.get("quiz_key") or "").strip()
     except Exception:
         ek2 = ""
     name2 = ""
@@ -122,7 +130,7 @@ def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) 
             "exam.finish",
             actor="candidate",
             candidate_id=(cid2 if cid2 > 0 else None),
-            exam_key=(ek2 or None),
+            quiz_key=(ek2 or None),
             token=(str(token or "").strip() or None),
             meta={
                 "name": name2,
@@ -194,7 +202,7 @@ def _grade_assignment_background(token: str) -> None:
         exam = get_exam_snapshot_for_assignment(snapshot) or {}
         spec = exam.get("spec") if isinstance(exam.get("spec"), dict) else {}
         if not spec:
-            raise FileNotFoundError(str(snapshot.get("exam_key") or ""))
+            raise FileNotFoundError(str(snapshot.get("quiz_key") or ""))
         with audit_context(meta={}):
             grading = grade_attempt(spec, snapshot)
             if isinstance(grading, dict):
@@ -238,7 +246,7 @@ def _grade_assignment_background(token: str) -> None:
         timing = assignment.get("timing") or {}
         started_at = _parse_iso_dt(timing.get("start_at"))
         submitted_at = _parse_iso_dt(timing.get("end_at"))
-        update_exam_paper_result(
+        update_quiz_paper_result(
             token,
             status="finished",
             score=int((grading or {}).get("total") or 0),
@@ -246,13 +254,13 @@ def _grade_assignment_background(token: str) -> None:
             finished_at=submitted_at,
         )
     except Exception:
-        logger.exception("Update exam_paper graded result failed (token=%s)", token)
+        logger.exception("Update quiz_paper graded result failed (token=%s)", token)
     try:
         cid2 = int((assignment or {}).get("candidate_id") or 0)
     except Exception:
         cid2 = 0
     try:
-        ek2 = str((assignment or {}).get("exam_key") or "").strip()
+        ek2 = str((assignment or {}).get("quiz_key") or "").strip()
     except Exception:
         ek2 = ""
     try:
@@ -264,7 +272,7 @@ def _grade_assignment_background(token: str) -> None:
             "exam.grade",
             actor="system",
             candidate_id=(cid2 if cid2 > 0 else None),
-            exam_key=(ek2 or None),
+            quiz_key=(ek2 or None),
             token=(str(token or "").strip() or None),
             llm_total_tokens=(int(grading_llm_total_tokens or 0) or None),
             meta={"score": score2, "public_invite": bool((assignment or {}).get("public_invite"))},
@@ -336,13 +344,13 @@ def _parse_duration_seconds(value: str | None) -> int:
     return h * 3600 + m * 60 + s
 
 
-def _stable_archive_filename(phone: str, token: str, exam_key: str) -> str:
+def _stable_archive_filename(phone: str, token: str, quiz_key: str) -> str:
     phone_part = _sanitize_archive_part(str(phone or ""))
     token_part = _sanitize_archive_part(str(token or ""))
-    exam_part = _sanitize_archive_part(str(exam_key or ""))
+    exam_part = _sanitize_archive_part(str(quiz_key or ""))
 
     # Stable per token: one attempt -> one archive file (overwrite on re-save).
-    # Must keep suffix compatible with existing glob patterns: *_{phone}_*_{exam_key}.json
+    # Must keep suffix compatible with existing glob patterns: *_{phone}_*_{quiz_key}.json
     suffix_parts = [p for p in (phone_part, token_part, exam_part) if p]
     suffix = "_".join(suffix_parts) or "attempt"
     raw = f"latest_{suffix}".strip("._")
@@ -358,8 +366,8 @@ def _sanitize_archive_part(value: str) -> str:
     return raw
 
 
-def _try_load_public_spec(exam_key: str) -> dict | None:
-    exam = get_exam_definition(str(exam_key or "").strip()) or {}
+def _try_load_public_spec(quiz_key: str) -> dict | None:
+    exam = get_quiz_definition(str(quiz_key or "").strip()) or {}
     public_spec = exam.get("public_spec")
     return public_spec if isinstance(public_spec, dict) else None
 
@@ -371,7 +379,7 @@ def _try_load_public_spec_for_assignment(assignment: dict) -> dict | None:
 
 
 def _redact_spec_for_archive(spec: dict) -> dict:
-    # 当公开试卷对象缺失时，回退到完整试卷并去掉标准答案。
+    # 当公开测验对象缺失时，回退到完整测验并去掉标准答案。
     out = dict(spec or {})
     questions = []
     for q in (spec or {}).get("questions", []) or []:
@@ -399,13 +407,13 @@ def _archive_candidate_attempt(assignment: dict, *, spec: dict | None = None) ->
     c = get_candidate(candidate_id)
     if not c:
         return
-    exam_key = str(assignment.get("exam_key") or "")
-    if not exam_key:
+    quiz_key = str(assignment.get("quiz_key") or "")
+    if not quiz_key:
         return
     try:
-        exam_version_id = int(assignment.get("exam_version_id") or 0)
+        quiz_version_id = int(assignment.get("quiz_version_id") or 0)
     except Exception:
-        exam_version_id = 0
+        quiz_version_id = 0
 
     grading = assignment.get("grading") or {}
     answers = assignment.get("answers") or {}
@@ -474,8 +482,8 @@ def _archive_candidate_attempt(assignment: dict, *, spec: dict | None = None) ->
         "token": token,
         "candidate": {"id": c.get("id"), "name": c.get("name"), "phone": c.get("phone")},
         "exam": {
-            "exam_key": exam_key,
-            "exam_version_id": (exam_version_id or None),
+            "quiz_key": quiz_key,
+            "quiz_version_id": (quiz_version_id or None),
             "title": public_spec.get("title"),
             "description": public_spec.get("description"),
         },
@@ -483,20 +491,25 @@ def _archive_candidate_attempt(assignment: dict, *, spec: dict | None = None) ->
         "time_limit_seconds": int(assignment.get("time_limit_seconds") or 0),
         "min_submit_seconds": int(assignment.get("min_submit_seconds") or 0),
         "total_score": grading.get("total"),
+        "score_max": grading.get("total_max"),
+        "result_mode": grading.get("result_mode"),
+        "traits": grading.get("traits") or grading.get("trait_result") or {},
+        "final_analysis": grading.get("final_analysis") or grading.get("analysis") or "",
         "raw_scored": grading.get("raw_scored"),
         "raw_total": grading.get("raw_total"),
         "grading": grading,
+        "candidate_remark": assignment.get("candidate_remark"),
         "answers": answers,
         "questions": questions_out,
     }
 
-    filename = _stable_archive_filename(str(c.get("phone") or ""), token, exam_key)
-    save_exam_archive(
+    filename = _stable_archive_filename(str(c.get("phone") or ""), token, quiz_key)
+    save_quiz_archive(
         archive_name=filename,
         token=token,
         candidate_id=int(candidate_id),
-        exam_key=exam_key,
-        exam_version_id=(exam_version_id or None),
+        quiz_key=quiz_key,
+        quiz_version_id=(quiz_version_id or None),
         phone=str(c.get("phone") or ""),
         archive=archive,
     )
@@ -509,12 +522,12 @@ def _find_latest_archive(candidate: dict) -> dict[str, Any] | None:
         return None
     if not phone:
         return None
-    rows = list_exam_archives_for_phone(phone)
+    rows = list_quiz_archives_for_phone(phone)
     return rows[0] if rows else None
 
 
 def _find_archive_by_token(token: str, *, assignment: dict | None = None) -> dict[str, Any] | None:
-    row = get_exam_archive_by_token(str(token or "").strip())
+    row = get_quiz_archive_by_token(str(token or "").strip())
     if row:
         return row
     if not assignment:
@@ -529,28 +542,28 @@ def _find_archive_by_token(token: str, *, assignment: dict | None = None) -> dic
     phone = str(c.get("phone") or "").strip()
     if not phone:
         return None
-    rows = list_exam_archives_for_phone(phone)
+    rows = list_quiz_archives_for_phone(phone)
     return rows[0] if rows else None
 
 
 def _augment_archive_with_spec(archive: dict) -> dict:
     """
-    尽力用当前试卷定义补全归档里的标签、rubric 和标准答案信息。
+    尽力用当前测验定义补全归档里的标签、rubric 和标准答案信息。
     """
     try:
-        exam_key = str(((archive.get("exam") or {}).get("exam_key")) or "").strip()
+        quiz_key = str(((archive.get("exam") or {}).get("quiz_key")) or "").strip()
     except Exception:
-        exam_key = ""
+        quiz_key = ""
     try:
-        exam_version_id = int(((archive.get("exam") or {}).get("exam_version_id")) or 0)
+        quiz_version_id = int(((archive.get("exam") or {}).get("quiz_version_id")) or 0)
     except Exception:
-        exam_version_id = 0
-    if not exam_key:
+        quiz_version_id = 0
+    if not quiz_key:
         return archive
-    if exam_version_id > 0:
-        exam = get_exam_version_snapshot(exam_version_id) or {}
+    if quiz_version_id > 0:
+        exam = get_quiz_version_snapshot(quiz_version_id) or {}
     else:
-        exam = get_exam_definition(exam_key) or {}
+        exam = get_quiz_definition(quiz_key) or {}
     spec = exam.get("spec")
     if not isinstance(spec, dict):
         return archive
@@ -577,7 +590,7 @@ def _augment_archive_with_spec(archive: dict) -> dict:
     return archive
 
 
-def _sync_exam_paper_finished_from_assignment(assignment: dict) -> None:
+def _sync_quiz_paper_finished_from_assignment(assignment: dict) -> None:
     token = str(assignment.get("token") or "").strip()
     if not token:
         return
@@ -598,7 +611,7 @@ def _sync_exam_paper_finished_from_assignment(assignment: dict) -> None:
             _archive_candidate_attempt(assignment)
         except Exception:
             logger.exception("Archive candidate attempt failed (token=%s)", token)
-        update_exam_paper_result(
+        update_quiz_paper_result(
             token,
             status="finished",
             score=int(grading.get("total") or 0),
@@ -606,7 +619,7 @@ def _sync_exam_paper_finished_from_assignment(assignment: dict) -> None:
             finished_at=submitted_at,
         )
     except Exception:
-        logger.exception("Sync exam_paper finished failed (token=%s)", token)
+        logger.exception("Sync quiz_paper finished failed (token=%s)", token)
         return
 
 __all__ = [name for name in globals() if not name.startswith("__")]

@@ -15,7 +15,7 @@
   --admin-danger: #e11d48;
   --admin-warning: #d97706;
   --admin-shadow: 0 30px 80px rgba(15, 23, 42, 0.08);
-  --radius-2xl: 0.75rem;
+  --radius-2xl: 0.875rem;
   --radius-3xl: 1rem;
 }
 
@@ -133,7 +133,7 @@
 
   .admin-markdown pre {
     overflow-x: auto;
-    border-radius: 1rem;
+    border-radius: 0.875rem;
     background: #0f172a;
     padding: 1rem;
     color: #e2e8f0;
@@ -154,8 +154,542 @@
   .admin-markdown img {
     margin: 0.75rem 0;
     max-width: 100%;
-    border-radius: 1rem;
+    border-radius: 0.875rem;
     border: 1px solid rgba(37, 99, 235, 0.12);
     background: rgba(255, 255, 255, 0.9);
+  }
+
+  input.rounded-2xl,
+  input.rounded-3xl,
+  textarea.rounded-2xl,
+  textarea.rounded-3xl,
+  select.rounded-2xl,
+  select.rounded-3xl {
+    border-radius: var(--radius-xl);
+  }
+
+  .assignment-surface {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .assignment-surface > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .assignment-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 220ms ease;
+  }
+
+  .assignment-card {
+    cursor: pointer;
+    border-radius: 1rem;
+    border: 1px solid rgba(37, 99, 235, 0.16);
+    background: rgba(255, 255, 255, 0.94);
+    padding: 1rem;
+    text-align: left;
+    transition:
+      border-color 180ms ease,
+      background-color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease;
+  }
+
+  .assignment-card:hover {
+    border-color: rgba(96, 165, 250, 0.6);
+    background: rgba(248, 251, 255, 0.98);
+    box-shadow: 0 16px 36px rgba(59, 130, 246, 0.08);
+  }
+
+  .assignment-card:focus-visible {
+    outline: 2px solid rgba(191, 219, 254, 0.92);
+    outline-offset: 3px;
+    box-shadow:
+      0 16px 36px rgba(59, 130, 246, 0.1);
+  }
+
+  .assignment-card--attention {
+    border-color: rgba(245, 158, 11, 0.34);
+    background: rgba(255, 251, 235, 0.88);
+  }
+
+  .assignment-card--attention:hover {
+    border-color: rgba(245, 158, 11, 0.46);
+    background: rgba(255, 248, 225, 0.94);
+    box-shadow: 0 16px 36px rgba(245, 158, 11, 0.1);
+  }
+
+  .assignment-detail-panel--attention {
+    border-color: rgba(245, 158, 11, 0.2);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 250, 240, 0.86)),
+      rgba(255, 255, 255, 0.84);
+  }
+
+  .assignment-surface--waiting {
+    border-color: rgba(59, 130, 246, 0.22);
+  }
+
+  .assignment-surface--finished {
+    border-color: rgba(16, 185, 129, 0.22);
+  }
+
+  .assignment-surface--expired {
+    border-color: rgba(148, 163, 184, 0.26);
+    background:
+      linear-gradient(180deg, rgba(248, 250, 252, 0.94), rgba(241, 245, 249, 0.88)),
+      rgba(248, 250, 252, 0.92);
+  }
+
+  .assignment-surface--in-quiz {
+    border-color: rgba(34, 211, 238, 0.3);
+  }
+
+  .assignment-surface--in-quiz::before {
+    opacity: 1;
+    background:
+      linear-gradient(
+        110deg,
+        transparent 0%,
+        rgba(37, 99, 235, 0.016) 18%,
+        rgba(34, 211, 238, 0.075) 34%,
+        rgba(37, 99, 235, 0.028) 52%,
+        transparent 68%
+      );
+    background-size: 220% 100%;
+    animation: assignment-progress-sheen 6s ease-in-out infinite;
+  }
+
+  .assignment-surface--grading {
+    border-color: rgba(245, 158, 11, 0.42);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 248, 225, 0.9)),
+      rgba(255, 255, 255, 0.95);
+    animation: assignment-grading-breathe 2.4s ease-in-out infinite;
+  }
+
+  .assignment-surface--grading::before {
+    opacity: 1;
+    background:
+      radial-gradient(120% 100% at 0% 0%, rgba(251, 191, 36, 0.2), transparent 56%),
+      linear-gradient(
+        112deg,
+        transparent 0%,
+        rgba(251, 191, 36, 0.04) 18%,
+        rgba(255, 255, 255, 0.45) 34%,
+        rgba(251, 191, 36, 0.11) 46%,
+        rgba(255, 255, 255, 0.12) 58%,
+        transparent 76%
+      );
+    background-size: 220% 100%;
+    animation: assignment-grading-sheen 2.8s linear infinite;
+  }
+
+  .assignment-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.75rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    padding: 0.35rem 0.72rem;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .assignment-badge--source {
+    border-color: rgba(16, 185, 129, 0.18);
+    background: rgba(236, 253, 245, 0.94);
+    color: #047857;
+  }
+
+  .assignment-badge--status-active {
+    border-color: rgba(34, 211, 238, 0.22);
+    background: rgba(236, 254, 255, 0.94);
+    color: #0f766e;
+  }
+
+  .assignment-badge--status-grading {
+    position: relative;
+    overflow: hidden;
+    padding-left: 1.28rem;
+    border-color: rgba(245, 158, 11, 0.34);
+    background: linear-gradient(180deg, rgba(255, 251, 235, 0.98), rgba(255, 244, 214, 0.92));
+    color: #b45309;
+    box-shadow:
+      0 0 0 1px rgba(251, 191, 36, 0.1) inset,
+      0 6px 16px rgba(245, 158, 11, 0.12);
+  }
+
+  .assignment-badge--status-grading::before {
+    content: "";
+    position: absolute;
+    left: 0.62rem;
+    top: 50%;
+    z-index: 1;
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 999px;
+    background: #f59e0b;
+    transform: translateY(-50%);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.38);
+    animation: assignment-grading-dot 1.7s ease-out infinite;
+  }
+
+  .assignment-badge--status-grading::after {
+    content: "";
+    position: absolute;
+    inset: -32% auto -32% -36%;
+    width: 38%;
+    pointer-events: none;
+    background: linear-gradient(
+      115deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.08) 24%,
+      rgba(255, 255, 255, 0.74) 46%,
+      rgba(255, 255, 255, 0.12) 62%,
+      transparent 100%
+    );
+    transform: skewX(-20deg);
+    opacity: 0.7;
+    animation: assignment-grading-sheen 2.4s linear infinite;
+  }
+
+  .assignment-badge--status-finished {
+    border-color: rgba(16, 185, 129, 0.18);
+    background: rgba(236, 253, 245, 0.94);
+    color: #047857;
+  }
+
+  .assignment-badge--status-waiting {
+    border-color: rgba(59, 130, 246, 0.18);
+    background: rgba(239, 246, 255, 0.92);
+    color: #1d4ed8;
+  }
+
+  .assignment-badge--status-expired,
+  .assignment-badge--status-neutral {
+    border-color: rgba(148, 163, 184, 0.2);
+    background: rgba(248, 250, 252, 0.92);
+    color: #475569;
+  }
+
+  .assignment-badge--attention {
+    border-color: rgba(245, 158, 11, 0.28);
+    background: rgba(254, 243, 199, 0.92);
+    color: #b45309;
+  }
+
+  .assignment-badge--handled {
+    border-color: rgba(148, 163, 184, 0.18);
+    background: rgba(241, 245, 249, 0.92);
+    color: #475569;
+  }
+
+  .assignment-action-group {
+    display: inline-flex;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.45rem;
+    align-self: center;
+    position: relative;
+    margin-left: 0.1rem;
+    padding-left: 0.72rem;
+  }
+
+  .assignment-action-group::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    height: 1.7rem;
+    width: 1px;
+    transform: translateY(-50%);
+    background: rgba(148, 163, 184, 0.24);
+  }
+
+  .grading-placeholder {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .grading-placeholder::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      radial-gradient(120% 120% at 0% 0%, rgba(251, 191, 36, 0.14), transparent 52%),
+      linear-gradient(
+        110deg,
+        transparent 0%,
+        rgba(251, 191, 36, 0.08) 18%,
+        rgba(255, 255, 255, 0.56) 36%,
+        rgba(251, 191, 36, 0.12) 50%,
+        transparent 72%
+      );
+    background-size: 220% 100%;
+    opacity: 0.88;
+    animation: assignment-grading-sheen 2.6s linear infinite;
+  }
+
+  .grading-placeholder > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .grading-placeholder__hero {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+  }
+
+  .grading-placeholder__spinner {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    background: linear-gradient(180deg, rgba(255, 251, 235, 0.96), rgba(254, 243, 199, 0.88));
+    color: #b45309;
+    box-shadow:
+      0 10px 24px rgba(245, 158, 11, 0.14),
+      0 0 0 1px rgba(251, 191, 36, 0.08) inset;
+  }
+
+  .grading-placeholder__spinner::before {
+    content: "";
+    position: absolute;
+    inset: -0.35rem;
+    border-radius: inherit;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    opacity: 0.7;
+    animation: grading-placeholder-ring 1.8s ease-out infinite;
+  }
+
+  .grading-placeholder__spinner > .material-symbols-rounded {
+    animation: grading-placeholder-rotate 1.7s linear infinite;
+  }
+
+  .grading-placeholder__bars {
+    margin-top: 1rem;
+    display: grid;
+    gap: 0.6rem;
+  }
+
+  .grading-placeholder__bar {
+    display: block;
+    height: 0.62rem;
+    border-radius: 999px;
+    background:
+      linear-gradient(
+        90deg,
+        rgba(251, 191, 36, 0.12) 0%,
+        rgba(255, 255, 255, 0.9) 42%,
+        rgba(251, 191, 36, 0.14) 68%,
+        rgba(255, 248, 225, 0.62) 100%
+      );
+    background-size: 220% 100%;
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.08) inset;
+    animation: assignment-grading-sheen 2.2s linear infinite;
+  }
+
+  .grading-placeholder__bar--primary {
+    width: 100%;
+  }
+
+  .grading-placeholder__bar--secondary {
+    width: 78%;
+  }
+
+  .grading-placeholder__bar--tertiary {
+    width: 58%;
+  }
+
+  .assignment-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.95rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    padding: 0.42rem 0.82rem;
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1;
+    white-space: nowrap;
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease,
+      color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+
+  .assignment-action:hover {
+    transform: translateY(-0.5px);
+  }
+
+  .assignment-action:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(191, 219, 254, 0.82);
+  }
+
+  .assignment-action--primary {
+    background: linear-gradient(135deg, var(--admin-brand), var(--admin-brand-strong));
+    color: white;
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+  }
+
+  .assignment-action--primary:hover {
+    background: linear-gradient(135deg, var(--admin-brand-strong), #1e40af);
+  }
+
+  .assignment-action--secondary {
+    border-color: rgba(148, 163, 184, 0.16);
+    background: rgba(255, 255, 255, 0.68);
+    color: #475569;
+  }
+
+  .assignment-action--secondary:hover {
+    border-color: rgba(96, 165, 250, 0.34);
+    background: rgba(255, 255, 255, 0.98);
+    color: #1d4ed8;
+  }
+
+  .assignment-action--warning {
+    border-color: rgba(245, 158, 11, 0.22);
+    background: rgba(255, 251, 235, 0.74);
+    color: #b45309;
+  }
+
+  .assignment-action--warning:hover {
+    background: rgba(255, 247, 237, 0.98);
+  }
+
+  .assignment-action--danger {
+    border-color: rgba(251, 113, 133, 0.24);
+    background: rgba(255, 241, 242, 0.72);
+    color: #be123c;
+  }
+
+  .assignment-action--danger:hover {
+    background: rgba(255, 228, 230, 0.98);
+  }
+}
+
+@keyframes assignment-progress-sheen {
+  0% {
+    background-position: 120% 0;
+  }
+
+  50% {
+    background-position: 20% 0;
+  }
+
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+@keyframes assignment-grading-breathe {
+  0%,
+  100% {
+    border-color: rgba(245, 158, 11, 0.3);
+    box-shadow:
+      0 0 0 1px rgba(251, 191, 36, 0.14) inset,
+      0 14px 32px rgba(245, 158, 11, 0.08);
+  }
+
+  50% {
+    border-color: rgba(245, 158, 11, 0.58);
+    box-shadow:
+      0 0 0 1px rgba(251, 191, 36, 0.24) inset,
+      0 20px 42px rgba(245, 158, 11, 0.16);
+  }
+}
+
+@keyframes assignment-grading-sheen {
+  0% {
+    background-position: 180% 0;
+  }
+
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+@keyframes assignment-grading-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.38);
+    transform: translateY(-50%) scale(0.95);
+  }
+
+  70% {
+    box-shadow: 0 0 0 0.5rem rgba(245, 158, 11, 0);
+    transform: translateY(-50%) scale(1);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+    transform: translateY(-50%) scale(0.95);
+  }
+}
+
+@keyframes grading-placeholder-ring {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.68;
+  }
+
+  100% {
+    transform: scale(1.18);
+    opacity: 0;
+  }
+}
+
+@keyframes grading-placeholder-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assignment-card,
+  .assignment-action {
+    transition-duration: 0ms;
+  }
+
+  .assignment-surface--in-quiz::before,
+  .assignment-surface--grading,
+  .assignment-surface--grading::before,
+  .assignment-badge--status-grading::before,
+  .assignment-badge--status-grading::after,
+  .grading-placeholder::before,
+  .grading-placeholder__spinner::before,
+  .grading-placeholder__spinner > .material-symbols-rounded,
+  .grading-placeholder__bar {
+    animation: none;
   }
 }

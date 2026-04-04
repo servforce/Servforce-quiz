@@ -19,7 +19,7 @@ from .deps import get_container
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-_LOG_CATEGORY_KEYS = ("candidate", "exam", "grading", "assignment", "system")
+_LOG_CATEGORY_KEYS = ("candidate", "quiz", "grading", "assignment", "system")
 
 
 class AdminLoginPayload(BaseModel):
@@ -28,7 +28,6 @@ class AdminLoginPayload(BaseModel):
 
 
 class RuntimeConfigPatch(BaseModel):
-    sms_enabled: bool | None = None
     token_daily_threshold: int | None = Field(default=None, ge=0)
     sms_daily_threshold: int | None = Field(default=None, ge=0)
     allow_public_assignments: bool | None = None
@@ -68,14 +67,19 @@ class CandidateEvaluationPayload(BaseModel):
 
 
 class AssignmentCreatePayload(BaseModel):
-    exam_key: str
+    quiz_key: str
     candidate_id: int
-    time_limit_seconds: int | str
+    time_limit_seconds: int | str | None = None
     invite_start_date: str
     invite_end_date: str
     min_submit_seconds: int | None = None
-    pass_threshold: int = 60
+    require_phone_verification: bool = False
+    ignore_timing: bool = False
     verify_max_attempts: int = 3
+
+
+class AssignmentHandlingPayload(BaseModel):
+    handled: bool
 
 
 def _require_admin(request: Request) -> None:
@@ -87,12 +91,16 @@ def _status_label(status_key: str) -> str:
     mapping = {
         "verified": "验证通过",
         "invited": "已邀约",
-        "in_exam": "正在答题",
+        "in_quiz": "正在答题",
         "grading": "正在判卷",
         "finished": "判卷结束",
         "expired": "失效",
     }
     return mapping.get(str(status_key or "").strip(), "未知")
+
+
+def _source_label(source_kind: str) -> str:
+    return "公开邀约" if str(source_kind or "").strip() == "public" else "主动邀约"
 
 
 def _parse_date_ymd(value: str) -> date | None:
@@ -119,11 +127,340 @@ def _iso_to_local_display(value: str) -> str:
         return raw
 
 
+def _score_display(score: Any, score_max: Any, *, result_mode: str = "") -> str:
+    mode = str(result_mode or "").strip().lower()
+    if mode == "traits":
+        return "-"
+    try:
+        scored = int(score)
+    except Exception:
+        return "-"
+    try:
+        max_value = int(score_max)
+    except Exception:
+        max_value = 0
+    if max_value > 0:
+        return f"{scored} / {max_value}"
+    return str(scored)
+
+
+def _coerce_int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _normalize_answer_keys(value: Any) -> list[str]:
+    if isinstance(value, list):
+        items = value
+    elif value is None:
+        items = []
+    else:
+        items = [value]
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        key = str(item or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(key)
+    return normalized
+
+
+def _has_trait_options(options: list[dict[str, Any]]) -> bool:
+    return any(isinstance((option or {}).get("traits"), dict) and (option or {}).get("traits") for option in options)
+
+
+def _normalize_review_options(raw_options: Any, *, spec_question: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    current_options = [dict(option) for option in (raw_options or []) if isinstance(option, dict)]
+    current_by_key = {str(option.get("key") or "").strip(): option for option in current_options if str(option.get("key") or "").strip()}
+    spec_options = [dict(option) for option in ((spec_question or {}).get("options") or []) if isinstance(option, dict)]
+    if spec_options:
+        merged: list[dict[str, Any]] = []
+        for spec_option in spec_options:
+            key = str(spec_option.get("key") or "").strip()
+            current_option = current_by_key.get(key) or {}
+            item: dict[str, Any] = {
+                "key": current_option.get("key") or spec_option.get("key"),
+                "text": current_option.get("text") or spec_option.get("text") or "",
+            }
+            if "correct" in current_option or "correct" in spec_option:
+                item["correct"] = bool(current_option.get("correct")) or bool(spec_option.get("correct"))
+            traits = current_option.get("traits")
+            if not isinstance(traits, dict) or not traits:
+                traits = spec_option.get("traits")
+            if isinstance(traits, dict) and traits:
+                item["traits"] = dict(traits)
+            merged.append(item)
+        return merged
+
+    normalized: list[dict[str, Any]] = []
+    for option in current_options:
+        item = {
+            "key": option.get("key"),
+            "text": option.get("text") or "",
+        }
+        if "correct" in option:
+            item["correct"] = bool(option.get("correct"))
+        traits = option.get("traits")
+        if isinstance(traits, dict) and traits:
+            item["traits"] = dict(traits)
+        normalized.append(item)
+    return normalized
+
+
+def _review_question_kind(question_type: str, options: list[dict[str, Any]]) -> str:
+    qtype = str(question_type or "").strip().lower()
+    if qtype == "short":
+        return "short"
+    if qtype in {"single", "multiple"} and _has_trait_options(options):
+        return "traits"
+    if qtype in {"single", "multiple"}:
+        return "objective"
+    return "unknown"
+
+
+def _build_review_answer_item(
+    raw_question: dict[str, Any],
+    *,
+    spec_question: dict[str, Any] | None = None,
+    public_question: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    qid = str(raw_question.get("qid") or (spec_question or {}).get("qid") or "").strip()
+    qtype = str(raw_question.get("type") or (spec_question or {}).get("type") or (public_question or {}).get("type") or "").strip()
+    options = _normalize_review_options(raw_question.get("options"), spec_question=spec_question)
+    review_kind = _review_question_kind(qtype, options)
+    score = _coerce_int_or_none(raw_question.get("score"))
+    max_points = _coerce_int_or_none(
+        raw_question.get("max_points")
+        or (spec_question or {}).get("max_points")
+        or (spec_question or {}).get("points")
+        or (public_question or {}).get("max_points")
+        or (public_question or {}).get("points")
+    )
+    score_max = _coerce_int_or_none(raw_question.get("score_max"))
+    if score_max is None:
+        score_max = max_points
+    stem_md = str(
+        raw_question.get("stem_md")
+        or (public_question or {}).get("stem_md")
+        or (spec_question or {}).get("stem_md")
+        or ""
+    )
+    stem_html = str(raw_question.get("stem_html") or "").strip() or exam_helpers._render_markdown_html(stem_md)
+    answer = raw_question.get("answer")
+    selected_options = _normalize_answer_keys(answer) if qtype in {"single", "multiple"} else []
+    correct_options = [
+        str(option.get("key") or "").strip()
+        for option in options
+        if bool(option.get("correct")) and str(option.get("key") or "").strip()
+    ]
+    has_answer = bool(str(answer or "").strip()) if qtype == "short" else bool(selected_options)
+    is_correct: bool | None = None
+    is_partial = False
+    if review_kind == "objective" and has_answer:
+        is_correct = set(selected_options) == set(correct_options)
+        is_partial = not bool(is_correct) and score is not None and int(score or 0) > 0 and int(score or 0) < int(score_max or 0)
+    score_display = _score_display(score, score_max, result_mode="scored") if review_kind != "traits" and score is not None else ""
+    return {
+        "qid": qid,
+        "label": raw_question.get("label") or (spec_question or {}).get("label") or (public_question or {}).get("label") or qid,
+        "type": qtype,
+        "review_kind": review_kind,
+        "is_trait_question": review_kind == "traits",
+        "max_points": max_points,
+        "score": score,
+        "score_max": score_max,
+        "has_score": review_kind != "traits" and score is not None,
+        "score_display": score_display,
+        "stem_md": stem_md,
+        "stem_html": stem_html,
+        "answer": answer,
+        "has_answer": has_answer,
+        "options": options,
+        "correct_options": correct_options,
+        "selected_options": selected_options,
+        "is_correct": is_correct,
+        "is_partial": is_partial,
+        "reason": str(raw_question.get("reason") or "").strip(),
+        "rubric": str(raw_question.get("rubric") or (spec_question or {}).get("rubric") or "").strip(),
+    }
+
+
+def _build_grading_details_by_qid(grading: Any) -> dict[str, dict[str, Any]]:
+    details: dict[str, dict[str, Any]] = {}
+    current = grading if isinstance(grading, dict) else {}
+    for item in (current.get("objective") or []):
+        qid = str((item or {}).get("qid") or "").strip()
+        if qid:
+            details[qid] = dict(item)
+    for item in (current.get("subjective") or []):
+        qid = str((item or {}).get("qid") or "").strip()
+        if qid:
+            details[qid] = dict(item)
+    return details
+
+
+def _resolve_attempt_snapshot(
+    assignment: dict[str, Any] | None,
+    archive: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if isinstance(assignment, dict) and assignment:
+        snapshot = exam_helpers.get_exam_snapshot_for_assignment(assignment)
+        if isinstance(snapshot, dict) and snapshot:
+            return snapshot
+    exam = (archive or {}).get("exam") or {}
+    try:
+        quiz_version_id = int(exam.get("quiz_version_id") or 0)
+    except Exception:
+        quiz_version_id = 0
+    if quiz_version_id > 0:
+        snapshot = exam_helpers.get_quiz_version_snapshot(quiz_version_id)
+        if isinstance(snapshot, dict) and snapshot:
+            return snapshot
+    quiz_key = str(exam.get("quiz_key") or "").strip()
+    if quiz_key:
+        snapshot = deps.get_quiz_definition(quiz_key) or {}
+        if isinstance(snapshot, dict):
+            return snapshot
+    return {}
+
+
+def _build_review_answers(
+    *,
+    archive: dict[str, Any] | None,
+    assignment: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    snapshot = _resolve_attempt_snapshot(assignment, archive)
+    spec_questions = [dict(question) for question in ((snapshot.get("spec") or {}).get("questions") or []) if isinstance(question, dict)]
+    spec_by_qid = {str(question.get("qid") or "").strip(): question for question in spec_questions if str(question.get("qid") or "").strip()}
+    public_by_qid = {
+        str(question.get("qid") or "").strip(): question
+        for question in (((snapshot.get("public_spec") or {}).get("questions") or []))
+        if isinstance(question, dict) and str(question.get("qid") or "").strip()
+    }
+    if isinstance(archive, dict) and isinstance(archive.get("questions"), list) and archive.get("questions"):
+        answers: list[dict[str, Any]] = []
+        for raw_question in archive.get("questions") or []:
+            if not isinstance(raw_question, dict):
+                continue
+            qid = str(raw_question.get("qid") or "").strip()
+            answers.append(
+                _build_review_answer_item(
+                    dict(raw_question),
+                    spec_question=spec_by_qid.get(qid),
+                    public_question=public_by_qid.get(qid),
+                )
+            )
+        return answers
+
+    if not isinstance(assignment, dict) or not spec_questions:
+        return []
+
+    grading = assignment.get("grading") or {}
+    scored_by_qid = _build_grading_details_by_qid(grading)
+    assignment_answers = assignment.get("answers") or {}
+    answers: list[dict[str, Any]] = []
+    for spec_question in spec_questions:
+        qid = str(spec_question.get("qid") or "").strip()
+        score_detail = scored_by_qid.get(qid) or {}
+        raw_question = {
+            "qid": qid,
+            "label": spec_question.get("label") or qid,
+            "type": spec_question.get("type"),
+            "max_points": spec_question.get("max_points") or spec_question.get("points"),
+            "stem_md": (public_by_qid.get(qid) or {}).get("stem_md") or spec_question.get("stem_md"),
+            "options": spec_question.get("options"),
+            "rubric": spec_question.get("rubric"),
+            "answer": assignment_answers.get(qid),
+            "score": score_detail.get("score"),
+            "score_max": score_detail.get("max") or spec_question.get("max_points") or spec_question.get("points"),
+            "reason": score_detail.get("reason"),
+        }
+        answers.append(
+            _build_review_answer_item(
+                raw_question,
+                spec_question=spec_question,
+                public_question=public_by_qid.get(qid),
+            )
+        )
+    return answers
+
+
+def _result_mode_label(result_mode: str) -> str:
+    mapping = {
+        "scored": "计分题",
+        "traits": "量表题",
+        "mixed": "计分 + 量表",
+    }
+    key = str(result_mode or "").strip().lower()
+    return mapping.get(key, "未定义")
+
+
+def _build_review_evaluation(
+    *,
+    archive: dict[str, Any] | None,
+    assignment: dict[str, Any] | None,
+) -> dict[str, Any]:
+    archive_data = archive if isinstance(archive, dict) else {}
+    assignment_data = assignment if isinstance(assignment, dict) else {}
+    grading = archive_data.get("grading") or assignment_data.get("grading") or {}
+    raw_total = _coerce_int_or_none((grading or {}).get("raw_total")) if isinstance(grading, dict) else None
+    result_mode = str(
+        archive_data.get("result_mode")
+        or (grading.get("result_mode") if isinstance(grading, dict) else "")
+        or ("traits" if isinstance(grading, dict) and raw_total == 0 and grading else "")
+    ).strip().lower()
+    total_score = _coerce_int_or_none(archive_data.get("total_score"))
+    if total_score is None and isinstance(grading, dict):
+        total_score = _coerce_int_or_none(grading.get("total"))
+    score_max = _coerce_int_or_none(archive_data.get("score_max"))
+    if score_max is None and isinstance(grading, dict):
+        score_max = _coerce_int_or_none(grading.get("total_max"))
+    traits = archive_data.get("traits")
+    if not isinstance(traits, dict) or not traits:
+        traits = (grading.get("traits") or grading.get("trait_result") or {}) if isinstance(grading, dict) else {}
+    traits = dict(traits or {})
+    has_score = result_mode != "traits" and total_score is not None
+    return {
+        "result_mode": result_mode,
+        "result_mode_label": _result_mode_label(result_mode),
+        "total_score": total_score,
+        "score_max": score_max,
+        "has_score": has_score,
+        "score_display": _score_display(total_score, score_max, result_mode=result_mode) if has_score else "",
+        "final_analysis": str(
+            archive_data.get("final_analysis")
+            or (grading.get("final_analysis") if isinstance(grading, dict) else "")
+            or (grading.get("analysis") if isinstance(grading, dict) else "")
+            or ""
+        ).strip(),
+        "candidate_remark": str(archive_data.get("candidate_remark") or assignment_data.get("candidate_remark") or "").strip(),
+        "traits": traits,
+        "primary_dimensions": list(traits.get("primary_dimensions") or []),
+        "paired_dimensions": list(traits.get("paired_dimensions") or []),
+        "dimension_list": list(traits.get("dimension_list") or []),
+    }
+
+
+def _build_attempt_review(
+    *,
+    archive: dict[str, Any] | None,
+    assignment: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return {
+        "answers": _build_review_answers(archive=archive, assignment=assignment),
+        "evaluation": _build_review_evaluation(archive=archive, assignment=assignment),
+    }
+
+
 def _looks_deleted_marker(value: str) -> bool:
     text = str(value or "").strip().lower()
     if not text:
         return False
-    if text in {"已删除", "deleted", "????", "???", "null", "none", "历史试卷"}:
+    if text in {"已删除", "deleted", "????", "???", "null", "none", "历史测验"}:
         return True
     if "?" in text and len(text) <= 12:
         return True
@@ -176,8 +513,8 @@ def _serialize_repo_binding(binding: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def _serialize_exam_summary(exam: dict[str, Any], request: Request) -> dict[str, Any]:
-    exam_key = str(exam.get("exam_key") or "").strip()
-    cfg = exam_helpers.get_public_invite_config(exam_key)
+    quiz_key = str(exam.get("quiz_key") or "").strip()
+    cfg = exam_helpers.get_public_invite_config(quiz_key)
     public_token = str(cfg.get("token") or "").strip()
     question_count = int(exam.get("question_count") or exam.get("count") or 0)
     question_counts = exam.get("question_counts") if isinstance(exam.get("question_counts"), dict) else {}
@@ -185,7 +522,7 @@ def _serialize_exam_summary(exam: dict[str, Any], request: Request) -> dict[str,
     trait = exam.get("trait") if isinstance(exam.get("trait"), dict) else {}
     return {
         "id": int(exam.get("id") or 0),
-        "exam_key": exam_key,
+        "quiz_key": quiz_key,
         "title": str(exam.get("title") or "").strip(),
         "description": str(exam.get("description") or "").strip(),
         "status": str(exam.get("status") or "").strip() or "active",
@@ -196,7 +533,7 @@ def _serialize_exam_summary(exam: dict[str, Any], request: Request) -> dict[str,
         "schema_version": exam.get("schema_version"),
         "format": str(exam.get("format") or "").strip(),
         "trait": trait,
-        "current_version_id": int(exam.get("current_version_id") or 0),
+        "current_quiz_version_id": int(exam.get("current_version_id") or 0),
         "current_version_no": int(exam.get("current_version_no") or 0),
         "source_path": str(exam.get("source_path") or "").strip(),
         "last_sync_error": str(exam.get("last_sync_error") or "").strip(),
@@ -222,7 +559,7 @@ def _serialize_exam_detail(
     request: Request,
     selected_version: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    exam_key = str(exam.get("exam_key") or "").strip()
+    quiz_key = str(exam.get("quiz_key") or "").strip()
     current_version_id = int(exam.get("current_version_id") or 0)
     selected = selected_version or {}
     selected_version_id = int(selected.get("id") or 0)
@@ -230,10 +567,10 @@ def _serialize_exam_detail(
     spec = exam_helpers.build_render_ready_public_spec(raw_spec if isinstance(raw_spec, dict) else {})
     quiz_metadata = exam_helpers.build_quiz_metadata(spec)
     stats = _compute_exam_stats(spec if isinstance(spec, dict) else {})
-    cfg = exam_helpers.get_public_invite_config(exam_key)
+    cfg = exam_helpers.get_public_invite_config(quiz_key)
     public_token = str(cfg.get("token") or "").strip()
     versions: list[dict[str, Any]] = []
-    for item in deps.list_exam_versions(exam_key):
+    for item in deps.list_quiz_versions(quiz_key):
         version_id = int(item.get("id") or 0)
         versions.append(
             {
@@ -247,9 +584,9 @@ def _serialize_exam_detail(
             }
         )
     return {
-        "exam": {
-            "id": int(exam_helpers._sort_id_from_exam_key(exam_key) or 0),
-            "exam_key": exam_key,
+        "quiz": {
+            "id": int(exam_helpers._sort_id_from_quiz_key(quiz_key) or 0),
+            "quiz_key": quiz_key,
             "title": str((spec or {}).get("title") or exam.get("title") or "").strip(),
             "description": str((spec or {}).get("description") or "").strip(),
             "status": str(exam.get("status") or "").strip() or "active",
@@ -260,7 +597,7 @@ def _serialize_exam_detail(
             "question_counts": dict(quiz_metadata["question_counts"]),
             "estimated_duration_minutes": int(quiz_metadata["estimated_duration_minutes"]),
             "trait": dict(quiz_metadata["trait"]),
-            "current_version_id": current_version_id,
+            "current_quiz_version_id": current_version_id,
             "current_version_no": int(exam.get("current_version_no") or 0),
             "source_path": str(exam.get("source_path") or "").strip(),
             "last_synced_commit": str(exam.get("last_synced_commit") or "").strip(),
@@ -278,7 +615,7 @@ def _serialize_exam_detail(
                 else ""
             ),
         },
-        "selected_version": {
+        "selected_quiz_version": {
             "id": selected_version_id,
             "version_no": int(selected.get("version_no") or 0),
             "git_commit": str(selected.get("git_commit") or "").strip(),
@@ -292,7 +629,7 @@ def _serialize_exam_detail(
             "trait": dict(quiz_metadata["trait"]),
             "spec": spec if isinstance(spec, dict) else {},
         },
-        "version_history": versions,
+        "quiz_version_history": versions,
         "stats": stats,
         "sync_state": deps.read_exam_repo_sync_state(),
     }
@@ -318,7 +655,7 @@ def _candidate_attempt_results(candidate: dict[str, Any]) -> list[dict[str, Any]
     if not phone:
         return []
     best_by_key: dict[str, dict[str, Any]] = {}
-    rows = deps.list_exam_archives_for_phone(phone)
+    rows = deps.list_quiz_archives_for_phone(phone)
     for row in rows:
         archive = row.get("archive") if isinstance(row, dict) else None
         if not isinstance(archive, dict):
@@ -330,13 +667,20 @@ def _candidate_attempt_results(candidate: dict[str, Any]) -> list[dict[str, Any]
         start_at = str(timing.get("start_at") or "").strip()
         end_at = str(timing.get("end_at") or "").strip()
         score = archive.get("total_score")
-        if not end_at or score is None:
+        score_max = archive.get("score_max")
+        grading = archive.get("grading") if isinstance(archive.get("grading"), dict) else {}
+        result_mode = str(
+            archive.get("result_mode")
+            or grading.get("result_mode")
+            or ("traits" if int(archive.get("raw_total") or 0) <= 0 else "scored")
+        ).strip()
+        if not end_at or (score is None and result_mode != "traits"):
             continue
         exam = archive.get("exam") or {}
         if not isinstance(exam, dict):
             exam = {}
-        exam_key = str(exam.get("exam_key") or "").strip()
-        exam_name = str(exam.get("title") or "").strip() or exam_key or "未知试卷"
+        quiz_key = str(exam.get("quiz_key") or "").strip()
+        quiz_name = str(exam.get("title") or "").strip() or quiz_key or "未知测验"
         sort_key = 0.0
         try:
             sort_key = datetime.fromisoformat(end_at.replace("Z", "+00:00")).timestamp()
@@ -346,13 +690,16 @@ def _candidate_attempt_results(candidate: dict[str, Any]) -> list[dict[str, Any]
                 sort_key = float(updated_at.timestamp()) if updated_at else 0.0
             except Exception:
                 sort_key = 0.0
-        dedupe_key = f"{token}::{exam_key}" if token else str(row.get("archive_name") or "")
+        dedupe_key = f"{token}::{quiz_key}" if token else str(row.get("archive_name") or "")
         current = best_by_key.get(dedupe_key)
         if current is None or float(sort_key) >= float(current.get("_sort_key") or 0.0):
             best_by_key[dedupe_key] = {
                 "token": token,
-                "exam_name": exam_name,
+                "quiz_name": quiz_name,
                 "score": score,
+                "score_max": score_max,
+                "score_display": _score_display(score, score_max, result_mode=result_mode),
+                "result_mode": result_mode,
                 "start_at": start_at,
                 "end_at": end_at,
                 "_sort_key": sort_key,
@@ -366,7 +713,7 @@ def _candidate_attempt_results(candidate: dict[str, Any]) -> list[dict[str, Any]
             {
                 "no": index,
                 "token": str(item.get("token") or "").strip(),
-                "exam_name": str(item.get("exam_name") or "").strip(),
+                "quiz_name": str(item.get("quiz_name") or "").strip(),
                 "score": item.get("score"),
                 "start_at": _iso_to_local_display(str(item.get("start_at") or "")),
                 "end_at": _iso_to_local_display(str(item.get("end_at") or "")),
@@ -523,7 +870,7 @@ def _serialize_candidate_detail(candidate_id: int, candidate: dict[str, Any]) ->
     }
 
 
-def _serialize_assignment_row(row: dict[str, Any]) -> dict[str, Any]:
+def _serialize_assignment_row(row: dict[str, Any], *, request: Request) -> dict[str, Any]:
     token = str(row.get("token") or "").strip()
     status_key = validation_helpers._normalize_exam_status(str(row.get("status") or "").strip())
     invite_end_date = _iso_or_empty(row.get("invite_end_date"))
@@ -543,31 +890,71 @@ def _serialize_assignment_row(row: dict[str, Any]) -> dict[str, Any]:
             recovered = ""
         if recovered:
             candidate_name = recovered
-    exam_key = str(row.get("exam_key") or "").strip()
-    if _looks_deleted_marker(exam_key):
-        exam_key = "历史试卷"
+    quiz_key = str(row.get("quiz_key") or "").strip()
+    if _looks_deleted_marker(quiz_key):
+        quiz_key = "历史测验"
+    source_kind = "public" if str(row.get("source_kind") or "").strip() == "public" else "direct"
+    require_phone_verification = bool(source_kind == "public")
+    ignore_timing = False
+    score = row.get("score")
+    score_max = None
+    result_mode = ""
+    if token:
+        try:
+            assignment = deps.load_assignment(token)
+        except Exception:
+            assignment = None
+        grading = (assignment or {}).get("grading") if isinstance((assignment or {}).get("grading"), dict) else {}
+        score_max = grading.get("total_max")
+        result_mode = str(
+            grading.get("result_mode")
+            or ("traits" if int(grading.get("raw_total") or 0) <= 0 and grading else "")
+        ).strip()
+        require_phone_verification = validation_helpers._require_phone_verification(assignment or row)
+        ignore_timing = bool((assignment or row).get("ignore_timing"))
+    handled_at = _iso_or_empty(row.get("handled_at"))
+    handled_by = str(row.get("handled_by") or "").strip()
+    needs_attention = bool(status_key == "finished" and not handled_at)
     return {
         "attempt_id": int(row.get("attempt_id") or 0),
         "candidate_id": candidate_id,
         "candidate_name": candidate_name,
         "candidate_deleted": candidate_deleted,
         "phone": str(row.get("phone") or "").strip(),
-        "exam_key": exam_key,
-        "exam_version_id": int(row.get("exam_version_id") or 0),
+        "quiz_key": quiz_key,
+        "quiz_version_id": int(row.get("quiz_version_id") or 0),
         "token": token,
+        "source_kind": source_kind,
+        "source_label": _source_label(source_kind),
         "invite_start_date": _iso_or_empty(row.get("invite_start_date")),
         "invite_end_date": invite_end_date,
+        "require_phone_verification": require_phone_verification,
+        "ignore_timing": ignore_timing,
         "status": status_key,
         "status_label": _status_label(status_key),
         "entered_at": _iso_or_empty(row.get("entered_at")),
         "finished_at": _iso_or_empty(row.get("finished_at")),
-        "score": row.get("score"),
+        "handled_at": handled_at,
+        "handled_by": handled_by,
+        "needs_attention": needs_attention,
+        "score": score,
+        "score_max": score_max,
+        "score_display": _score_display(score, score_max, result_mode=result_mode),
+        "result_mode": result_mode,
         "created_at": _iso_or_empty(row.get("created_at")),
+        "url": f"{_admin_base_url(request)}/t/{token}" if token else "",
+        "qr_url": f"/api/admin/assignments/{token}/qr.png" if token else "",
     }
 
 
-def _serialize_attempt_detail(token: str) -> dict[str, Any]:
-    assignment = deps.load_assignment(token)
+def _serialize_attempt_detail(token: str, *, request: Request) -> dict[str, Any]:
+    quiz_paper_row = deps.get_quiz_paper_admin_detail_by_token(token)
+    try:
+        assignment = deps.load_assignment(token)
+    except FileNotFoundError:
+        assignment = {}
+    if not assignment and not quiz_paper_row:
+        raise FileNotFoundError(token)
     row = runtime_jobs._find_archive_by_token(token, assignment=assignment)
     archive = row.get("archive") if isinstance(row, dict) else None
     if isinstance(archive, dict):
@@ -577,15 +964,23 @@ def _serialize_attempt_detail(token: str) -> dict[str, Any]:
             archive = dict(archive)
     else:
         archive = None
+    if isinstance(assignment, dict):
+        assignment = dict(assignment)
+        assignment["require_phone_verification"] = validation_helpers._require_phone_verification(assignment)
+        assignment["ignore_timing"] = bool(assignment.get("ignore_timing"))
     return {
         "assignment": assignment,
+        "quiz_paper": _serialize_assignment_row(quiz_paper_row, request=request) if quiz_paper_row else None,
         "archive": archive,
+        "review": _build_attempt_review(archive=archive, assignment=assignment),
     }
 
 
 def _serialize_log_row(row: dict[str, Any]) -> dict[str, Any]:
     event_type = str(row.get("event_type") or "").strip()
     type_key, type_label = system_status_helpers._oplog_type_label_v2(event_type)
+    if type_key == "exam":
+        type_key = "quiz"
     detail_text = system_status_helpers._oplog_detail_text_v2(dict(row))
     return {
         "id": int(row.get("id") or 0),
@@ -596,7 +991,7 @@ def _serialize_log_row(row: dict[str, Any]) -> dict[str, Any]:
         "candidate_id": row.get("candidate_id"),
         "candidate_name": str(row.get("candidate_name") or "").strip(),
         "candidate_phone": str(row.get("candidate_phone") or "").strip(),
-        "exam_key": str(row.get("exam_key") or "").strip(),
+        "quiz_key": str(row.get("quiz_key") or "").strip(),
         "token": str(row.get("token") or "").strip(),
         "llm_total_tokens": row.get("llm_total_tokens"),
         "duration_seconds": row.get("duration_seconds"),
@@ -648,7 +1043,8 @@ def _serialize_log_trend(
         days.append(day_text)
         for key in _LOG_CATEGORY_KEYS:
             try:
-                count = int(row.get(f"{key}_cnt") or 0)
+                raw_key = "exam_cnt" if key == "quiz" else f"{key}_cnt"
+                count = int(row.get(raw_key) or 0)
             except Exception:
                 count = 0
             series[key].append({"day": day_text, "count": max(0, count)})
@@ -658,6 +1054,17 @@ def _serialize_log_trend(
         "end_day": end_day.isoformat(),
         "days": days,
         "series": series,
+    }
+
+
+def _normalize_log_category_counts(counts: dict[str, Any]) -> dict[str, Any]:
+    current = dict(counts or {})
+    return {
+        "candidate": int(current.get("candidate") or 0),
+        "quiz": int(current.get("quiz", current.get("exam") or 0) or 0),
+        "grading": int(current.get("grading") or 0),
+        "assignment": int(current.get("assignment") or 0),
+        "system": int(current.get("system") or 0),
     }
 
 
@@ -873,7 +1280,7 @@ def bootstrap(request: Request, container=Depends(get_container)):
     return {
         "brand": {"name": "MD Quiz", "theme": runtime_config.get("ui_theme_name") or "blue-green"},
         "navigation": [
-            {"key": "exams", "label": "试卷", "href": "/admin/exams"},
+            {"key": "quizzes", "label": "测验", "href": "/admin/quizzes"},
             {"key": "candidates", "label": "候选人", "href": "/admin/candidates"},
             {"key": "assignments", "label": "邀约与答题", "href": "/admin/assignments"},
             {"key": "logs", "label": "系统日志", "href": "/admin/logs"},
@@ -914,6 +1321,7 @@ def enqueue_job(payload: EnqueueJobPayload, request: Request, container=Depends(
     return job.model_dump()
 
 
+@router.get("/quizzes")
 @router.get("/exams")
 def list_exams(request: Request, q: str = "", page: int = 1):
     _require_admin(request)
@@ -923,7 +1331,7 @@ def list_exams(request: Request, q: str = "", page: int = 1):
         exams = [
             item
             for item in exams
-            if query in str(item.get("exam_key") or "").lower()
+            if query in str(item.get("quiz_key") or "").lower()
             or query in str(item.get("title") or "").lower()
             or query in str(item.get("id") or "")
             or any(query in str(tag or "").lower() for tag in (item.get("tags") or []))
@@ -946,7 +1354,7 @@ def list_exams(request: Request, q: str = "", page: int = 1):
     }
 
 
-@router.post("/exams/binding", status_code=status.HTTP_201_CREATED)
+@router.post("/quizzes/binding", status_code=status.HTTP_201_CREATED)
 def bind_exam_repo(payload: RepoBindingPayload, request: Request):
     _require_admin(request)
     try:
@@ -971,7 +1379,7 @@ def bind_exam_repo(payload: RepoBindingPayload, request: Request):
     return result
 
 
-@router.post("/exams/binding/rebind")
+@router.post("/quizzes/binding/rebind")
 def rebind_exam_repo(payload: RepoRebindPayload, request: Request):
     _require_admin(request)
     if str(payload.confirmation_text or "").strip() != "重新绑定":
@@ -1000,7 +1408,7 @@ def rebind_exam_repo(payload: RepoRebindPayload, request: Request):
     return result
 
 
-@router.post("/exams/sync")
+@router.post("/quizzes/sync")
 def sync_exams(payload: SyncExamPayload, request: Request):
     _require_admin(request)
     _ = payload
@@ -1026,44 +1434,46 @@ def sync_exams(payload: SyncExamPayload, request: Request):
     return result
 
 
-@router.get("/exams/{exam_key}")
-def get_exam_detail(exam_key: str, request: Request):
+@router.get("/quizzes/{quiz_key}")
+@router.get("/exams/{quiz_key}")
+def get_exam_detail(quiz_key: str, request: Request):
     _require_admin(request)
-    exam = deps.get_exam_definition(str(exam_key or "").strip())
+    exam = deps.get_quiz_definition(str(quiz_key or "").strip())
     if not exam:
-        raise HTTPException(status_code=404, detail="试卷不存在")
+        raise HTTPException(status_code=404, detail="测验不存在")
     selected_version = None
     current_version_id = int(exam.get("current_version_id") or 0)
     if current_version_id > 0:
-        selected_version = exam_helpers.get_exam_version_snapshot(current_version_id)
+        selected_version = exam_helpers.get_quiz_version_snapshot(current_version_id)
     return _serialize_exam_detail(exam, request=request, selected_version=selected_version)
 
 
+@router.get("/quiz-versions/{version_id}")
 @router.get("/exam-versions/{version_id}")
-def get_exam_version_detail(version_id: int, request: Request):
+def get_quiz_version_detail(version_id: int, request: Request):
     _require_admin(request)
-    version = exam_helpers.get_exam_version_snapshot(version_id)
+    version = exam_helpers.get_quiz_version_snapshot(version_id)
     if not version:
         raise HTTPException(status_code=404, detail="版本不存在")
-    exam = deps.get_exam_definition(str(version.get("exam_key") or "").strip())
+    exam = deps.get_quiz_definition(str(version.get("quiz_key") or "").strip())
     if not exam:
-        raise HTTPException(status_code=404, detail="试卷不存在")
+        raise HTTPException(status_code=404, detail="测验不存在")
     return _serialize_exam_detail(exam, request=request, selected_version=version)
 
 
-@router.post("/exams/{exam_key}/public-invite")
-def toggle_exam_public_invite(exam_key: str, payload: PublicInviteTogglePayload, request: Request):
+@router.post("/quizzes/{quiz_key}/public-invite")
+def toggle_exam_public_invite(quiz_key: str, payload: PublicInviteTogglePayload, request: Request):
     _require_admin(request)
-    exam = deps.get_exam_definition(str(exam_key or "").strip())
+    exam = deps.get_quiz_definition(str(quiz_key or "").strip())
     if not exam:
-        raise HTTPException(status_code=404, detail="试卷不存在")
-    cfg = exam_helpers.set_public_invite_enabled(str(exam_key or "").strip(), payload.enabled)
+        raise HTTPException(status_code=404, detail="测验不存在")
+    cfg = exam_helpers.set_public_invite_enabled(str(quiz_key or "").strip(), payload.enabled)
     public_token = str(cfg.get("token") or "").strip()
     try:
         deps.log_event(
             "exam.public_invite.enable" if payload.enabled else "exam.public_invite.disable",
             actor="admin",
-            exam_key=str(exam_key or "").strip(),
+            quiz_key=str(quiz_key or "").strip(),
             meta={"public_token": public_token},
         )
     except Exception:
@@ -1072,8 +1482,16 @@ def toggle_exam_public_invite(exam_key: str, payload: PublicInviteTogglePayload,
         "ok": True,
         "enabled": bool(cfg.get("enabled")),
         "token": public_token,
-        "public_url": f"{_admin_base_url(request)}/p/{public_token}" if public_token else "",
-        "qr_url": f"/api/public/invites/{public_token}/qr.png" if public_token else "",
+        "public_url": (
+            f"{_admin_base_url(request)}/p/{public_token}"
+            if bool(cfg.get("enabled")) and public_token
+            else ""
+        ),
+        "qr_url": (
+            f"/api/public/invites/{public_token}/qr.png"
+            if bool(cfg.get("enabled")) and public_token
+            else ""
+        ),
     }
 
 
@@ -1382,92 +1800,126 @@ def get_assignments(
     q: str = "",
     start_from: str = "",
     start_to: str = "",
+    end_from: str = "",
+    end_to: str = "",
     page: int = 1,
 ):
     _require_admin(request)
     per_page = 20
-    total = deps.count_exam_papers(
+    invite_start_from = str(start_from or "").strip() or None
+    invite_start_to = str(start_to or "").strip() or None
+    invite_end_from = str(end_from or "").strip() or None
+    invite_end_to = str(end_to or "").strip() or None
+    total = deps.count_quiz_papers(
         query=q or None,
-        invite_start_from=str(start_from or "").strip() or None,
-        invite_start_to=str(start_to or "").strip() or None,
+        invite_start_from=invite_start_from,
+        invite_start_to=invite_start_to,
+        invite_end_from=invite_end_from,
+        invite_end_to=invite_end_to,
+    )
+    unhandled_finished_count = deps.count_unhandled_finished_quiz_papers(
+        query=q or None,
+        invite_start_from=invite_start_from,
+        invite_start_to=invite_start_to,
+        invite_end_from=invite_end_from,
+        invite_end_to=invite_end_to,
     )
     total_pages = max(1, (total + per_page - 1) // per_page)
     current_page = max(1, min(int(page or 1), total_pages))
     offset = (current_page - 1) * per_page
-    rows = deps.list_exam_papers(
+    rows = deps.list_quiz_papers(
         query=q or None,
-        invite_start_from=str(start_from or "").strip() or None,
-        invite_start_to=str(start_to or "").strip() or None,
+        invite_start_from=invite_start_from,
+        invite_start_to=invite_start_to,
+        invite_end_from=invite_end_from,
+        invite_end_to=invite_end_to,
         limit=per_page,
         offset=offset,
     )
     return {
-        "items": [_serialize_assignment_row(row) for row in rows],
+        "items": [_serialize_assignment_row(row, request=request) for row in rows],
+        "summary": {
+            "unhandled_finished_count": int(unhandled_finished_count or 0),
+        },
         "page": current_page,
         "per_page": per_page,
         "total": total,
         "total_pages": total_pages,
-        "filters": {"q": str(q or "").strip(), "start_from": start_from, "start_to": start_to},
+        "filters": {
+            "q": str(q or "").strip(),
+            "start_from": start_from,
+            "start_to": start_to,
+            "end_from": end_from,
+            "end_to": end_to,
+        },
     }
 
 
 @router.post("/assignments", status_code=status.HTTP_201_CREATED)
 def create_assignment(payload: AssignmentCreatePayload, request: Request):
     _require_admin(request)
-    exam_key = str(payload.exam_key or "").strip()
-    if not exam_key:
-        raise HTTPException(status_code=400, detail="缺少 exam_key")
+    quiz_key = str(payload.quiz_key or "").strip()
+    if not quiz_key:
+        raise HTTPException(status_code=400, detail="缺少 quiz_key")
     candidate = deps.get_candidate(int(payload.candidate_id))
     if not candidate:
         raise HTTPException(status_code=404, detail="候选人不存在")
-    exam = deps.get_exam_definition(exam_key)
-    exam_version_id = exam_helpers.resolve_exam_version_id_for_new_assignment(exam_key)
-    if not exam or not exam_version_id:
-        raise HTTPException(status_code=400, detail="试卷不可用")
+    exam = deps.get_quiz_definition(quiz_key)
+    quiz_version_id = exam_helpers.resolve_quiz_version_id_for_new_assignment(quiz_key)
+    if not exam or not quiz_version_id:
+        raise HTTPException(status_code=400, detail="测验不可用")
     start_date = _parse_date_ymd(payload.invite_start_date)
     end_date = _parse_date_ymd(payload.invite_end_date)
     if start_date is None or end_date is None:
         raise HTTPException(status_code=400, detail="答题日期无效")
     if end_date < start_date:
         raise HTTPException(status_code=400, detail="答题结束日期不能早于开始日期")
-    time_limit_seconds = _parse_assignment_duration(payload.time_limit_seconds)
+    ignore_timing = bool(payload.ignore_timing)
+    public_spec = exam.get("public_spec") if isinstance(exam.get("public_spec"), dict) else {}
+    time_limit_seconds = 0 if ignore_timing else exam_helpers.compute_quiz_time_limit_seconds(public_spec)
+    if not ignore_timing and time_limit_seconds <= 0:
+        raise HTTPException(status_code=400, detail="测验缺少有效的题目答题时长配置")
     result = deps.create_assignment(
-        exam_key=exam_key,
+        quiz_key=quiz_key,
         candidate_id=int(payload.candidate_id),
-        exam_version_id=exam_version_id,
+        quiz_version_id=quiz_version_id,
         base_url=_admin_base_url(request),
         phone=str(candidate.get("phone") or ""),
         invite_start_date=start_date.isoformat(),
         invite_end_date=end_date.isoformat(),
         time_limit_seconds=time_limit_seconds,
-        min_submit_seconds=payload.min_submit_seconds,
+        min_submit_seconds=0,
+        require_phone_verification=bool(payload.require_phone_verification),
+        ignore_timing=ignore_timing,
         verify_max_attempts=int(payload.verify_max_attempts or 3),
-        pass_threshold=int(payload.pass_threshold or 60),
     )
     token = str(result.get("token") or "").strip()
     try:
-        deps.create_exam_paper(
+        deps.create_quiz_paper(
             candidate_id=int(payload.candidate_id),
             phone=str(candidate.get("phone") or ""),
-            exam_key=exam_key,
-            exam_version_id=exam_version_id,
+            quiz_key=quiz_key,
+            quiz_version_id=quiz_version_id,
             token=token,
+            source_kind="direct",
             invite_start_date=start_date.isoformat(),
             invite_end_date=end_date.isoformat(),
             status="invited",
         )
     except Exception:
-        deps.logger.exception("Create exam_paper failed (candidate_id=%s, exam_key=%s)", payload.candidate_id, exam_key)
+        deps.logger.exception("Create quiz_paper failed (candidate_id=%s, quiz_key=%s)", payload.candidate_id, quiz_key)
     try:
         deps.log_event(
             "assignment.create",
             actor="admin",
             candidate_id=int(payload.candidate_id),
-            exam_key=exam_key,
+            quiz_key=quiz_key,
             token=token or None,
             meta={
                 "invite_start_date": start_date.isoformat(),
                 "invite_end_date": end_date.isoformat(),
+                "require_phone_verification": bool(payload.require_phone_verification),
+                "ignore_timing": ignore_timing,
             },
         )
     except Exception:
@@ -1483,7 +1935,7 @@ def create_assignment(payload: AssignmentCreatePayload, request: Request):
 def get_assignment_detail(token: str, request: Request):
     _require_admin(request)
     try:
-        return _serialize_attempt_detail(token)
+        return _serialize_attempt_detail(token, request=request)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="答题记录不存在") from exc
 
@@ -1496,6 +1948,85 @@ def get_attempt_detail(token: str, request: Request):
 @router.get("/results/{token}")
 def get_result_detail(token: str, request: Request):
     return get_assignment_detail(token, request)
+
+
+@router.delete("/assignments/{token}")
+def delete_assignment(token: str, request: Request):
+    _require_admin(request)
+    token_str = str(token or "").strip()
+    if not token_str:
+        raise HTTPException(status_code=400, detail="缺少 token")
+    quiz_paper = deps.get_quiz_paper_by_token(token_str)
+    try:
+        assignment = deps.load_assignment(token_str)
+    except FileNotFoundError:
+        assignment = {}
+    if not quiz_paper and not assignment:
+        raise HTTPException(status_code=404, detail="邀约不存在")
+
+    status_key = validation_helpers._normalize_exam_status(
+        str((quiz_paper or {}).get("status") or (assignment or {}).get("status") or "").strip()
+    )
+
+    deleted_quiz_archive = int(deps.delete_quiz_archive_by_token(token_str) or 0)
+    deleted_quiz_paper = int(deps.delete_quiz_paper_by_token(token_str) or 0)
+    deleted_assignment_record = int(deps.delete_assignment_record(token_str) or 0)
+    if deleted_quiz_archive <= 0 and deleted_quiz_paper <= 0 and deleted_assignment_record <= 0:
+        raise HTTPException(status_code=404, detail="邀约不存在")
+
+    candidate_id = int((quiz_paper or {}).get("candidate_id") or (assignment or {}).get("candidate_id") or 0)
+    quiz_key = str((quiz_paper or {}).get("quiz_key") or (assignment or {}).get("quiz_key") or "").strip()
+    source_kind = str(
+        (quiz_paper or {}).get("source_kind") or ("public" if (assignment or {}).get("public_invite") else "direct")
+    ).strip() or "direct"
+    try:
+        deps.log_event(
+            "assignment.delete",
+            actor="admin",
+            candidate_id=(candidate_id or None),
+            quiz_key=(quiz_key or None),
+            token=token_str,
+            meta={
+                "source_kind": source_kind,
+                "status": status_key,
+                "deleted_quiz_archive": deleted_quiz_archive,
+                "deleted_assignment_record": deleted_assignment_record,
+                "deleted_quiz_paper": deleted_quiz_paper,
+            },
+        )
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "deleted": {
+            "quiz_archive": deleted_quiz_archive,
+            "assignment_record": deleted_assignment_record,
+            "quiz_paper": deleted_quiz_paper,
+        },
+    }
+
+
+@router.post("/assignments/{token}/handling")
+def set_assignment_handling(token: str, payload: AssignmentHandlingPayload, request: Request):
+    _require_admin(request)
+    quiz_paper = deps.get_quiz_paper_by_token(token)
+    if not quiz_paper:
+        raise HTTPException(status_code=404, detail="答题记录不存在")
+    status_key = validation_helpers._normalize_exam_status(str(quiz_paper.get("status") or "").strip())
+    if status_key != "finished":
+        raise HTTPException(status_code=409, detail="只有已判卷完成的记录才能标记处理状态")
+    admin_username = str(request.session.get("admin_username") or "").strip() or "admin"
+    deps.set_quiz_paper_handling(
+        token,
+        handled=bool(payload.handled),
+        handled_by=admin_username,
+    )
+    row = deps.get_quiz_paper_admin_detail_by_token(token)
+    if not row:
+        raise HTTPException(status_code=404, detail="答题记录不存在")
+    return {
+        "item": _serialize_assignment_row(row, request=request),
+    }
 
 
 @router.get("/assignments/{token}/qr.png")
@@ -1526,12 +2057,12 @@ def get_attempt_status(request: Request, tokens: str = ""):
     items: list[dict[str, Any]] = []
     today_local = datetime.now().astimezone().date()
     for token in values:
-        exam_paper = deps.get_exam_paper_by_token(token) or {}
-        if not exam_paper:
+        quiz_paper = deps.get_quiz_paper_by_token(token) or {}
+        if not quiz_paper:
             continue
-        status_key = validation_helpers._normalize_exam_status(exam_paper.get("status"))
-        invite_end_date = _iso_or_empty(exam_paper.get("invite_end_date"))
-        if status_key in {"invited", "verified"} and not exam_paper.get("entered_at"):
+        status_key = validation_helpers._normalize_exam_status(quiz_paper.get("status"))
+        invite_end_date = _iso_or_empty(quiz_paper.get("invite_end_date"))
+        if status_key in {"invited", "verified"} and not quiz_paper.get("entered_at"):
             end_date = _parse_date_ymd(invite_end_date)
             if end_date is not None and today_local > end_date:
                 status_key = "expired"
@@ -1540,7 +2071,7 @@ def get_attempt_status(request: Request, tokens: str = ""):
                 "token": token,
                 "status": status_key,
                 "status_label": _status_label(status_key),
-                "score": exam_paper.get("score"),
+                "score": quiz_paper.get("score"),
             }
         )
     return {"items": items}
@@ -1576,7 +2107,7 @@ def get_logs(
         "per_page": page_size,
         "total": total,
         "total_pages": total_pages,
-        "counts": deps.count_operation_logs_by_category(),
+        "counts": _normalize_log_category_counts(deps.count_operation_logs_by_category()),
         "trend": _serialize_log_trend(trend_rows, start_day=start_day, end_day=end_day),
     }
 
@@ -1608,7 +2139,12 @@ def get_system_status_range(
     start_day = _parse_date_ymd(start) or (today - timedelta(days=29))
     end_day = _parse_date_ymd(end) or today
     data = system_status_helpers._compute_system_status_range(start_day=start_day, end_day=end_day)
-    return {"ok": True, "config": system_status_helpers._load_system_status_cfg(), "data": data}
+    return {
+        "ok": True,
+        "config": system_status_helpers._load_system_status_cfg(),
+        "data": data,
+        "summary": system_status_helpers._get_cached_system_status_summary(),
+    }
 
 
 @router.put("/system-status/config")

@@ -12,10 +12,11 @@
 - 若存在 Front Matter，必须以 `---` 开始并闭合
 - Front Matter 必须是 YAML mapping
 - 若缺少 `id`，允许 parser 生成临时 id；但接入 quiz 仓库规范的同步器通常不会接受这种 quiz
-- 当前 parser 会把 `id`、`title`、`description`、`tags`、`schema_version`、`format`、`question_count`、`question_counts`、`estimated_duration_minutes`、`welcome_image`、`end_image`、`llm`、`trait` 纳入结构化输出
-- `tags` 若出现，推荐为 YAML 字符串列表；parser 会做 trim、去空、去重、保序
-- `question_count`、`question_counts`、`estimated_duration_minutes` 若出现在 Front Matter 中会进入结构化 spec，但它们在外部仓库同步时仍可能被服务端按题目内容重算覆盖
-- 当前服务端重算 `estimated_duration_minutes` 时，会优先累计各题的 `answer_time_seconds`（向上取整到分钟）；若没有任何题配置 `answer_time`，才回退为按题型估算
+- 当前 parser 只把 `id`、`title`、`description`、`tags`、`format`、`welcome_image`、`end_image`、`llm`、`trait` 纳入结构化输出
+- 诸如 `schema_version`、`question_count`、`question_counts`、`estimated_duration_minutes` 这类头部摘要字段，当前主要用于源文档阅读，不一定进入结构化 spec
+- `tags` 若出现，推荐为 YAML 字符串列表；parser 应按原始列表值保留
+- `trait` 若出现，推荐为 YAML mapping；其中 `dimensions` 常用，`dimension_meanings` 与 `analysis_guidance` 推荐显式维护
+- 若题面没有实际使用 `scoring=traits` 或选项级 `traits`，作者侧应删除 `trait` 元数据，避免保留无效说明
 
 ### 题头
 

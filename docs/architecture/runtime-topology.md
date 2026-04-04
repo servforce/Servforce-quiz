@@ -11,7 +11,7 @@ browser
       -> /static/*
       -> /legacy/*  (307 跳转到真实路径)
       -> /admin*    (后台 Alpine SPA)
-      -> /p/* /t/* /resume/* /exam/* /done/* /a/* (候选人 Alpine SPA)
+      -> /p/* /t/* /resume/* /quiz/* /done/* /a/* (候选人 Alpine SPA)
 
 scheduler
   -> enqueue jobs

@@ -142,7 +142,7 @@ def init_db() -> None:
 
     Notes:
     - candidate no longer stores exam status/entered/submitted timestamps.
-    - Per-token exam attempts are stored in exam_paper so one candidate can take the same paper multiple times
+    - Per-token exam attempts are stored in quiz_paper so one candidate can take the same paper multiple times
       with different tokens.
     """
     enum_ddl = """
@@ -217,10 +217,10 @@ BEGIN
       SELECT 1
       FROM pg_enum e
       JOIN pg_type t ON t.oid = e.enumtypid
-      WHERE t.typname = 'candidate_status' AND e.enumlabel = 'in_exam'
+      WHERE t.typname = 'candidate_status' AND e.enumlabel = 'in_quiz'
     ) THEN
       BEGIN
-        ALTER TYPE candidate_status ADD VALUE 'in_exam';
+        ALTER TYPE candidate_status ADD VALUE 'in_quiz';
       EXCEPTION
         WHEN OTHERS THEN
           NULL;
@@ -258,20 +258,33 @@ BEGIN
 END$$;
 """
 
-    exam_paper_enum_ddl = """
+    quiz_paper_enum_ddl = """
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'exam_paper_status') THEN
-    CREATE TYPE exam_paper_status AS ENUM ('invited', 'verified', 'in_exam', 'grading', 'finished');
+  IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'exam_paper_status')
+     AND NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quiz_paper_status') THEN
+    BEGIN
+      ALTER TYPE exam_paper_status RENAME TO quiz_paper_status;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quiz_paper_status') THEN
+    CREATE TYPE quiz_paper_status AS ENUM ('invited', 'verified', 'in_quiz', 'grading', 'finished');
   ELSE
-    IF NOT EXISTS (
+    IF EXISTS (
       SELECT 1
       FROM pg_enum e
       JOIN pg_type t ON t.oid = e.enumtypid
-      WHERE t.typname = 'exam_paper_status' AND e.enumlabel = 'invited'
+      WHERE t.typname = 'quiz_paper_status' AND e.enumlabel = 'in_exam'
+    ) AND NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'quiz_paper_status' AND e.enumlabel = 'in_quiz'
     ) THEN
       BEGIN
-        ALTER TYPE exam_paper_status ADD VALUE 'invited';
+        ALTER TYPE quiz_paper_status RENAME VALUE 'in_exam' TO 'in_quiz';
       EXCEPTION WHEN OTHERS THEN NULL;
       END;
     END IF;
@@ -280,10 +293,10 @@ BEGIN
       SELECT 1
       FROM pg_enum e
       JOIN pg_type t ON t.oid = e.enumtypid
-      WHERE t.typname = 'exam_paper_status' AND e.enumlabel = 'verified'
+      WHERE t.typname = 'quiz_paper_status' AND e.enumlabel = 'invited'
     ) THEN
       BEGIN
-        ALTER TYPE exam_paper_status ADD VALUE 'verified';
+        ALTER TYPE quiz_paper_status ADD VALUE 'invited';
       EXCEPTION WHEN OTHERS THEN NULL;
       END;
     END IF;
@@ -292,10 +305,10 @@ BEGIN
       SELECT 1
       FROM pg_enum e
       JOIN pg_type t ON t.oid = e.enumtypid
-      WHERE t.typname = 'exam_paper_status' AND e.enumlabel = 'in_exam'
+      WHERE t.typname = 'quiz_paper_status' AND e.enumlabel = 'verified'
     ) THEN
       BEGIN
-        ALTER TYPE exam_paper_status ADD VALUE 'in_exam';
+        ALTER TYPE quiz_paper_status ADD VALUE 'verified';
       EXCEPTION WHEN OTHERS THEN NULL;
       END;
     END IF;
@@ -304,10 +317,10 @@ BEGIN
       SELECT 1
       FROM pg_enum e
       JOIN pg_type t ON t.oid = e.enumtypid
-      WHERE t.typname = 'exam_paper_status' AND e.enumlabel = 'grading'
+      WHERE t.typname = 'quiz_paper_status' AND e.enumlabel = 'in_quiz'
     ) THEN
       BEGIN
-        ALTER TYPE exam_paper_status ADD VALUE 'grading';
+        ALTER TYPE quiz_paper_status ADD VALUE 'in_quiz';
       EXCEPTION WHEN OTHERS THEN NULL;
       END;
     END IF;
@@ -316,10 +329,22 @@ BEGIN
       SELECT 1
       FROM pg_enum e
       JOIN pg_type t ON t.oid = e.enumtypid
-      WHERE t.typname = 'exam_paper_status' AND e.enumlabel = 'finished'
+      WHERE t.typname = 'quiz_paper_status' AND e.enumlabel = 'grading'
     ) THEN
       BEGIN
-        ALTER TYPE exam_paper_status ADD VALUE 'finished';
+        ALTER TYPE quiz_paper_status ADD VALUE 'grading';
+      EXCEPTION WHEN OTHERS THEN NULL;
+      END;
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_enum e
+      JOIN pg_type t ON t.oid = e.enumtypid
+      WHERE t.typname = 'quiz_paper_status' AND e.enumlabel = 'finished'
+    ) THEN
+      BEGIN
+        ALTER TYPE quiz_paper_status ADD VALUE 'finished';
       EXCEPTION WHEN OTHERS THEN NULL;
       END;
     END IF;
@@ -328,6 +353,34 @@ END$$;
 """
 
     schema_ddl = """
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'exam_paper')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'quiz_paper') THEN
+    EXECUTE 'ALTER TABLE exam_paper RENAME TO quiz_paper';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'exam_asset')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'quiz_asset') THEN
+    EXECUTE 'ALTER TABLE exam_asset RENAME TO quiz_asset';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'exam_version')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'quiz_version') THEN
+    EXECUTE 'ALTER TABLE exam_version RENAME TO quiz_version';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'exam_version_asset')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'quiz_version_asset') THEN
+    EXECUTE 'ALTER TABLE exam_version_asset RENAME TO quiz_version_asset';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'exam_definition')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'quiz_definition') THEN
+    EXECUTE 'ALTER TABLE exam_definition RENAME TO quiz_definition';
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'exam_archive')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'quiz_archive') THEN
+    EXECUTE 'ALTER TABLE exam_archive RENAME TO quiz_archive';
+  END IF;
+END$$;
+
  CREATE TABLE IF NOT EXISTS candidate (
    id               BIGSERIAL PRIMARY KEY,
     name             TEXT NOT NULL,
@@ -364,9 +417,9 @@ ALTER TABLE candidate ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ NULL;
 
 ALTER TABLE candidate DROP COLUMN IF EXISTS updated_at;
 
--- Drop deprecated columns (status/exam fields moved to exam_paper).
+-- Drop deprecated columns (status/exam fields moved to quiz_paper).
 ALTER TABLE candidate DROP COLUMN IF EXISTS status;
-ALTER TABLE candidate DROP COLUMN IF EXISTS exam_key;
+ALTER TABLE candidate DROP COLUMN IF EXISTS quiz_key;
 ALTER TABLE candidate DROP COLUMN IF EXISTS score;
 ALTER TABLE candidate DROP COLUMN IF EXISTS exam_started_at;
 ALTER TABLE candidate DROP COLUMN IF EXISTS exam_submitted_at;
@@ -386,66 +439,132 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
  CREATE INDEX IF NOT EXISTS idx_candidate_created_at ON candidate(created_at);
  CREATE INDEX IF NOT EXISTS idx_candidate_deleted_at ON candidate(deleted_at);
 
-  CREATE TABLE IF NOT EXISTS exam_paper (
+  CREATE TABLE IF NOT EXISTS quiz_paper (
     id BIGSERIAL PRIMARY KEY,
     candidate_id BIGINT NOT NULL REFERENCES candidate(id),
     phone TEXT NOT NULL,
-    exam_key TEXT NOT NULL,
-    exam_version_id BIGINT NULL,
+    quiz_key TEXT NOT NULL,
+    quiz_version_id BIGINT NULL,
     token TEXT NOT NULL,
+    source_kind TEXT NOT NULL DEFAULT 'direct',
     invite_start_date DATE NULL,
     invite_end_date DATE NULL,
-    status exam_paper_status NOT NULL DEFAULT 'invited',
+    status quiz_paper_status NOT NULL DEFAULT 'invited',
     entered_at TIMESTAMPTZ NULL,
     finished_at TIMESTAMPTZ NULL,
+    handled_at TIMESTAMPTZ NULL,
+    handled_by TEXT NULL,
     score INT NULL CHECK (score IS NULL OR score BETWEEN 0 AND 100),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
  );
 
- ALTER TABLE exam_paper DROP COLUMN IF EXISTS duration_seconds;
- ALTER TABLE exam_paper ADD COLUMN IF NOT EXISTS exam_version_id BIGINT NULL;
+ ALTER TABLE quiz_paper DROP COLUMN IF EXISTS duration_seconds;
+ DO $$
+ BEGIN
+   IF EXISTS (
+     SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'quiz_paper' AND column_name = 'exam_key'
+   ) AND NOT EXISTS (
+     SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'quiz_paper' AND column_name = 'quiz_key'
+   ) THEN
+     EXECUTE 'ALTER TABLE quiz_paper RENAME COLUMN exam_key TO quiz_key';
+   END IF;
+   IF EXISTS (
+     SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'quiz_paper' AND column_name = 'exam_version_id'
+   ) AND NOT EXISTS (
+     SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'quiz_paper' AND column_name = 'quiz_version_id'
+   ) THEN
+     EXECUTE 'ALTER TABLE quiz_paper RENAME COLUMN exam_version_id TO quiz_version_id';
+   END IF;
+   IF EXISTS (
+     SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'quiz_paper' AND column_name = 'status' AND udt_name = 'exam_paper_status'
+   ) THEN
+     EXECUTE 'ALTER TABLE quiz_paper ALTER COLUMN status DROP DEFAULT';
+     EXECUTE 'ALTER TABLE quiz_paper ALTER COLUMN status TYPE quiz_paper_status USING status::text::quiz_paper_status';
+     EXECUTE 'ALTER TABLE quiz_paper ALTER COLUMN status SET DEFAULT ''invited''::quiz_paper_status';
+   END IF;
+ END$$;
+ ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS quiz_version_id BIGINT NULL;
+ ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS source_kind TEXT NOT NULL DEFAULT 'direct';
+ ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS handled_at TIMESTAMPTZ NULL;
+ ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS handled_by TEXT NULL;
+ UPDATE quiz_paper ep
+    SET source_kind='public'
+   FROM assignment_record ar
+  WHERE ar.token = ep.token
+    AND COALESCE(ar.data->'public_invite', 'null'::jsonb) <> 'null'::jsonb;
+ UPDATE quiz_paper
+    SET source_kind='direct'
+  WHERE COALESCE(NULLIF(BTRIM(source_kind), ''), 'direct') NOT IN ('direct', 'public');
 
  DO $$
  BEGIN
-   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'exam_paper_token_key') THEN
+   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quiz_paper_token_key') THEN
      BEGIN
-       ALTER TABLE exam_paper ADD CONSTRAINT exam_paper_token_key UNIQUE (token);
+       ALTER TABLE quiz_paper ADD CONSTRAINT quiz_paper_token_key UNIQUE (token);
      EXCEPTION WHEN OTHERS THEN NULL;
      END;
    END IF;
  END$$;
 
-  CREATE INDEX IF NOT EXISTS idx_exam_paper_candidate_id ON exam_paper(candidate_id);
- CREATE INDEX IF NOT EXISTS idx_exam_paper_phone ON exam_paper(phone);
-  CREATE INDEX IF NOT EXISTS idx_exam_paper_exam_key ON exam_paper(exam_key);
-  CREATE INDEX IF NOT EXISTS idx_exam_paper_exam_version_id ON exam_paper(exam_version_id);
-  CREATE INDEX IF NOT EXISTS idx_exam_paper_status ON exam_paper(status);
-  CREATE INDEX IF NOT EXISTS idx_exam_paper_created_at ON exam_paper(created_at);
-  ALTER TABLE exam_paper ADD COLUMN IF NOT EXISTS invite_start_date DATE NULL;
-  ALTER TABLE exam_paper ADD COLUMN IF NOT EXISTS invite_end_date DATE NULL;
-  CREATE INDEX IF NOT EXISTS idx_exam_paper_invite_start_date ON exam_paper(invite_start_date);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_candidate_id ON quiz_paper(candidate_id);
+ CREATE INDEX IF NOT EXISTS idx_quiz_paper_phone ON quiz_paper(phone);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_quiz_key ON quiz_paper(quiz_key);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_quiz_version_id ON quiz_paper(quiz_version_id);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_source_kind ON quiz_paper(source_kind);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_status ON quiz_paper(status);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_handled_at ON quiz_paper(handled_at);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_created_at ON quiz_paper(created_at);
+  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS invite_start_date DATE NULL;
+  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS invite_end_date DATE NULL;
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_invite_start_date ON quiz_paper(invite_start_date);
 
   CREATE TABLE IF NOT EXISTS assignment_record (
     token TEXT PRIMARY KEY,
-    exam_key TEXT NOT NULL,
-    exam_version_id BIGINT NULL,
+    quiz_key TEXT NOT NULL,
+    quiz_version_id BIGINT NULL,
     candidate_id BIGINT NULL REFERENCES candidate(id) ON DELETE SET NULL,
     status TEXT NOT NULL,
     data JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
-  ALTER TABLE assignment_record ADD COLUMN IF NOT EXISTS exam_version_id BIGINT NULL;
-  CREATE INDEX IF NOT EXISTS idx_assignment_record_exam_key ON assignment_record(exam_key);
-  CREATE INDEX IF NOT EXISTS idx_assignment_record_exam_version_id ON assignment_record(exam_version_id);
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'assignment_record' AND column_name = 'exam_key'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'assignment_record' AND column_name = 'quiz_key'
+    ) THEN
+      EXECUTE 'ALTER TABLE assignment_record RENAME COLUMN exam_key TO quiz_key';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'assignment_record' AND column_name = 'exam_version_id'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'assignment_record' AND column_name = 'quiz_version_id'
+    ) THEN
+      EXECUTE 'ALTER TABLE assignment_record RENAME COLUMN exam_version_id TO quiz_version_id';
+    END IF;
+  END$$;
+  ALTER TABLE assignment_record ADD COLUMN IF NOT EXISTS quiz_version_id BIGINT NULL;
+  CREATE INDEX IF NOT EXISTS idx_assignment_record_quiz_key ON assignment_record(quiz_key);
+  CREATE INDEX IF NOT EXISTS idx_assignment_record_quiz_version_id ON assignment_record(quiz_version_id);
   CREATE INDEX IF NOT EXISTS idx_assignment_record_candidate_id ON assignment_record(candidate_id);
   CREATE INDEX IF NOT EXISTS idx_assignment_record_status ON assignment_record(status);
   CREATE INDEX IF NOT EXISTS idx_assignment_record_created_at ON assignment_record(created_at);
 
-  CREATE TABLE IF NOT EXISTS exam_asset (
+  CREATE TABLE IF NOT EXISTS quiz_asset (
     id BIGSERIAL PRIMARY KEY,
-    exam_key TEXT NOT NULL,
+    quiz_key TEXT NOT NULL,
     relpath TEXT NOT NULL,
     content BYTEA NOT NULL,
     mime TEXT NOT NULL,
@@ -454,18 +573,30 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
   );
   DO $$
   BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'exam_asset_exam_key_relpath_key') THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_asset' AND column_name = 'exam_key'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_asset' AND column_name = 'quiz_key'
+    ) THEN
+      EXECUTE 'ALTER TABLE quiz_asset RENAME COLUMN exam_key TO quiz_key';
+    END IF;
+  END$$;
+  DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quiz_asset_quiz_key_relpath_key') THEN
       BEGIN
-        ALTER TABLE exam_asset ADD CONSTRAINT exam_asset_exam_key_relpath_key UNIQUE (exam_key, relpath);
+        ALTER TABLE quiz_asset ADD CONSTRAINT quiz_asset_quiz_key_relpath_key UNIQUE (quiz_key, relpath);
       EXCEPTION WHEN OTHERS THEN NULL;
       END;
     END IF;
   END$$;
-  CREATE INDEX IF NOT EXISTS idx_exam_asset_exam_key ON exam_asset(exam_key);
+  CREATE INDEX IF NOT EXISTS idx_quiz_asset_quiz_key ON quiz_asset(quiz_key);
 
-  CREATE TABLE IF NOT EXISTS exam_version (
+  CREATE TABLE IF NOT EXISTS quiz_version (
     id BIGSERIAL PRIMARY KEY,
-    exam_key TEXT NOT NULL,
+    quiz_key TEXT NOT NULL,
     version_no INT NOT NULL,
     title TEXT NOT NULL DEFAULT '',
     source_path TEXT NULL,
@@ -480,25 +611,37 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
   );
   DO $$
   BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'exam_version_exam_key_version_no_key') THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_version' AND column_name = 'exam_key'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_version' AND column_name = 'quiz_key'
+    ) THEN
+      EXECUTE 'ALTER TABLE quiz_version RENAME COLUMN exam_key TO quiz_key';
+    END IF;
+  END$$;
+  DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quiz_version_quiz_key_version_no_key') THEN
       BEGIN
-        ALTER TABLE exam_version ADD CONSTRAINT exam_version_exam_key_version_no_key UNIQUE (exam_key, version_no);
+        ALTER TABLE quiz_version ADD CONSTRAINT quiz_version_quiz_key_version_no_key UNIQUE (quiz_key, version_no);
       EXCEPTION WHEN OTHERS THEN NULL;
       END;
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'exam_version_exam_key_content_hash_key') THEN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quiz_version_quiz_key_content_hash_key') THEN
       BEGIN
-        ALTER TABLE exam_version ADD CONSTRAINT exam_version_exam_key_content_hash_key UNIQUE (exam_key, content_hash);
+        ALTER TABLE quiz_version ADD CONSTRAINT quiz_version_quiz_key_content_hash_key UNIQUE (quiz_key, content_hash);
       EXCEPTION WHEN OTHERS THEN NULL;
       END;
     END IF;
   END$$;
-  CREATE INDEX IF NOT EXISTS idx_exam_version_exam_key ON exam_version(exam_key);
-  CREATE INDEX IF NOT EXISTS idx_exam_version_created_at ON exam_version(created_at);
+  CREATE INDEX IF NOT EXISTS idx_quiz_version_quiz_key ON quiz_version(quiz_key);
+  CREATE INDEX IF NOT EXISTS idx_quiz_version_created_at ON quiz_version(created_at);
 
-  CREATE TABLE IF NOT EXISTS exam_version_asset (
+  CREATE TABLE IF NOT EXISTS quiz_version_asset (
     id BIGSERIAL PRIMARY KEY,
-    exam_version_id BIGINT NOT NULL REFERENCES exam_version(id) ON DELETE CASCADE,
+    quiz_version_id BIGINT NOT NULL REFERENCES quiz_version(id) ON DELETE CASCADE,
     relpath TEXT NOT NULL,
     content BYTEA NOT NULL,
     mime TEXT NOT NULL,
@@ -507,17 +650,29 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
   );
   DO $$
   BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'exam_version_asset_version_relpath_key') THEN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_version_asset' AND column_name = 'exam_version_id'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_version_asset' AND column_name = 'quiz_version_id'
+    ) THEN
+      EXECUTE 'ALTER TABLE quiz_version_asset RENAME COLUMN exam_version_id TO quiz_version_id';
+    END IF;
+  END$$;
+  DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quiz_version_asset_version_relpath_key') THEN
       BEGIN
-        ALTER TABLE exam_version_asset ADD CONSTRAINT exam_version_asset_version_relpath_key UNIQUE (exam_version_id, relpath);
+        ALTER TABLE quiz_version_asset ADD CONSTRAINT quiz_version_asset_version_relpath_key UNIQUE (quiz_version_id, relpath);
       EXCEPTION WHEN OTHERS THEN NULL;
       END;
     END IF;
   END$$;
-  CREATE INDEX IF NOT EXISTS idx_exam_version_asset_version_id ON exam_version_asset(exam_version_id);
+  CREATE INDEX IF NOT EXISTS idx_quiz_version_asset_version_id ON quiz_version_asset(quiz_version_id);
 
-  CREATE TABLE IF NOT EXISTS exam_definition (
-    exam_key TEXT PRIMARY KEY,
+  CREATE TABLE IF NOT EXISTS quiz_definition (
+    quiz_key TEXT PRIMARY KEY,
     title TEXT NOT NULL DEFAULT '',
     source_md TEXT NOT NULL,
     spec JSONB NOT NULL,
@@ -527,36 +682,69 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
-  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
-  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS source_path TEXT NULL;
-  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS git_repo_url TEXT NULL;
-  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS current_version_id BIGINT NULL;
-  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS current_version_no INT NOT NULL DEFAULT 0;
-  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS last_synced_commit TEXT NULL;
-  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS last_sync_error TEXT NULL;
-  ALTER TABLE exam_definition ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMPTZ NULL;
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_definition_public_invite_token
-    ON exam_definition(public_invite_token)
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_definition' AND column_name = 'exam_key'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_definition' AND column_name = 'quiz_key'
+    ) THEN
+      EXECUTE 'ALTER TABLE quiz_definition RENAME COLUMN exam_key TO quiz_key';
+    END IF;
+  END$$;
+  ALTER TABLE quiz_definition ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+  ALTER TABLE quiz_definition ADD COLUMN IF NOT EXISTS source_path TEXT NULL;
+  ALTER TABLE quiz_definition ADD COLUMN IF NOT EXISTS git_repo_url TEXT NULL;
+  ALTER TABLE quiz_definition ADD COLUMN IF NOT EXISTS current_version_id BIGINT NULL;
+  ALTER TABLE quiz_definition ADD COLUMN IF NOT EXISTS current_version_no INT NOT NULL DEFAULT 0;
+  ALTER TABLE quiz_definition ADD COLUMN IF NOT EXISTS last_synced_commit TEXT NULL;
+  ALTER TABLE quiz_definition ADD COLUMN IF NOT EXISTS last_sync_error TEXT NULL;
+  ALTER TABLE quiz_definition ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMPTZ NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_quiz_definition_public_invite_token
+    ON quiz_definition(public_invite_token)
     WHERE public_invite_token IS NOT NULL;
-  CREATE INDEX IF NOT EXISTS idx_exam_definition_created_at ON exam_definition(created_at);
-  CREATE INDEX IF NOT EXISTS idx_exam_definition_status ON exam_definition(status);
+  CREATE INDEX IF NOT EXISTS idx_quiz_definition_created_at ON quiz_definition(created_at);
+  CREATE INDEX IF NOT EXISTS idx_quiz_definition_status ON quiz_definition(status);
 
-  CREATE TABLE IF NOT EXISTS exam_archive (
+  CREATE TABLE IF NOT EXISTS quiz_archive (
     archive_name TEXT PRIMARY KEY,
     token TEXT NOT NULL,
     candidate_id BIGINT NULL REFERENCES candidate(id) ON DELETE SET NULL,
-    exam_key TEXT NOT NULL,
-    exam_version_id BIGINT NULL,
+    quiz_key TEXT NOT NULL,
+    quiz_version_id BIGINT NULL,
     phone TEXT NOT NULL,
     archive JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
-  ALTER TABLE exam_archive ADD COLUMN IF NOT EXISTS exam_version_id BIGINT NULL;
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_exam_archive_token ON exam_archive(token);
-  CREATE INDEX IF NOT EXISTS idx_exam_archive_phone ON exam_archive(phone);
-  CREATE INDEX IF NOT EXISTS idx_exam_archive_exam_key ON exam_archive(exam_key);
-  CREATE INDEX IF NOT EXISTS idx_exam_archive_exam_version_id ON exam_archive(exam_version_id);
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_archive' AND column_name = 'exam_key'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_archive' AND column_name = 'quiz_key'
+    ) THEN
+      EXECUTE 'ALTER TABLE quiz_archive RENAME COLUMN exam_key TO quiz_key';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_archive' AND column_name = 'exam_version_id'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'quiz_archive' AND column_name = 'quiz_version_id'
+    ) THEN
+      EXECUTE 'ALTER TABLE quiz_archive RENAME COLUMN exam_version_id TO quiz_version_id';
+    END IF;
+  END$$;
+  ALTER TABLE quiz_archive ADD COLUMN IF NOT EXISTS quiz_version_id BIGINT NULL;
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_quiz_archive_token ON quiz_archive(token);
+  CREATE INDEX IF NOT EXISTS idx_quiz_archive_phone ON quiz_archive(phone);
+  CREATE INDEX IF NOT EXISTS idx_quiz_archive_quiz_key ON quiz_archive(quiz_key);
+  CREATE INDEX IF NOT EXISTS idx_quiz_archive_quiz_version_id ON quiz_archive(quiz_version_id);
 
   CREATE TABLE IF NOT EXISTS runtime_kv (
     key TEXT PRIMARY KEY,
@@ -607,7 +795,7 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
     actor TEXT NOT NULL,
     event_type TEXT NOT NULL,
     candidate_id BIGINT NULL,
-    exam_key TEXT NULL,
+    quiz_key TEXT NULL,
     token TEXT NULL,
     llm_prompt_tokens INT NULL,
     llm_completion_tokens INT NULL,
@@ -617,10 +805,22 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
     user_agent TEXT NULL,
     meta JSONB NULL
   );
+  DO $$
+  BEGIN
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'system_log' AND column_name = 'exam_key'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'system_log' AND column_name = 'quiz_key'
+    ) THEN
+      EXECUTE 'ALTER TABLE system_log RENAME COLUMN exam_key TO quiz_key';
+    END IF;
+  END$$;
   CREATE INDEX IF NOT EXISTS idx_system_log_at ON system_log(at);
   CREATE INDEX IF NOT EXISTS idx_system_log_event_type ON system_log(event_type);
   CREATE INDEX IF NOT EXISTS idx_system_log_candidate_id ON system_log(candidate_id);
-  CREATE INDEX IF NOT EXISTS idx_system_log_exam_key ON system_log(exam_key);
+  CREATE INDEX IF NOT EXISTS idx_system_log_quiz_key ON system_log(quiz_key);
   CREATE INDEX IF NOT EXISTS idx_system_log_token ON system_log(token);
   """
     try:
@@ -631,7 +831,7 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
                 cur.execute(enum_ddl)
         with conn_scope() as conn:
             with conn.cursor() as cur:
-                cur.execute(exam_paper_enum_ddl)
+                cur.execute(quiz_paper_enum_ddl)
         with conn_scope() as conn:
             with conn.cursor() as cur:
                 cur.execute(schema_ddl)
@@ -862,28 +1062,28 @@ def update_candidate_resume_parsed(
             cur.execute(sql, (parsed_param, int(candidate_id)))
 
 
-def mark_exam_deleted(exam_key: str, *, marker: str = "已删除") -> int:
+def mark_exam_deleted(quiz_key: str, *, marker: str = "已删除") -> int:
     """
     Count impacted history rows when an exam is deleted.
-    We keep original exam_key in exam_paper to preserve attempt display data.
+    We keep original quiz_key in quiz_paper to preserve attempt display data.
     """
-    sql = "SELECT COUNT(*) FROM exam_paper WHERE exam_key=%s"
+    sql = "SELECT COUNT(*) FROM quiz_paper WHERE quiz_key=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(exam_key or ""),))
+            cur.execute(sql, (str(quiz_key or ""),))
             row = cur.fetchone()
             return int(row[0] or 0) if row else 0
 
 
-def rename_exam_key(old_exam_key: str, new_exam_key: str) -> int:
+def rename_quiz_key(old_quiz_key: str, new_quiz_key: str) -> int:
     """
-    Rename exam_key references in exam_paper table.
+    Rename quiz_key references in quiz_paper table.
     Returns number of affected rows.
     """
-    sql = "UPDATE exam_paper SET exam_key=%s WHERE exam_key=%s"
+    sql = "UPDATE quiz_paper SET quiz_key=%s WHERE quiz_key=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(new_exam_key or ""), str(old_exam_key or "")))
+            cur.execute(sql, (str(new_quiz_key or ""), str(old_quiz_key or "")))
             return int(cur.rowcount or 0)
 
 
@@ -892,19 +1092,19 @@ def save_assignment_record(token: str, assignment: dict[str, Any]) -> None:
     if not token_str:
         raise ValueError("missing token")
     assignment_obj = dict(assignment or {})
-    exam_key = str(assignment_obj.get("exam_key") or "").strip()
-    if not exam_key:
-        raise ValueError("missing exam_key")
+    quiz_key = str(assignment_obj.get("quiz_key") or "").strip()
+    if not quiz_key:
+        raise ValueError("missing quiz_key")
     try:
         candidate_id = int(assignment_obj.get("candidate_id") or 0)
     except Exception:
         candidate_id = 0
     candidate_id_param = int(candidate_id) if candidate_id > 0 else None
     try:
-        exam_version_id = int(assignment_obj.get("exam_version_id") or 0)
+        quiz_version_id = int(assignment_obj.get("quiz_version_id") or 0)
     except Exception:
-        exam_version_id = 0
-    exam_version_id_param = int(exam_version_id) if exam_version_id > 0 else None
+        quiz_version_id = 0
+    quiz_version_id_param = int(quiz_version_id) if quiz_version_id > 0 else None
     status = str(assignment_obj.get("status") or "").strip() or "invited"
     created_at_raw = str(assignment_obj.get("created_at") or "").strip()
     created_at_param = None
@@ -915,12 +1115,12 @@ def save_assignment_record(token: str, assignment: dict[str, Any]) -> None:
             created_at_param = None
     payload = psycopg2.extras.Json(assignment_obj, dumps=lambda x: json.dumps(x, ensure_ascii=False))
     sql = """
-INSERT INTO assignment_record(token, exam_key, exam_version_id, candidate_id, status, data, created_at, updated_at)
+INSERT INTO assignment_record(token, quiz_key, quiz_version_id, candidate_id, status, data, created_at, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW())
 ON CONFLICT (token) DO UPDATE
 SET
-  exam_key = EXCLUDED.exam_key,
-  exam_version_id = EXCLUDED.exam_version_id,
+  quiz_key = EXCLUDED.quiz_key,
+  quiz_version_id = EXCLUDED.quiz_version_id,
   candidate_id = EXCLUDED.candidate_id,
   status = EXCLUDED.status,
   data = EXCLUDED.data,
@@ -932,8 +1132,8 @@ SET
                 sql,
                 (
                     token_str,
-                    exam_key,
-                    exam_version_id_param,
+                    quiz_key,
+                    quiz_version_id_param,
                     candidate_id_param,
                     status,
                     payload,
@@ -947,19 +1147,19 @@ def create_assignment_record(token: str, assignment: dict[str, Any]) -> bool:
     if not token_str:
         raise ValueError("missing token")
     assignment_obj = dict(assignment or {})
-    exam_key = str(assignment_obj.get("exam_key") or "").strip()
-    if not exam_key:
-        raise ValueError("missing exam_key")
+    quiz_key = str(assignment_obj.get("quiz_key") or "").strip()
+    if not quiz_key:
+        raise ValueError("missing quiz_key")
     try:
         candidate_id = int(assignment_obj.get("candidate_id") or 0)
     except Exception:
         candidate_id = 0
     candidate_id_param = int(candidate_id) if candidate_id > 0 else None
     try:
-        exam_version_id = int(assignment_obj.get("exam_version_id") or 0)
+        quiz_version_id = int(assignment_obj.get("quiz_version_id") or 0)
     except Exception:
-        exam_version_id = 0
-    exam_version_id_param = int(exam_version_id) if exam_version_id > 0 else None
+        quiz_version_id = 0
+    quiz_version_id_param = int(quiz_version_id) if quiz_version_id > 0 else None
     status = str(assignment_obj.get("status") or "").strip() or "invited"
     created_at_raw = str(assignment_obj.get("created_at") or "").strip()
     created_at_param = None
@@ -970,7 +1170,7 @@ def create_assignment_record(token: str, assignment: dict[str, Any]) -> bool:
             created_at_param = None
     payload = psycopg2.extras.Json(assignment_obj, dumps=lambda x: json.dumps(x, ensure_ascii=False))
     sql = """
-INSERT INTO assignment_record(token, exam_key, exam_version_id, candidate_id, status, data, created_at, updated_at)
+INSERT INTO assignment_record(token, quiz_key, quiz_version_id, candidate_id, status, data, created_at, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s, COALESCE(%s, NOW()), NOW())
 ON CONFLICT (token) DO NOTHING
 RETURNING token
@@ -981,8 +1181,8 @@ RETURNING token
                 sql,
                 (
                     token_str,
-                    exam_key,
-                    exam_version_id_param,
+                    quiz_key,
+                    quiz_version_id_param,
                     candidate_id_param,
                     status,
                     payload,
@@ -1007,6 +1207,14 @@ def get_assignment_record(token: str) -> dict[str, Any] | None:
     return obj if isinstance(obj, dict) else None
 
 
+def delete_assignment_record(token: str) -> int:
+    sql = "DELETE FROM assignment_record WHERE token=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(token or "").strip(),))
+            return int(cur.rowcount or 0)
+
+
 def list_assignment_tokens() -> list[str]:
     sql = "SELECT token FROM assignment_record ORDER BY created_at DESC"
     with conn_scope() as conn:
@@ -1016,43 +1224,43 @@ def list_assignment_tokens() -> list[str]:
     return [str(row[0] or "").strip() for row in rows if str(row[0] or "").strip()]
 
 
-def rename_assignment_exam_key(old_exam_key: str, new_exam_key: str) -> int:
+def rename_assignment_quiz_key(old_quiz_key: str, new_quiz_key: str) -> int:
     sql = """
 UPDATE assignment_record
 SET
-  exam_key=%s,
-  data=jsonb_set(COALESCE(data, '{}'::jsonb), '{exam_key}', to_jsonb(%s::text), true),
+  quiz_key=%s,
+  data=jsonb_set(COALESCE(data, '{}'::jsonb), '{quiz_key}', to_jsonb(%s::text), true),
   updated_at=NOW()
-WHERE exam_key=%s
+WHERE quiz_key=%s
 """
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(new_exam_key or ""), str(new_exam_key or ""), str(old_exam_key or "")))
+            cur.execute(sql, (str(new_quiz_key or ""), str(new_quiz_key or ""), str(old_quiz_key or "")))
             return int(cur.rowcount or 0)
 
 
-def backfill_assignment_exam_version_id(exam_key: str, exam_version_id: int) -> int:
+def backfill_assignment_quiz_version_id(quiz_key: str, quiz_version_id: int) -> int:
     sql = """
 UPDATE assignment_record
 SET
-  exam_version_id = %s,
-  data = jsonb_set(COALESCE(data, '{}'::jsonb), '{exam_version_id}', to_jsonb(%s::bigint), true),
+  quiz_version_id = %s,
+  data = jsonb_set(COALESCE(data, '{}'::jsonb), '{quiz_version_id}', to_jsonb(%s::bigint), true),
   updated_at = NOW()
-WHERE exam_key=%s AND exam_version_id IS NULL
+WHERE quiz_key=%s AND quiz_version_id IS NULL
 """
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (int(exam_version_id), int(exam_version_id), str(exam_key or "").strip()))
+            cur.execute(sql, (int(quiz_version_id), int(quiz_version_id), str(quiz_key or "").strip()))
             return int(cur.rowcount or 0)
 
 
-def replace_exam_assets(exam_key: str, assets: dict[str, tuple[bytes, str]]) -> None:
-    exam_key_str = str(exam_key or "").strip()
-    if not exam_key_str:
-        raise ValueError("missing exam_key")
+def replace_quiz_assets(quiz_key: str, assets: dict[str, tuple[bytes, str]]) -> None:
+    quiz_key_str = str(quiz_key or "").strip()
+    if not quiz_key_str:
+        raise ValueError("missing quiz_key")
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM exam_asset WHERE exam_key=%s", (exam_key_str,))
+            cur.execute("DELETE FROM quiz_asset WHERE quiz_key=%s", (quiz_key_str,))
             for relpath, payload in dict(assets or {}).items():
                 rel = str(relpath or "").strip()
                 if not rel:
@@ -1060,18 +1268,18 @@ def replace_exam_assets(exam_key: str, assets: dict[str, tuple[bytes, str]]) -> 
                 content, mime = payload
                 cur.execute(
                     """
-INSERT INTO exam_asset(exam_key, relpath, content, mime, updated_at)
+INSERT INTO quiz_asset(quiz_key, relpath, content, mime, updated_at)
 VALUES (%s, %s, %s, %s, NOW())
 """,
-                    (exam_key_str, rel, psycopg2.Binary(bytes(content or b"")), str(mime or "application/octet-stream")),
+                    (quiz_key_str, rel, psycopg2.Binary(bytes(content or b"")), str(mime or "application/octet-stream")),
                 )
 
 
-def get_exam_asset(exam_key: str, relpath: str) -> tuple[bytes, str] | None:
-    sql = "SELECT content, mime FROM exam_asset WHERE exam_key=%s AND relpath=%s"
+def get_quiz_asset(quiz_key: str, relpath: str) -> tuple[bytes, str] | None:
+    sql = "SELECT content, mime FROM quiz_asset WHERE quiz_key=%s AND relpath=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(exam_key or "").strip(), str(relpath or "").strip()))
+            cur.execute(sql, (str(quiz_key or "").strip(), str(relpath or "").strip()))
             row = cur.fetchone()
     if not row:
         return None
@@ -1080,11 +1288,11 @@ def get_exam_asset(exam_key: str, relpath: str) -> tuple[bytes, str] | None:
     return content, mime
 
 
-def list_exam_assets(exam_key: str) -> list[dict[str, Any]]:
-    sql = "SELECT relpath, content, mime FROM exam_asset WHERE exam_key=%s ORDER BY relpath ASC"
+def list_quiz_assets(quiz_key: str) -> list[dict[str, Any]]:
+    sql = "SELECT relpath, content, mime FROM quiz_asset WHERE quiz_key=%s ORDER BY relpath ASC"
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (str(exam_key or "").strip(),))
+            cur.execute(sql, (str(quiz_key or "").strip(),))
             rows = cur.fetchall()
     out: list[dict[str, Any]] = []
     for row in rows or []:
@@ -1095,25 +1303,25 @@ def list_exam_assets(exam_key: str) -> list[dict[str, Any]]:
     return out
 
 
-def rename_exam_assets(old_exam_key: str, new_exam_key: str) -> int:
-    sql = "UPDATE exam_asset SET exam_key=%s, updated_at=NOW() WHERE exam_key=%s"
+def rename_quiz_assets(old_quiz_key: str, new_quiz_key: str) -> int:
+    sql = "UPDATE quiz_asset SET quiz_key=%s, updated_at=NOW() WHERE quiz_key=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(new_exam_key or ""), str(old_exam_key or "")))
+            cur.execute(sql, (str(new_quiz_key or ""), str(old_quiz_key or "")))
             return int(cur.rowcount or 0)
 
 
-def delete_exam_assets(exam_key: str) -> int:
-    sql = "DELETE FROM exam_asset WHERE exam_key=%s"
+def delete_quiz_assets(quiz_key: str) -> int:
+    sql = "DELETE FROM quiz_asset WHERE quiz_key=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(exam_key or "").strip(),))
+            cur.execute(sql, (str(quiz_key or "").strip(),))
             return int(cur.rowcount or 0)
 
 
-def save_exam_definition(
+def save_quiz_definition(
     *,
-    exam_key: str,
+    quiz_key: str,
     title: str,
     source_md: str,
     spec: dict[str, Any],
@@ -1128,8 +1336,8 @@ def save_exam_definition(
     last_sync_at=None,
 ) -> None:
     sql = """
-INSERT INTO exam_definition(
-  exam_key,
+INSERT INTO quiz_definition(
+  quiz_key,
   title,
   source_md,
   spec,
@@ -1162,20 +1370,20 @@ VALUES (
   NOW(),
   NOW()
 )
-ON CONFLICT (exam_key) DO UPDATE
+ON CONFLICT (quiz_key) DO UPDATE
 SET
   title = EXCLUDED.title,
   source_md = EXCLUDED.source_md,
   spec = EXCLUDED.spec,
   public_spec = EXCLUDED.public_spec,
-  status = COALESCE(EXCLUDED.status, exam_definition.status),
-  source_path = COALESCE(EXCLUDED.source_path, exam_definition.source_path),
-  git_repo_url = COALESCE(EXCLUDED.git_repo_url, exam_definition.git_repo_url),
-  current_version_id = COALESCE(EXCLUDED.current_version_id, exam_definition.current_version_id),
-  current_version_no = COALESCE(NULLIF(EXCLUDED.current_version_no, 0), exam_definition.current_version_no),
-  last_synced_commit = COALESCE(EXCLUDED.last_synced_commit, exam_definition.last_synced_commit),
+  status = COALESCE(EXCLUDED.status, quiz_definition.status),
+  source_path = COALESCE(EXCLUDED.source_path, quiz_definition.source_path),
+  git_repo_url = COALESCE(EXCLUDED.git_repo_url, quiz_definition.git_repo_url),
+  current_version_id = COALESCE(EXCLUDED.current_version_id, quiz_definition.current_version_id),
+  current_version_no = COALESCE(NULLIF(EXCLUDED.current_version_no, 0), quiz_definition.current_version_no),
+  last_synced_commit = COALESCE(EXCLUDED.last_synced_commit, quiz_definition.last_synced_commit),
   last_sync_error = EXCLUDED.last_sync_error,
-  last_sync_at = COALESCE(EXCLUDED.last_sync_at, exam_definition.last_sync_at),
+  last_sync_at = COALESCE(EXCLUDED.last_sync_at, quiz_definition.last_sync_at),
   updated_at = NOW()
 """
     with conn_scope() as conn:
@@ -1183,7 +1391,7 @@ SET
             cur.execute(
                 sql,
                 (
-                    str(exam_key or "").strip(),
+                    str(quiz_key or "").strip(),
                     str(title or "").strip(),
                     str(source_md or ""),
                     _json_param(spec or {}),
@@ -1200,10 +1408,10 @@ SET
             )
 
 
-def get_exam_definition(exam_key: str) -> dict[str, Any] | None:
+def get_quiz_definition(quiz_key: str) -> dict[str, Any] | None:
     sql = """
 SELECT
-  exam_key,
+  quiz_key,
   title,
   source_md,
   spec::text,
@@ -1220,12 +1428,12 @@ SELECT
   last_sync_at,
   created_at,
   updated_at
-FROM exam_definition
-WHERE exam_key=%s
+FROM quiz_definition
+WHERE quiz_key=%s
 """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (str(exam_key or "").strip(),))
+            cur.execute(sql, (str(quiz_key or "").strip(),))
             row = cur.fetchone()
     if not row:
         return None
@@ -1235,10 +1443,10 @@ WHERE exam_key=%s
     return out
 
 
-def list_exam_definitions() -> list[dict[str, Any]]:
+def list_quiz_definitions() -> list[dict[str, Any]]:
     sql = """
 SELECT
-  exam_key,
+  quiz_key,
   title,
   spec::text,
   status,
@@ -1253,8 +1461,8 @@ SELECT
   last_sync_at,
   created_at,
   updated_at
-FROM exam_definition
-ORDER BY created_at ASC, exam_key ASC
+FROM quiz_definition
+ORDER BY created_at ASC, quiz_key ASC
 """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -1268,43 +1476,43 @@ ORDER BY created_at ASC, exam_key ASC
     return out
 
 
-def rename_exam_definition(old_exam_key: str, new_exam_key: str) -> int:
-    sql = "UPDATE exam_definition SET exam_key=%s, updated_at=NOW() WHERE exam_key=%s"
+def rename_quiz_definition(old_quiz_key: str, new_quiz_key: str) -> int:
+    sql = "UPDATE quiz_definition SET quiz_key=%s, updated_at=NOW() WHERE quiz_key=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(new_exam_key or "").strip(), str(old_exam_key or "").strip()))
+            cur.execute(sql, (str(new_quiz_key or "").strip(), str(old_quiz_key or "").strip()))
             return int(cur.rowcount or 0)
 
 
-def delete_exam_definition(exam_key: str) -> int:
-    sql = "DELETE FROM exam_definition WHERE exam_key=%s"
+def delete_quiz_definition(quiz_key: str) -> int:
+    sql = "DELETE FROM quiz_definition WHERE quiz_key=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(exam_key or "").strip(),))
+            cur.execute(sql, (str(quiz_key or "").strip(),))
             return int(cur.rowcount or 0)
 
 
-def get_exam_public_invite(exam_key: str) -> dict[str, Any] | None:
+def get_exam_public_invite(quiz_key: str) -> dict[str, Any] | None:
     sql = """
 SELECT public_invite_enabled, public_invite_token, created_at, title
-FROM exam_definition
-WHERE exam_key=%s
+FROM quiz_definition
+WHERE quiz_key=%s
 """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (str(exam_key or "").strip(),))
+            cur.execute(sql, (str(quiz_key or "").strip(),))
             row = cur.fetchone()
     return dict(row) if row else None
 
 
-def set_exam_public_invite(exam_key: str, *, enabled: bool, token: str | None) -> int:
+def set_exam_public_invite(quiz_key: str, *, enabled: bool, token: str | None) -> int:
     sql = """
-UPDATE exam_definition
+UPDATE quiz_definition
 SET
   public_invite_enabled=%s,
   public_invite_token=%s,
   updated_at=NOW()
-WHERE exam_key=%s
+WHERE quiz_key=%s
 """
     with conn_scope() as conn:
         with conn.cursor() as cur:
@@ -1313,16 +1521,16 @@ WHERE exam_key=%s
                 (
                     bool(enabled),
                     (str(token or "").strip() or None),
-                    str(exam_key or "").strip(),
+                    str(quiz_key or "").strip(),
                 ),
             )
             return int(cur.rowcount or 0)
 
 
-def get_exam_key_by_public_invite_token(token: str) -> str:
+def get_quiz_key_by_public_invite_token(token: str) -> str:
     sql = """
-SELECT exam_key
-FROM exam_definition
+SELECT quiz_key
+FROM quiz_definition
 WHERE public_invite_enabled = TRUE AND public_invite_token = %s
 LIMIT 1
 """
@@ -1333,9 +1541,9 @@ LIMIT 1
     return str((row[0] if row else "") or "").strip()
 
 
-def create_exam_version(
+def create_quiz_version(
     *,
-    exam_key: str,
+    quiz_key: str,
     version_no: int,
     title: str,
     source_path: str | None,
@@ -1347,8 +1555,8 @@ def create_exam_version(
     public_spec: dict[str, Any],
 ) -> int:
     sql = """
-INSERT INTO exam_version(
-  exam_key,
+INSERT INTO quiz_version(
+  quiz_key,
   version_no,
   title,
   source_path,
@@ -1369,7 +1577,7 @@ RETURNING id
             cur.execute(
                 sql,
                 (
-                    str(exam_key or "").strip(),
+                    str(quiz_key or "").strip(),
                     int(version_no),
                     str(title or "").strip(),
                     (str(source_path).strip() if source_path is not None else None),
@@ -1385,7 +1593,7 @@ RETURNING id
             return int(row[0]) if row else 0
 
 
-def update_exam_version_metadata(
+def update_quiz_version_metadata(
     version_id: int,
     *,
     title: str | None = None,
@@ -1394,7 +1602,7 @@ def update_exam_version_metadata(
     git_commit: str | None = None,
 ) -> int:
     sql = """
-UPDATE exam_version
+UPDATE quiz_version
 SET
   title = COALESCE(%s, title),
   source_path = COALESCE(%s, source_path),
@@ -1418,7 +1626,7 @@ WHERE id=%s
             return int(cur.rowcount or 0)
 
 
-def update_exam_version_payload(
+def update_quiz_version_payload(
     version_id: int,
     *,
     title: str,
@@ -1427,7 +1635,7 @@ def update_exam_version_payload(
     public_spec: dict[str, Any],
 ) -> int:
     sql = """
-UPDATE exam_version
+UPDATE quiz_version
 SET
   title=%s,
   source_md=%s,
@@ -1451,11 +1659,11 @@ WHERE id=%s
             return int(cur.rowcount or 0)
 
 
-def get_exam_version(version_id: int) -> dict[str, Any] | None:
+def get_quiz_version(version_id: int) -> dict[str, Any] | None:
     sql = """
 SELECT
   id,
-  exam_key,
+  quiz_key,
   version_no,
   title,
   source_path,
@@ -1467,7 +1675,7 @@ SELECT
   public_spec::text,
   created_at,
   updated_at
-FROM exam_version
+FROM quiz_version
 WHERE id=%s
 LIMIT 1
 """
@@ -1483,28 +1691,28 @@ LIMIT 1
     return out
 
 
-def get_current_exam_version(exam_key: str) -> dict[str, Any] | None:
+def get_current_quiz_version(quiz_key: str) -> dict[str, Any] | None:
     sql = """
 SELECT ev.id
-FROM exam_definition ed
-JOIN exam_version ev ON ev.id = ed.current_version_id
-WHERE ed.exam_key=%s
+FROM quiz_definition ed
+JOIN quiz_version ev ON ev.id = ed.current_version_id
+WHERE ed.quiz_key=%s
 LIMIT 1
 """
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(exam_key or "").strip(),))
+            cur.execute(sql, (str(quiz_key or "").strip(),))
             row = cur.fetchone()
     if not row:
         return None
-    return get_exam_version(int(row[0]))
+    return get_quiz_version(int(row[0]))
 
 
-def find_exam_version_by_hash(exam_key: str, content_hash: str) -> dict[str, Any] | None:
+def find_quiz_version_by_hash(quiz_key: str, content_hash: str) -> dict[str, Any] | None:
     sql = """
 SELECT
   id,
-  exam_key,
+  quiz_key,
   version_no,
   title,
   source_path,
@@ -1516,13 +1724,13 @@ SELECT
   public_spec::text,
   created_at,
   updated_at
-FROM exam_version
-WHERE exam_key=%s AND content_hash=%s
+FROM quiz_version
+WHERE quiz_key=%s AND content_hash=%s
 LIMIT 1
 """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute((sql), (str(exam_key or "").strip(), str(content_hash or "").strip()))
+            cur.execute((sql), (str(quiz_key or "").strip(), str(content_hash or "").strip()))
             row = cur.fetchone()
     if not row:
         return None
@@ -1532,11 +1740,11 @@ LIMIT 1
     return out
 
 
-def list_exam_versions(exam_key: str) -> list[dict[str, Any]]:
+def list_quiz_versions(quiz_key: str) -> list[dict[str, Any]]:
     sql = """
 SELECT
   id,
-  exam_key,
+  quiz_key,
   version_no,
   title,
   source_path,
@@ -1548,13 +1756,13 @@ SELECT
   public_spec::text,
   created_at,
   updated_at
-FROM exam_version
-WHERE exam_key=%s
+FROM quiz_version
+WHERE quiz_key=%s
 ORDER BY version_no DESC, id DESC
 """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (str(exam_key or "").strip(),))
+            cur.execute(sql, (str(quiz_key or "").strip(),))
             rows = cur.fetchall()
     out: list[dict[str, Any]] = []
     for row in rows or []:
@@ -1565,10 +1773,10 @@ ORDER BY version_no DESC, id DESC
     return out
 
 
-def replace_exam_version_assets(version_id: int, assets: dict[str, tuple[bytes, str]]) -> None:
+def replace_quiz_version_assets(version_id: int, assets: dict[str, tuple[bytes, str]]) -> None:
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM exam_version_asset WHERE exam_version_id=%s", (int(version_id),))
+            cur.execute("DELETE FROM quiz_version_asset WHERE quiz_version_id=%s", (int(version_id),))
             for relpath, payload in dict(assets or {}).items():
                 rel = str(relpath or "").strip()
                 if not rel:
@@ -1576,15 +1784,15 @@ def replace_exam_version_assets(version_id: int, assets: dict[str, tuple[bytes, 
                 content, mime = payload
                 cur.execute(
                     """
-INSERT INTO exam_version_asset(exam_version_id, relpath, content, mime, updated_at)
+INSERT INTO quiz_version_asset(quiz_version_id, relpath, content, mime, updated_at)
 VALUES (%s, %s, %s, %s, NOW())
 """,
                     (int(version_id), rel, psycopg2.Binary(bytes(content or b"")), str(mime or "application/octet-stream")),
                 )
 
 
-def get_exam_version_asset(version_id: int, relpath: str) -> tuple[bytes, str] | None:
-    sql = "SELECT content, mime FROM exam_version_asset WHERE exam_version_id=%s AND relpath=%s"
+def get_quiz_version_asset(version_id: int, relpath: str) -> tuple[bytes, str] | None:
+    sql = "SELECT content, mime FROM quiz_version_asset WHERE quiz_version_id=%s AND relpath=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (int(version_id), str(relpath or "").strip()))
@@ -1594,25 +1802,25 @@ def get_exam_version_asset(version_id: int, relpath: str) -> tuple[bytes, str] |
     return bytes(row[0] or b""), str(row[1] or "application/octet-stream").strip() or "application/octet-stream"
 
 
-def save_exam_archive(
+def save_quiz_archive(
     *,
     archive_name: str,
     token: str,
     candidate_id: int | None,
-    exam_key: str,
-    exam_version_id: int | None = None,
+    quiz_key: str,
+    quiz_version_id: int | None = None,
     phone: str,
     archive: dict[str, Any],
 ) -> None:
     sql = """
-INSERT INTO exam_archive(archive_name, token, candidate_id, exam_key, exam_version_id, phone, archive, created_at, updated_at)
+INSERT INTO quiz_archive(archive_name, token, candidate_id, quiz_key, quiz_version_id, phone, archive, created_at, updated_at)
 VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
 ON CONFLICT (archive_name) DO UPDATE
 SET
   token = EXCLUDED.token,
   candidate_id = EXCLUDED.candidate_id,
-  exam_key = EXCLUDED.exam_key,
-  exam_version_id = EXCLUDED.exam_version_id,
+  quiz_key = EXCLUDED.quiz_key,
+  quiz_version_id = EXCLUDED.quiz_version_id,
   phone = EXCLUDED.phone,
   archive = EXCLUDED.archive,
   updated_at = NOW()
@@ -1625,18 +1833,18 @@ SET
                     str(archive_name or "").strip(),
                     str(token or "").strip(),
                     (int(candidate_id) if candidate_id else None),
-                    str(exam_key or "").strip(),
-                    (int(exam_version_id) if exam_version_id else None),
+                    str(quiz_key or "").strip(),
+                    (int(quiz_version_id) if quiz_version_id else None),
                     str(phone or "").strip(),
                     _json_param(archive or {}),
                 ),
             )
 
 
-def get_exam_archive_by_name(archive_name: str) -> dict[str, Any] | None:
+def get_quiz_archive_by_name(archive_name: str) -> dict[str, Any] | None:
     sql = """
-SELECT archive_name, token, candidate_id, exam_key, exam_version_id, phone, archive::text, created_at, updated_at
-FROM exam_archive
+SELECT archive_name, token, candidate_id, quiz_key, quiz_version_id, phone, archive::text, created_at, updated_at
+FROM quiz_archive
 WHERE archive_name=%s
 """
     with conn_scope() as conn:
@@ -1650,10 +1858,10 @@ WHERE archive_name=%s
     return out
 
 
-def get_exam_archive_by_token(token: str) -> dict[str, Any] | None:
+def get_quiz_archive_by_token(token: str) -> dict[str, Any] | None:
     sql = """
-SELECT archive_name, token, candidate_id, exam_key, exam_version_id, phone, archive::text, created_at, updated_at
-FROM exam_archive
+SELECT archive_name, token, candidate_id, quiz_key, quiz_version_id, phone, archive::text, created_at, updated_at
+FROM quiz_archive
 WHERE token=%s
 """
     with conn_scope() as conn:
@@ -1667,10 +1875,18 @@ WHERE token=%s
     return out
 
 
-def list_exam_archives_for_phone(phone: str) -> list[dict[str, Any]]:
+def delete_quiz_archive_by_token(token: str) -> int:
+    sql = "DELETE FROM quiz_archive WHERE token=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(token or "").strip(),))
+            return int(cur.rowcount or 0)
+
+
+def list_quiz_archives_for_phone(phone: str) -> list[dict[str, Any]]:
     sql = """
-SELECT archive_name, token, candidate_id, exam_key, exam_version_id, phone, archive::text, created_at, updated_at
-FROM exam_archive
+SELECT archive_name, token, candidate_id, quiz_key, quiz_version_id, phone, archive::text, created_at, updated_at
+FROM quiz_archive
 WHERE phone=%s
 ORDER BY updated_at DESC, archive_name DESC
 """
@@ -1686,16 +1902,16 @@ ORDER BY updated_at DESC, archive_name DESC
     return out
 
 
-def list_exam_archives_by_exam_key(exam_key: str) -> list[dict[str, Any]]:
+def list_quiz_archives_by_quiz_key(quiz_key: str) -> list[dict[str, Any]]:
     sql = """
-SELECT archive_name, token, candidate_id, exam_key, exam_version_id, phone, archive::text, created_at, updated_at
-FROM exam_archive
-WHERE exam_key=%s
+SELECT archive_name, token, candidate_id, quiz_key, quiz_version_id, phone, archive::text, created_at, updated_at
+FROM quiz_archive
+WHERE quiz_key=%s
 ORDER BY updated_at DESC, archive_name DESC
 """
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (str(exam_key or "").strip(),))
+            cur.execute(sql, (str(quiz_key or "").strip(),))
             rows = cur.fetchall()
     out: list[dict[str, Any]] = []
     for row in rows or []:
@@ -1705,33 +1921,33 @@ ORDER BY updated_at DESC, archive_name DESC
     return out
 
 
-def rename_exam_archives_exam_key(old_exam_key: str, new_exam_key: str) -> int:
+def rename_quiz_archives_quiz_key(old_quiz_key: str, new_quiz_key: str) -> int:
     sql = """
-UPDATE exam_archive
+UPDATE quiz_archive
 SET
-  exam_key=%s,
-  archive=jsonb_set(COALESCE(archive, '{}'::jsonb), '{exam,exam_key}', to_jsonb(%s::text), true),
+  quiz_key=%s,
+  archive=jsonb_set(COALESCE(archive, '{}'::jsonb), '{exam,quiz_key}', to_jsonb(%s::text), true),
   updated_at=NOW()
-WHERE exam_key=%s
+WHERE quiz_key=%s
 """
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (str(new_exam_key or ""), str(new_exam_key or ""), str(old_exam_key or "")))
+            cur.execute(sql, (str(new_quiz_key or ""), str(new_quiz_key or ""), str(old_quiz_key or "")))
             return int(cur.rowcount or 0)
 
 
-def backfill_exam_archive_version_id(exam_key: str, exam_version_id: int) -> int:
+def backfill_quiz_archive_version_id(quiz_key: str, quiz_version_id: int) -> int:
     sql = """
-UPDATE exam_archive
+UPDATE quiz_archive
 SET
-  exam_version_id = %s,
-  archive = jsonb_set(COALESCE(archive, '{}'::jsonb), '{exam,exam_version_id}', to_jsonb(%s::bigint), true),
+  quiz_version_id = %s,
+  archive = jsonb_set(COALESCE(archive, '{}'::jsonb), '{exam,quiz_version_id}', to_jsonb(%s::bigint), true),
   updated_at = NOW()
-WHERE exam_key=%s AND exam_version_id IS NULL
+WHERE quiz_key=%s AND quiz_version_id IS NULL
 """
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (int(exam_version_id), int(exam_version_id), str(exam_key or "").strip()))
+            cur.execute(sql, (int(quiz_version_id), int(quiz_version_id), str(quiz_key or "").strip()))
             return int(cur.rowcount or 0)
 
 
@@ -1759,10 +1975,10 @@ SET value=EXCLUDED.value, updated_at=NOW()
 
 def _delete_exam_domain_rows(cur) -> dict[str, int]:
     counts: dict[str, int] = {}
-    cur.execute("SELECT COUNT(*) FROM exam_version_asset")
+    cur.execute("SELECT COUNT(*) FROM quiz_version_asset")
     row = cur.fetchone()
-    counts["exam_version_asset"] = int((row[0] if row else 0) or 0)
-    for table in ("exam_archive", "exam_paper", "assignment_record", "exam_asset", "exam_version", "exam_definition"):
+    counts["quiz_version_asset"] = int((row[0] if row else 0) or 0)
+    for table in ("quiz_archive", "quiz_paper", "assignment_record", "quiz_asset", "quiz_version", "quiz_definition"):
         cur.execute(f"DELETE FROM {table}")
         counts[table] = int(cur.rowcount or 0)
     return counts
@@ -2220,9 +2436,9 @@ def update_candidate(candidate_id: int, *, name: str, phone: str, created_at=Non
 
 # 根据id号删除候选者id
 def delete_candidate(candidate_id: int) -> None:
-    # Preserve exam history: if exam_paper exists, perform a "soft delete" by anonymizing
+    # Preserve exam history: if quiz_paper exists, perform a "soft delete" by anonymizing
     # the candidate record while keeping its id for FK references.
-    sql_check = "SELECT 1 FROM exam_paper WHERE candidate_id=%s LIMIT 1"
+    sql_check = "SELECT 1 FROM quiz_paper WHERE candidate_id=%s LIMIT 1"
     sql_get_name = "SELECT name FROM candidate WHERE id=%s LIMIT 1"
     sql_hard = "DELETE FROM candidate WHERE id=%s"
     sql_soft = """
@@ -2264,20 +2480,21 @@ def verify_candidate(candidate_id: int, *, name: str, phone: str) -> bool:
             return cur.fetchone() is not None
 
 
-def create_exam_paper(
+def create_quiz_paper(
     *,
     candidate_id: int,
     phone: str,
-    exam_key: str,
-    exam_version_id: int | None = None,
+    quiz_key: str,
+    quiz_version_id: int | None = None,
     token: str,
+    source_kind: str = "direct",
     invite_start_date: str | None = None,
     invite_end_date: str | None = None,
     status: str = "invited",
 ) -> int:
     sql = """
- INSERT INTO exam_paper(candidate_id, phone, exam_key, exam_version_id, token, invite_start_date, invite_end_date, status)
- VALUES (%s, %s, %s, %s, %s, %s::date, %s::date, %s::exam_paper_status)
+ INSERT INTO quiz_paper(candidate_id, phone, quiz_key, quiz_version_id, token, source_kind, invite_start_date, invite_end_date, status)
+ VALUES (%s, %s, %s, %s, %s, %s, %s::date, %s::date, %s::quiz_paper_status)
  RETURNING id
  """
     with conn_scope() as conn:
@@ -2287,9 +2504,10 @@ def create_exam_paper(
                 (
                     int(candidate_id),
                     str(phone or ""),
-                    str(exam_key or ""),
-                    (int(exam_version_id) if exam_version_id else None),
+                    str(quiz_key or ""),
+                    (int(quiz_version_id) if quiz_version_id else None),
                     str(token or ""),
+                    ("public" if str(source_kind or "").strip().lower() == "public" else "direct"),
                     (str(invite_start_date).strip() if invite_start_date else None),
                     (str(invite_end_date).strip() if invite_end_date else None),
                     str(status or "invited"),
@@ -2299,24 +2517,27 @@ def create_exam_paper(
             return int(row[0]) if row else 0
 
 
-def get_exam_paper_by_token(token: str) -> dict[str, Any] | None:
+def get_quiz_paper_by_token(token: str) -> dict[str, Any] | None:
     sql = """
  SELECT
     id,
     candidate_id,
     phone,
-    exam_key,
-    exam_version_id,
+    quiz_key,
+    quiz_version_id,
     token,
+    source_kind,
     invite_start_date,
     invite_end_date,
     status,
     entered_at,
     finished_at,
+    handled_at,
+    handled_by,
     score,
     created_at,
     updated_at
- FROM exam_paper
+ FROM quiz_paper
  WHERE token=%s
  LIMIT 1
  """
@@ -2327,16 +2548,71 @@ def get_exam_paper_by_token(token: str) -> dict[str, Any] | None:
             return dict(row) if row else None
 
 
-def set_exam_paper_status(token: str, status: str) -> None:
-    sql = "UPDATE exam_paper SET status=%s::exam_paper_status, updated_at=NOW() WHERE token=%s"
+def delete_quiz_paper_by_token(token: str) -> int:
+    sql = "DELETE FROM quiz_paper WHERE token=%s"
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (str(token or "").strip(),))
+            return int(cur.rowcount or 0)
+
+
+def get_quiz_paper_admin_detail_by_token(token: str) -> dict[str, Any] | None:
+    sql = """
+ SELECT
+    ep.id AS attempt_id,
+    ep.candidate_id,
+    c.name,
+    c.deleted_at AS candidate_deleted_at,
+    ep.phone,
+    ep.quiz_key,
+    ep.quiz_version_id,
+    ep.token,
+    ep.source_kind,
+    ep.invite_start_date,
+    ep.invite_end_date,
+    ep.status,
+    ep.entered_at,
+    ep.finished_at,
+    ep.handled_at,
+    ep.handled_by,
+    ep.score,
+    ep.created_at
+ FROM quiz_paper ep
+ JOIN candidate c ON c.id = ep.candidate_id
+ WHERE ep.token=%s
+ LIMIT 1
+ """
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(token or ""),))
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+
+def set_quiz_paper_status(token: str, status: str) -> None:
+    sql = "UPDATE quiz_paper SET status=%s::quiz_paper_status, updated_at=NOW() WHERE token=%s"
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (str(status or ""), str(token or "")))
 
 
-def set_exam_paper_entered_at(token: str, entered_at) -> None:
+def set_quiz_paper_handling(token: str, *, handled: bool, handled_by: str = "") -> None:
     sql = """
- UPDATE exam_paper
+ UPDATE quiz_paper
+ SET
+   handled_at = CASE WHEN %s THEN NOW() ELSE NULL END,
+   handled_by = CASE WHEN %s THEN %s ELSE NULL END,
+   updated_at = NOW()
+ WHERE token=%s
+ """
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (bool(handled), bool(handled), str(handled_by or "").strip(), str(token or "")))
+
+
+def set_quiz_paper_entered_at(token: str, entered_at) -> None:
+    sql = """
+ UPDATE quiz_paper
  SET entered_at=COALESCE(entered_at, %s),
      updated_at=NOW()
  WHERE token=%s
@@ -2346,9 +2622,9 @@ def set_exam_paper_entered_at(token: str, entered_at) -> None:
             cur.execute(sql, (entered_at, str(token or "")))
 
 
-def set_exam_paper_finished_at(token: str, finished_at) -> None:
+def set_quiz_paper_finished_at(token: str, finished_at) -> None:
     sql = """
- UPDATE exam_paper
+ UPDATE quiz_paper
  SET finished_at=COALESCE(finished_at, %s),
      updated_at=NOW()
  WHERE token=%s
@@ -2358,17 +2634,17 @@ def set_exam_paper_finished_at(token: str, finished_at) -> None:
             cur.execute(sql, (finished_at, str(token or "")))
 
 
-def set_exam_paper_invite_window_if_missing(
+def set_quiz_paper_invite_window_if_missing(
     token: str,
     *,
     invite_start_date: str | None = None,
     invite_end_date: str | None = None,
 ) -> None:
     """
-    Backfill invite window dates onto exam_paper without overwriting existing values.
+    Backfill invite window dates onto quiz_paper without overwriting existing values.
     """
     sql = """
- UPDATE exam_paper
+ UPDATE quiz_paper
  SET
    invite_start_date = COALESCE(invite_start_date, %s::date),
    invite_end_date = COALESCE(invite_end_date, %s::date),
@@ -2387,7 +2663,7 @@ def set_exam_paper_invite_window_if_missing(
             )
 
 
-def update_exam_paper_result(
+def update_quiz_paper_result(
     token: str,
     *,
     status: str,
@@ -2396,9 +2672,9 @@ def update_exam_paper_result(
     finished_at=None,
 ) -> None:
     sql = """
- UPDATE exam_paper
+ UPDATE quiz_paper
  SET
-   status=%s::exam_paper_status,
+   status=%s::quiz_paper_status,
    score=%s,
    entered_at=COALESCE(entered_at, %s),
    finished_at=%s,
@@ -2419,25 +2695,27 @@ def update_exam_paper_result(
             )
 
 
-def backfill_exam_paper_version_id(exam_key: str, exam_version_id: int) -> int:
+def backfill_quiz_paper_version_id(quiz_key: str, quiz_version_id: int) -> int:
     sql = """
-UPDATE exam_paper
+UPDATE quiz_paper
 SET
-  exam_version_id=%s,
+  quiz_version_id=%s,
   updated_at=NOW()
-WHERE exam_key=%s AND exam_version_id IS NULL
+WHERE quiz_key=%s AND quiz_version_id IS NULL
 """
     with conn_scope() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (int(exam_version_id), str(exam_key or "").strip()))
+            cur.execute(sql, (int(quiz_version_id), str(quiz_key or "").strip()))
             return int(cur.rowcount or 0)
 
 
-def list_exam_papers(
+def list_quiz_papers(
     *,
     query: str | None = None,
     invite_start_from: str | None = None,
     invite_start_to: str | None = None,
+    invite_end_from: str | None = None,
+    invite_end_to: str | None = None,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
@@ -2448,17 +2726,20 @@ def list_exam_papers(
      c.name,
      c.deleted_at AS candidate_deleted_at,
      ep.phone,
-     ep.exam_key,
-     ep.exam_version_id,
+     ep.quiz_key,
+     ep.quiz_version_id,
      ep.token,
+     ep.source_kind,
      ep.invite_start_date,
      ep.invite_end_date,
      ep.status,
      ep.entered_at,
      ep.finished_at,
+     ep.handled_at,
+     ep.handled_by,
      ep.score,
      ep.created_at
-  FROM exam_paper ep
+  FROM quiz_paper ep
   JOIN candidate c ON c.id = ep.candidate_id
   """
     params: list[Any] = []
@@ -2466,7 +2747,7 @@ def list_exam_papers(
     q = str(query or "").strip()
     if q:
         ql = f"%{q}%"
-        where.append("(c.name ILIKE %s OR ep.phone LIKE %s OR ep.exam_key ILIKE %s OR ep.token ILIKE %s)")
+        where.append("(c.name ILIKE %s OR ep.phone LIKE %s OR ep.quiz_key ILIKE %s OR ep.token ILIKE %s)")
         params.extend([ql, ql, ql, ql])
     if invite_start_from:
         where.append("ep.invite_start_date >= %s::date")
@@ -2474,6 +2755,12 @@ def list_exam_papers(
     if invite_start_to:
         where.append("ep.invite_start_date <= %s::date")
         params.append(str(invite_start_to).strip())
+    if invite_end_from:
+        where.append("ep.invite_end_date >= %s::date")
+        params.append(str(invite_end_from).strip())
+    if invite_end_to:
+        where.append("ep.invite_end_date <= %s::date")
+        params.append(str(invite_end_to).strip())
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += "\n ORDER BY ep.id DESC\n"
@@ -2531,7 +2818,7 @@ def create_system_log(
     actor: str,
     event_type: str,
     candidate_id: int | None = None,
-    exam_key: str | None = None,
+    quiz_key: str | None = None,
     token: str | None = None,
     llm_prompt_tokens: int | None = None,
     llm_completion_tokens: int | None = None,
@@ -2543,7 +2830,7 @@ def create_system_log(
 ) -> int:
     sql = """
  INSERT INTO system_log(
-   actor, event_type, candidate_id, exam_key, token,
+   actor, event_type, candidate_id, quiz_key, token,
    llm_prompt_tokens, llm_completion_tokens, llm_total_tokens, duration_seconds,
    ip, user_agent, meta
  )
@@ -2561,7 +2848,7 @@ def create_system_log(
                     str(actor or ""),
                     str(event_type or ""),
                     (int(candidate_id) if candidate_id is not None else None),
-                    (str(exam_key).strip() if exam_key else None),
+                    (str(quiz_key).strip() if quiz_key else None),
                     (str(token).strip() if token else None),
                     (int(llm_prompt_tokens) if llm_prompt_tokens is not None else None),
                     (int(llm_completion_tokens) if llm_completion_tokens is not None else None),
@@ -2654,11 +2941,11 @@ def _system_log_where_clause(
         # - candidate.* ops
         # - exam CRUD ops
         # - assignment/invite + answering timeline
-        # - llm.usage only when it can be linked to candidate/exam/token context
+        # - llm.usage only when it can be linked to candidate/quiz/token context
         llm_linked = (
             f"({a}token IS NOT NULL AND {a}token <> '') OR "
             f"{a}candidate_id IS NOT NULL OR "
-            f"({a}exam_key IS NOT NULL AND {a}exam_key <> '')"
+            f"({a}quiz_key IS NOT NULL AND {a}quiz_key <> '')"
         )
         where.append(
             "("
@@ -2686,7 +2973,7 @@ def _system_log_where_clause(
         ql = f"%{q}%"
         where.append(
             "("
-            f"{a}actor ILIKE %s OR {a}event_type ILIKE %s OR {a}exam_key ILIKE %s OR {a}token ILIKE %s OR "
+            f"{a}actor ILIKE %s OR {a}event_type ILIKE %s OR {a}quiz_key ILIKE %s OR {a}token ILIKE %s OR "
             f"CAST({a}candidate_id AS TEXT) ILIKE %s OR CAST({a}meta AS TEXT) ILIKE %s"
             ")"
         )
@@ -2740,7 +3027,7 @@ def list_system_logs(
    sl.candidate_id,
    c.name AS candidate_name,
    c.phone AS candidate_phone,
-   sl.exam_key,
+   sl.quiz_key,
    sl.token,
    sl.llm_prompt_tokens,
    sl.llm_completion_tokens,
@@ -2814,7 +3101,7 @@ def list_operation_logs(*, limit: int = 50, offset: int = 0) -> list[dict[str, A
     sl.candidate_id,
     c.name AS candidate_name,
     c.phone AS candidate_phone,
-    sl.exam_key,
+    sl.quiz_key,
     sl.token,
     sl.llm_prompt_tokens,
     sl.llm_completion_tokens,
@@ -2860,7 +3147,7 @@ def list_operation_logs_after_id(*, after_id: int, limit: int = 50) -> list[dict
     sl.candidate_id,
     c.name AS candidate_name,
     c.phone AS candidate_phone,
-    sl.exam_key,
+    sl.quiz_key,
     sl.token,
     sl.llm_prompt_tokens,
     sl.llm_completion_tokens,
@@ -3383,7 +3670,7 @@ def list_system_log_category_counts(
        CASE
          WHEN sl.token IS NOT NULL AND sl.token <> '' THEN 'assignment'
          WHEN sl.candidate_id IS NOT NULL THEN 'candidate'
-         WHEN sl.exam_key IS NOT NULL AND sl.exam_key <> '' THEN 'exam'
+         WHEN sl.quiz_key IS NOT NULL AND sl.quiz_key <> '' THEN 'exam'
          ELSE 'system'
        END
      WHEN sl.event_type IN ('ui.view','admin.view') THEN 'ui'
@@ -3440,15 +3727,17 @@ def list_system_log_daily_counts(
             return [dict(r) for r in cur.fetchall()]
 
 
-def count_exam_papers(
+def count_quiz_papers(
     *,
     query: str | None = None,
     invite_start_from: str | None = None,
     invite_start_to: str | None = None,
+    invite_end_from: str | None = None,
+    invite_end_to: str | None = None,
 ) -> int:
     sql = """
  SELECT COUNT(*)
- FROM exam_paper ep
+ FROM quiz_paper ep
  JOIN candidate c ON c.id = ep.candidate_id
  """
     params: list[Any] = []
@@ -3456,7 +3745,7 @@ def count_exam_papers(
     q = str(query or "").strip()
     if q:
         ql = f"%{q}%"
-        where.append("(c.name ILIKE %s OR ep.phone LIKE %s OR ep.exam_key ILIKE %s OR ep.token ILIKE %s)")
+        where.append("(c.name ILIKE %s OR ep.phone LIKE %s OR ep.quiz_key ILIKE %s OR ep.token ILIKE %s)")
         params.extend([ql, ql, ql, ql])
     if invite_start_from:
         where.append("ep.invite_start_date >= %s::date")
@@ -3464,8 +3753,53 @@ def count_exam_papers(
     if invite_start_to:
         where.append("ep.invite_start_date <= %s::date")
         params.append(str(invite_start_to).strip())
+    if invite_end_from:
+        where.append("ep.invite_end_date >= %s::date")
+        params.append(str(invite_end_from).strip())
+    if invite_end_to:
+        where.append("ep.invite_end_date <= %s::date")
+        params.append(str(invite_end_to).strip())
     if where:
         sql += " WHERE " + " AND ".join(where)
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            return int(cur.fetchone()[0])
+
+
+def count_unhandled_finished_quiz_papers(
+    *,
+    query: str | None = None,
+    invite_start_from: str | None = None,
+    invite_start_to: str | None = None,
+    invite_end_from: str | None = None,
+    invite_end_to: str | None = None,
+) -> int:
+    sql = """
+ SELECT COUNT(*)
+ FROM quiz_paper ep
+ JOIN candidate c ON c.id = ep.candidate_id
+ """
+    params: list[Any] = []
+    where: list[str] = ["ep.status = 'finished'::quiz_paper_status", "ep.handled_at IS NULL"]
+    q = str(query or "").strip()
+    if q:
+        ql = f"%{q}%"
+        where.append("(c.name ILIKE %s OR ep.phone LIKE %s OR ep.quiz_key ILIKE %s OR ep.token ILIKE %s)")
+        params.extend([ql, ql, ql, ql])
+    if invite_start_from:
+        where.append("ep.invite_start_date >= %s::date")
+        params.append(str(invite_start_from).strip())
+    if invite_start_to:
+        where.append("ep.invite_start_date <= %s::date")
+        params.append(str(invite_start_to).strip())
+    if invite_end_from:
+        where.append("ep.invite_end_date >= %s::date")
+        params.append(str(invite_end_from).strip())
+    if invite_end_to:
+        where.append("ep.invite_end_date <= %s::date")
+        params.append(str(invite_end_to).strip())
+    sql += " WHERE " + " AND ".join(where)
     with conn_scope() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, tuple(params))

@@ -11,7 +11,7 @@
 
 1. 浏览器访问 `/legacy` 或 `/legacy/{full_path}` 时，请求仍由 FastAPI 直接处理。
 2. FastAPI 返回 `307` 跳转到去掉 `/legacy` 前缀后的当前真实路径。
-3. 其中 `/legacy` 会跳转到 `/admin`；`/legacy/admin/exams?q=tag` 会跳转到 `/admin/exams?q=tag`，查询参数会原样保留。
+3. 其中 `/legacy` 会跳转到 `/admin`；`/legacy/admin/quizzes?q=tag` 会跳转到 `/admin/quizzes?q=tag`，查询参数会原样保留。
 
 ## 任务链路
 

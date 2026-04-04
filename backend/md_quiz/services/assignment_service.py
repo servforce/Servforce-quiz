@@ -32,14 +32,14 @@ def _assignment_token_secret() -> bytes:
     return raw.encode("utf-8", errors="ignore")
 
 
-def generate_assignment_token(*, exam_key: str, candidate_id: int, phone: str | None = None) -> str:
+def generate_assignment_token(*, quiz_key: str, candidate_id: int, phone: str | None = None) -> str:
     """
     Generate a short, URL-safe token (<12 chars) for (candidate, exam) invitations.
 
     Token space: base64url(HMAC-SHA256(secret, seed)) truncated to `_ASSIGNMENT_TOKEN_LEN`.
     Seed uses real related info + high-resolution time to avoid collisions across multiple invites.
     """
-    ek = str(exam_key or "").strip()
+    ek = str(quiz_key or "").strip()
     cid = int(candidate_id)
     ph = str(phone or "").strip()
     seed = f"{ek}\n{cid}\n{ph}\n{time.time_ns()}"
@@ -90,32 +90,37 @@ def compute_min_submit_seconds(time_limit_seconds: int, min_submit_seconds: int 
 
 
 def create_assignment(
-    exam_key: str,
+    quiz_key: str,
     candidate_id: int,
     base_url: str,
-    exam_version_id: int | None = None,
+    quiz_version_id: int | None = None,
     phone: str | None = None,
     invite_start_date: str | None = None,
     invite_end_date: str | None = None,
     time_limit_seconds: int = 7200,
     min_submit_seconds: int | None = None,
+    require_phone_verification: bool = False,
+    ignore_timing: bool = False,
     verify_max_attempts: int = 3,
-    pass_threshold: int = 70,
 ) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat()
-    min_submit_seconds = compute_min_submit_seconds(time_limit_seconds, min_submit_seconds)
+    ignore_timing = bool(ignore_timing)
+    if ignore_timing:
+        time_limit_seconds = 0
+        min_submit_seconds = 0
+    min_submit_seconds = max(0, int(min_submit_seconds or 0))
 
     # Ensure we don't overwrite an existing assignment due to token collision.
     for _ in range(50):
-        token = generate_assignment_token(exam_key=exam_key, candidate_id=candidate_id, phone=phone)
+        token = generate_assignment_token(quiz_key=quiz_key, candidate_id=candidate_id, phone=phone)
 
         assignment = {
             "token": token,
-            "exam_key": exam_key,
-            "exam_version_id": (int(exam_version_id) if exam_version_id else None),
+            "quiz_key": quiz_key,
+            "quiz_version_id": (int(quiz_version_id) if quiz_version_id else None),
             "candidate_id": candidate_id,
             "created_at": now,
-            "status": "invited",  # invited -> verified -> in_exam -> grading -> graded
+            "status": "invited",  # invited -> verified -> in_quiz -> grading -> graded
             "status_updated_at": now,
             "invite_window": {
                 "start_date": (str(invite_start_date or "").strip() or None),
@@ -123,10 +128,18 @@ def create_assignment(
             },
             "time_limit_seconds": int(time_limit_seconds),
             "min_submit_seconds": int(min_submit_seconds),
+            "require_phone_verification": bool(require_phone_verification),
+            "ignore_timing": ignore_timing,
             "verify_max_attempts": int(verify_max_attempts),
-            "pass_threshold": int(pass_threshold),
             "verify": {"attempts": 0, "locked": False},
             "timing": {"start_at": None, "end_at": None},
+            "question_flow": {
+                "current_index": 0,
+                "current_started_at": None,
+                "reentry_count": 0,
+                "active_session_id": "",
+                "last_session_seen_at": "",
+            },
             "answers": {},
             "grading_started_at": None,
             "graded_at": None,

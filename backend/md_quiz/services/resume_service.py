@@ -573,6 +573,56 @@ def parse_resume_all_llm(*, data: bytes, filename: str, mime: str = "") -> dict[
     }
 
 
+def build_resume_parsed_payload(
+    parsed: dict[str, Any],
+    *,
+    filename: str,
+    mime: str,
+    current_phone: str,
+    parsed_at: str | None = None,
+) -> dict[str, Any]:
+    raw = parsed if isinstance(parsed, dict) else {}
+    parsed_phone = _normalize_phone(_resume_string(raw.get("phone")))
+    parsed_name = _resume_string(raw.get("name"))
+    confidence = raw.get("confidence") or {}
+    if not isinstance(confidence, dict):
+        confidence = {}
+    details = raw.get("details") or {}
+    if not isinstance(details, dict):
+        details = {}
+    details_status = _resume_string(raw.get("details_status")) or ("done" if _resume_details_has_content(details) else "empty")
+    method = raw.get("method") if isinstance(raw.get("method"), dict) else {
+        "identity": "llm_attachment",
+        "name": "llm_attachment",
+        "details": "llm_attachment",
+    }
+    parsed_at_value = _resume_string(parsed_at)
+    if not parsed_at_value:
+        from datetime import UTC, datetime
+
+        parsed_at_value = datetime.now(UTC).isoformat()
+
+    return {
+        "resume_parsed": {
+            "extracted": {"name": parsed_name, "phone": parsed_phone or current_phone},
+            "confidence": {
+                "name": max(0, min(100, _normalize_resume_int(confidence.get("name")))),
+                "phone": max(0, min(100, _normalize_resume_int(confidence.get("phone")))),
+            },
+            "source_filename": filename,
+            "source_mime": mime,
+            "method": method,
+            "details": {
+                "status": details_status,
+                "data": details,
+                "parsed_at": parsed_at_value,
+            },
+        },
+        "parsed_name": parsed_name,
+        "parsed_phone": parsed_phone,
+    }
+
+
 def extract_resume_section(
     text: str,
     *,

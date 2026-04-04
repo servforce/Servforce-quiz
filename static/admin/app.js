@@ -2,7 +2,7 @@
   const LOG_TREND_WINDOW_DAYS = 30;
   const LOG_SERIES_META = [
     { key: "candidate", label: "候选人", color: "#2563eb", hint: "创建、编辑与简历入库" },
-    { key: "exam", label: "试卷", color: "#14b8a6", hint: "试卷查看、更新与同步" },
+    { key: "quiz", label: "测验", color: "#14b8a6", hint: "测验查看、更新与同步" },
     { key: "grading", label: "判卷", color: "#f59e0b", hint: "判卷完成与得分回写" },
     { key: "assignment", label: "邀约", color: "#7c3aed", hint: "邀约创建、验证与答题过程" },
     { key: "system", label: "系统", color: "#ef4444", hint: "告警与短信相关事件" },
@@ -49,6 +49,13 @@
     error: "",
     pendingFile: null,
   });
+  const formatLogTrendCount = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return "0";
+    }
+    return String(Math.round(numeric));
+  };
 
   const register = () => {
     if (!window.Alpine) return;
@@ -56,10 +63,12 @@
       booting: true,
       error: "",
       notice: "",
+      notices: [],
+      noticeSeq: 0,
       session: { authenticated: false, username: "" },
       route: { name: "login", path: "/admin/login", title: "管理员登录", section: "Login", params: {} },
       navItems: [
-        { href: "/admin/exams", label: "试卷", icon: "library_books" },
+        { href: "/admin/quizzes", label: "测验", icon: "library_books" },
         { href: "/admin/candidates", label: "候选人", icon: "group" },
         { href: "/admin/assignments", label: "邀约与答题", icon: "assignment" },
         { href: "/admin/logs", label: "系统日志", icon: "receipt_long" },
@@ -67,9 +76,9 @@
       ],
       loginForm: { username: "admin", password: "password" },
       filters: {
-        exams: { q: "" },
+        quizzes: { q: "" },
         candidates: { q: "" },
-        assignments: { q: "" },
+        assignments: { q: "", start_from: "", end_to: "" },
       },
       syncForm: { repoUrl: "" },
       repoBinding: {},
@@ -79,22 +88,23 @@
       candidateResumeReparseState: createCandidateResumeReparseState(),
       candidateEvaluation: "",
       assignmentForm: {
-        exam_key: "",
+        quiz_key: "",
         candidate_id: "",
         invite_start_date: new Date().toISOString().slice(0, 10),
         invite_end_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-        time_limit_seconds: "7200",
+        require_phone_verification: false,
+        ignore_timing: false,
       },
       assignmentSelect: {
-        exam: { open: false, query: "" },
+        quiz: { open: false, query: "" },
         candidate: { open: false, query: "" },
       },
-      exams: { items: [] },
-      examDetail: { exam: {}, selected_version: {}, version_history: [], stats: {} },
+      quizzes: { items: [] },
+      quizDetail: { quiz: {}, selected_quiz_version: {}, quiz_version_history: [], stats: {} },
       candidates: { items: [] },
       candidateDetail: { candidate: {}, profile: {}, resume_parsed: {} },
-      assignments: { items: [] },
-      attemptDetail: { assignment: {}, archive: {} },
+      assignments: { items: [], summary: { unhandled_finished_count: 0 } },
+      attemptDetail: { assignment: {}, quiz_paper: {}, archive: {}, review: { answers: [], evaluation: {} } },
       logs: { items: [], counts: {}, trend: { days: [], series: {} } },
       logsChart: null,
       logsChartContainer: null,
@@ -104,6 +114,9 @@
       syncState: {},
       syncPollTimer: null,
       syncPollIntervalMs: 2000,
+      assignmentsPollTimer: null,
+      assignmentsPollIntervalMs: 3000,
+      assignmentStatusSnapshot: {},
       statusSummary: {},
       statusRange: { data: {} },
       statusConfig: { llm_tokens_limit: "", sms_calls_limit: "" },
@@ -124,10 +137,10 @@
         return JSON.stringify(value || {}, null, 2);
       },
 
-      selectedAssignmentExam() {
-        const examKey = String(this.assignmentForm?.exam_key || "").trim();
-        if (!examKey) return null;
-        return (this.exams?.items || []).find((item) => String(item?.exam_key || "").trim() === examKey) || null;
+      selectedAssignmentQuiz() {
+        const quizKey = String(this.assignmentForm?.quiz_key || "").trim();
+        if (!quizKey) return null;
+        return (this.quizzes?.items || []).find((item) => String(item?.quiz_key || "").trim() === quizKey) || null;
       },
 
       selectedAssignmentCandidate() {
@@ -136,14 +149,14 @@
         return (this.candidates?.items || []).find((item) => String(item?.id || "").trim() === candidateId) || null;
       },
 
-      filteredAssignmentExams() {
-        const query = String(this.assignmentSelect?.exam?.query || "").trim().toLowerCase();
-        const items = Array.isArray(this.exams?.items) ? this.exams.items : [];
+      filteredAssignmentQuizzes() {
+        const query = String(this.assignmentSelect?.quiz?.query || "").trim().toLowerCase();
+        const items = Array.isArray(this.quizzes?.items) ? this.quizzes.items : [];
         if (!query) return items;
         return items.filter((item) => {
           const haystacks = [
             String(item?.title || "").trim(),
-            String(item?.exam_key || "").trim(),
+            String(item?.quiz_key || "").trim(),
             ...(Array.isArray(item?.tags) ? item.tags.map((tag) => String(tag || "").trim()) : []),
           ]
             .filter(Boolean)
@@ -170,35 +183,35 @@
       },
 
       assignmentSelectDisplayValue(kind) {
-        const target = kind === "candidate" ? "candidate" : "exam";
+        const target = kind === "candidate" ? "candidate" : "quiz";
         if (this.assignmentSelect?.[target]?.open) {
           return String(this.assignmentSelect[target].query || "");
         }
-        if (target === "exam") {
-          const selected = this.selectedAssignmentExam();
-          return selected ? String(selected.title || selected.exam_key || "") : "";
+        if (target === "quiz") {
+          const selected = this.selectedAssignmentQuiz();
+          return selected ? String(selected.title || selected.quiz_key || "") : "";
         }
         const selected = this.selectedAssignmentCandidate();
         return selected ? String(selected.name || "") : "";
       },
 
       openAssignmentSelect(kind) {
-        const target = kind === "candidate" ? "candidate" : "exam";
-        this.assignmentSelect.exam.open = false;
+        const target = kind === "candidate" ? "candidate" : "quiz";
+        this.assignmentSelect.quiz.open = false;
         this.assignmentSelect.candidate.open = false;
         this.assignmentSelect[target].open = true;
         this.assignmentSelect[target].query = "";
       },
 
       handleAssignmentSelectInput(kind, event) {
-        const target = kind === "candidate" ? "candidate" : "exam";
+        const target = kind === "candidate" ? "candidate" : "quiz";
         const value = String(event?.target?.value || "");
-        this.assignmentSelect.exam.open = false;
+        this.assignmentSelect.quiz.open = false;
         this.assignmentSelect.candidate.open = false;
         this.assignmentSelect[target].open = true;
         this.assignmentSelect[target].query = value;
-        if (target === "exam" && this.assignmentForm.exam_key) {
-          this.assignmentForm.exam_key = "";
+        if (target === "quiz" && this.assignmentForm.quiz_key) {
+          this.assignmentForm.quiz_key = "";
         }
         if (target === "candidate" && this.assignmentForm.candidate_id) {
           this.assignmentForm.candidate_id = "";
@@ -206,9 +219,9 @@
       },
 
       toggleAssignmentSelect(kind) {
-        const target = kind === "candidate" ? "candidate" : "exam";
+        const target = kind === "candidate" ? "candidate" : "quiz";
         const nextOpen = !Boolean(this.assignmentSelect?.[target]?.open);
-        this.assignmentSelect.exam.open = false;
+        this.assignmentSelect.quiz.open = false;
         this.assignmentSelect.candidate.open = false;
         this.assignmentSelect[target].open = nextOpen;
         if (!nextOpen) {
@@ -217,20 +230,20 @@
       },
 
       closeAssignmentSelect(kind) {
-        const target = kind === "candidate" ? "candidate" : "exam";
+        const target = kind === "candidate" ? "candidate" : "quiz";
         if (!this.assignmentSelect?.[target]) return;
         this.assignmentSelect[target].open = false;
         this.assignmentSelect[target].query = "";
       },
 
-      selectAssignmentExam(item) {
-        this.assignmentForm.exam_key = String(item?.exam_key || "").trim();
-        this.closeAssignmentSelect("exam");
+      selectAssignmentQuiz(item) {
+        this.assignmentForm.quiz_key = String(item?.quiz_key || "").trim();
+        this.closeAssignmentSelect("quiz");
       },
 
-      clearAssignmentExam() {
-        this.assignmentForm.exam_key = "";
-        this.closeAssignmentSelect("exam");
+      clearAssignmentQuiz() {
+        this.assignmentForm.quiz_key = "";
+        this.closeAssignmentSelect("quiz");
       },
 
       selectAssignmentCandidate(item) {
@@ -241,6 +254,12 @@
       clearAssignmentCandidate() {
         this.assignmentForm.candidate_id = "";
         this.closeAssignmentSelect("candidate");
+      },
+
+      resetAssignmentCandidateSelection() {
+        this.assignmentForm.candidate_id = "";
+        this.assignmentSelect.candidate.open = false;
+        this.assignmentSelect.candidate.query = "";
       },
 
       candidateResumeParsedData() {
@@ -460,8 +479,8 @@
         return `${number.toFixed(1)} 年`;
       },
 
-      examQuestions() {
-        const questions = this.examDetail?.selected_version?.spec?.questions;
+      quizQuestions() {
+        const questions = this.quizDetail?.selected_quiz_version?.spec?.questions;
         return Array.isArray(questions) ? questions : [];
       },
 
@@ -474,6 +493,230 @@
         };
         const key = String(value || "").trim().toLowerCase();
         return labels[key] || String(value || "其他");
+      },
+
+      attemptReviewAnswers() {
+        const answers = this.attemptDetail?.review?.answers;
+        return Array.isArray(answers) ? answers : [];
+      },
+
+      attemptReviewEvaluation() {
+        const evaluation = this.attemptDetail?.review?.evaluation;
+        return evaluation && typeof evaluation === "object" ? evaluation : {};
+      },
+
+      attemptReviewQuestionKind(question) {
+        const explicit = String(question?.review_kind || "").trim().toLowerCase();
+        if (explicit) {
+          return explicit;
+        }
+        const type = String(question?.type || "").trim().toLowerCase();
+        if (type === "short") {
+          return "short";
+        }
+        if (type === "single" || type === "multiple") {
+          const options = Array.isArray(question?.options) ? question.options : [];
+          const hasTraits = options.some((option) => this.optionTraits(option).length > 0);
+          return hasTraits ? "traits" : "objective";
+        }
+        return "unknown";
+      },
+
+      attemptReviewIsShortQuestion(question) {
+        return this.attemptReviewQuestionKind(question) === "short";
+      },
+
+      attemptReviewIsTraitQuestion(question) {
+        return this.attemptReviewQuestionKind(question) === "traits";
+      },
+
+      attemptReviewIsObjectiveQuestion(question) {
+        return this.attemptReviewQuestionKind(question) === "objective";
+      },
+
+      attemptReviewHasOptions(question) {
+        return Array.isArray(question?.options) && question.options.length > 0;
+      },
+
+      attemptReviewSelectedOptions(question) {
+        const options = question?.selected_options;
+        return Array.isArray(options)
+          ? options.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+      },
+
+      attemptReviewCorrectOptions(question) {
+        const options = question?.correct_options;
+        return Array.isArray(options)
+          ? options.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+      },
+
+      attemptReviewHasAnswer(question) {
+        if (typeof question?.has_answer === "boolean") {
+          return question.has_answer;
+        }
+        if (this.attemptReviewIsShortQuestion(question)) {
+          return Boolean(String(question?.answer || "").trim());
+        }
+        return this.attemptReviewSelectedOptions(question).length > 0;
+      },
+
+      attemptReviewQuestionStatusLabel(question) {
+        const hasAnswer = this.attemptReviewHasAnswer(question);
+        if (this.attemptReviewIsTraitQuestion(question)) {
+          return hasAnswer ? "已作答" : "未作答";
+        }
+        if (this.attemptReviewIsShortQuestion(question)) {
+          if (!hasAnswer) {
+            return "未作答";
+          }
+          return question?.has_score ? "已评分" : "待评分";
+        }
+        if (!hasAnswer) {
+          return "未作答";
+        }
+        if (question?.is_correct) {
+          return "回答正确";
+        }
+        if (question?.is_partial) {
+          return "部分得分";
+        }
+        return "回答错误";
+      },
+
+      attemptReviewQuestionStatusClass(question) {
+        const label = this.attemptReviewQuestionStatusLabel(question);
+        const classes = [
+          "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold",
+        ];
+        if (label === "回答正确") {
+          classes.push("border-emerald-200 bg-emerald-50 text-emerald-700");
+        } else if (label === "部分得分") {
+          classes.push("border-amber-200 bg-amber-50 text-amber-700");
+        } else if (label === "回答错误") {
+          classes.push("border-rose-200 bg-rose-50 text-rose-700");
+        } else if (label === "已评分") {
+          classes.push("border-blue-200 bg-blue-50 text-blue-700");
+        } else if (label === "待评分") {
+          classes.push("border-amber-200 bg-amber-50 text-amber-700");
+        } else if (label === "已作答") {
+          classes.push("border-sky-200 bg-sky-50 text-sky-700");
+        } else {
+          classes.push("border-slate-200 bg-slate-50 text-slate-600");
+        }
+        return classes.join(" ");
+      },
+
+      attemptReviewOptionIsSelected(question, option) {
+        const key = String(option?.key || "").trim();
+        return Boolean(key) && this.attemptReviewSelectedOptions(question).includes(key);
+      },
+
+      attemptReviewOptionIsCorrect(question, option) {
+        const key = String(option?.key || "").trim();
+        return Boolean(key) && this.attemptReviewCorrectOptions(question).includes(key);
+      },
+
+      attemptReviewOptionRowClass(question, option) {
+        const classes = ["flex items-start gap-2.5 px-3 py-3"];
+        const selected = this.attemptReviewOptionIsSelected(question, option);
+        const correct = this.attemptReviewOptionIsCorrect(question, option);
+        if (this.attemptReviewIsTraitQuestion(question)) {
+          classes.push(selected ? "bg-sky-50/85" : "bg-slate-50/80");
+        } else if (selected && correct) {
+          classes.push("bg-emerald-50/85");
+        } else if (selected) {
+          classes.push("bg-rose-50/80");
+        } else if (correct) {
+          classes.push("bg-emerald-50/60");
+        } else {
+          classes.push("bg-slate-50/80");
+        }
+        return classes.join(" ");
+      },
+
+      attemptReviewOptionSelectionBadgeClass(question, option) {
+        const classes = ["shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold"];
+        if (this.attemptReviewIsTraitQuestion(question)) {
+          classes.push("border-sky-200 bg-white text-sky-700");
+        } else if (this.attemptReviewOptionIsCorrect(question, option)) {
+          classes.push("border-emerald-200 bg-white text-emerald-700");
+        } else {
+          classes.push("border-rose-200 bg-white text-rose-700");
+        }
+        return classes.join(" ");
+      },
+
+      attemptReviewShortAnswerText(question) {
+        const answer = question?.answer;
+        if (typeof answer === "string") {
+          return answer.trim() || "未作答";
+        }
+        if (Array.isArray(answer)) {
+          return answer.length ? answer.join("、") : "未作答";
+        }
+        if (answer === null || answer === undefined || answer === "") {
+          return "未作答";
+        }
+        try {
+          return JSON.stringify(answer, null, 2);
+        } catch (_error) {
+          return String(answer);
+        }
+      },
+
+      attemptEvaluationResultModeLabel() {
+        const evaluation = this.attemptReviewEvaluation();
+        if (String(evaluation?.result_mode_label || "").trim()) {
+          return String(evaluation.result_mode_label).trim();
+        }
+        const mapping = {
+          scored: "计分题",
+          traits: "量表题",
+          mixed: "计分 + 量表",
+        };
+        const key = String(evaluation?.result_mode || "").trim().toLowerCase();
+        return mapping[key] || "未定义";
+      },
+
+      attemptEvaluationPrimaryDimensions() {
+        const evaluation = this.attemptReviewEvaluation();
+        const items = evaluation?.primary_dimensions || evaluation?.traits?.primary_dimensions;
+        return Array.isArray(items) ? items.map((item) => String(item || "").trim()).filter(Boolean) : [];
+      },
+
+      attemptEvaluationTraitPairs() {
+        const evaluation = this.attemptReviewEvaluation();
+        const items = evaluation?.paired_dimensions || evaluation?.traits?.paired_dimensions;
+        return Array.isArray(items) ? items : [];
+      },
+
+      attemptEvaluationDimensionList() {
+        const evaluation = this.attemptReviewEvaluation();
+        const items = evaluation?.dimension_list || evaluation?.traits?.dimension_list;
+        return Array.isArray(items) ? items : [];
+      },
+
+      attemptEvaluationShowScore() {
+        const evaluation = this.attemptReviewEvaluation();
+        if (typeof evaluation?.has_score === "boolean") {
+          return evaluation.has_score;
+        }
+        return Boolean(String(evaluation?.score_display || "").trim()) && String(evaluation?.result_mode || "").trim() !== "traits";
+      },
+
+      attemptEvaluationHasContent() {
+        const evaluation = this.attemptReviewEvaluation();
+        return Boolean(
+          String(evaluation?.final_analysis || "").trim()
+          || String(evaluation?.candidate_remark || "").trim()
+          || String(evaluation?.score_display || "").trim()
+          || String(evaluation?.result_mode || "").trim()
+          || this.attemptEvaluationPrimaryDimensions().length
+          || this.attemptEvaluationTraitPairs().length
+          || this.attemptEvaluationDimensionList().length
+        );
       },
 
       formatDateTime(value) {
@@ -491,6 +734,148 @@
           minute: "2-digit",
           hour12: false,
         }).format(date);
+      },
+
+      formatDate(value) {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        const date = new Date(text);
+        if (Number.isNaN(date.getTime())) {
+          return text;
+        }
+        return new Intl.DateTimeFormat("zh-CN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(date);
+      },
+
+      unhandledAssignmentCount() {
+        return Math.max(0, Number(this.assignments?.summary?.unhandled_finished_count || 0));
+      },
+
+      assignmentSurfaceStateClass(item) {
+        switch (this.assignmentStatusValue(item)) {
+          case "in_quiz":
+            return "assignment-surface--in-quiz";
+          case "grading":
+            return "assignment-surface--grading";
+          case "finished":
+            return "assignment-surface--finished";
+          case "expired":
+            return "assignment-surface--expired";
+          case "invited":
+          case "verified":
+            return "assignment-surface--waiting";
+          default:
+            return "";
+        }
+      },
+
+      assignmentCardClass(item) {
+        const classes = [];
+        const stateClass = this.assignmentSurfaceStateClass(item);
+        if (stateClass) {
+          classes.push(stateClass);
+        }
+        if (item?.needs_attention) {
+          classes.push("assignment-card--attention");
+        }
+        return classes.join(" ");
+      },
+
+      assignmentDetailSectionClass(item) {
+        const classes = [];
+        const stateClass = this.assignmentSurfaceStateClass(item);
+        if (stateClass) {
+          classes.push(stateClass);
+        }
+        if (item?.needs_attention) {
+          classes.push("assignment-detail-panel--attention");
+        }
+        return classes.join(" ");
+      },
+
+      assignmentSourceBadgeClass() {
+        return "assignment-badge assignment-badge--source";
+      },
+
+      assignmentStatusBadgeClass(item) {
+        const classes = ["assignment-badge"];
+        switch (this.assignmentStatusValue(item)) {
+          case "in_quiz":
+            classes.push("assignment-badge--status-active");
+            break;
+          case "grading":
+            classes.push("assignment-badge--status-grading");
+            break;
+          case "finished":
+            classes.push("assignment-badge--status-finished");
+            break;
+          case "expired":
+            classes.push("assignment-badge--status-expired");
+            break;
+          case "invited":
+          case "verified":
+            classes.push("assignment-badge--status-waiting");
+            break;
+          default:
+            classes.push("assignment-badge--status-neutral");
+            break;
+        }
+        return classes.join(" ");
+      },
+
+      assignmentHandlingBadgeClass(item) {
+        return item?.needs_attention
+          ? "assignment-badge assignment-badge--attention"
+          : "assignment-badge assignment-badge--handled";
+      },
+
+      assignmentIgnoresTiming(item) {
+        return Boolean(item?.ignore_timing);
+      },
+
+      canToggleAssignmentHandling(item) {
+        return String(item?.status || "").trim() === "finished";
+      },
+
+      assignmentHandlingLabel(item) {
+        if (!this.canToggleAssignmentHandling(item)) return "";
+        return item?.needs_attention ? "未处理" : "已处理";
+      },
+
+      assignmentHandlingActionLabel(item) {
+        return item?.needs_attention ? "标记已处理" : "取消已处理";
+      },
+
+      assignmentActionButtonClass(kind, item) {
+        const classes = ["assignment-action"];
+        if (kind === "detail") {
+          classes.push("assignment-action--primary");
+        } else if (kind === "danger") {
+          classes.push("assignment-action--danger");
+        } else if (kind === "handling" && item?.needs_attention) {
+          classes.push("assignment-action--warning");
+        } else {
+          classes.push("assignment-action--secondary");
+        }
+        return classes.join(" ");
+      },
+
+      assignmentHandledMeta(item) {
+        const handledAt = String(item?.handled_at || "").trim();
+        if (!handledAt) return "";
+        const parts = [];
+        const handledBy = String(item?.handled_by || "").trim();
+        if (handledBy) {
+          parts.push(handledBy);
+        }
+        const displayTime = this.formatDateTime(handledAt);
+        if (displayTime) {
+          parts.push(displayTime);
+        }
+        return parts.join(" · ");
       },
 
       formatAnswerTime(seconds) {
@@ -577,7 +962,7 @@
           usedSet.add(name);
           usedNames.push(name);
         };
-        for (const question of this.examQuestions()) {
+        for (const question of this.quizQuestions()) {
           for (const option of question?.options || []) {
             for (const traitName of Object.keys(option?.traits || {})) {
               pushUsedName(traitName);
@@ -593,7 +978,7 @@
           seen.add(name);
           names.push(name);
         };
-        const configured = this.examDetail?.selected_version?.trait?.dimensions || this.examDetail?.exam?.trait?.dimensions;
+        const configured = this.quizDetail?.selected_quiz_version?.trait?.dimensions || this.quizDetail?.quiz?.trait?.dimensions;
         if (Array.isArray(configured)) {
           configured.forEach(pushName);
         }
@@ -688,6 +1073,27 @@
         return `${data.range_start} 至 ${data.range_end}`;
       },
 
+      statusConfigAlerts() {
+        return Array.isArray(this.statusSummary?.config_alerts) ? this.statusSummary.config_alerts : [];
+      },
+
+      statusModuleConfigured(key) {
+        const module = this.statusSummary?.[key];
+        if (!module || typeof module.configured !== "boolean") {
+          return true;
+        }
+        return Boolean(module.configured);
+      },
+
+      statusModuleMissingFields(key) {
+        return Array.isArray(this.statusSummary?.[key]?.missing_fields) ? this.statusSummary[key].missing_fields : [];
+      },
+
+      statusModuleMissingText(key) {
+        const fields = this.statusModuleMissingFields(key);
+        return fields.length ? `缺少 ${fields.join("、")}` : "";
+      },
+
       statusDailyRows() {
         const items = Array.isArray(this.statusRange?.data?.items) ? this.statusRange.data.items : [];
         return [...items].reverse();
@@ -695,14 +1101,14 @@
 
       statusDailyTotals() {
         const totals = {
-          exams_new: 0,
+          quizzes_new: 0,
           invites_new: 0,
           candidates_new: 0,
           llm_tokens: 0,
           sms_calls: 0,
         };
         for (const item of this.statusDailyRows()) {
-          totals.exams_new += Number(item?.exams_new || 0);
+          totals.quizzes_new += Number(item?.quizzes_new || 0);
           totals.invites_new += Number(item?.invites_new || 0);
           totals.candidates_new += Number(item?.candidates_new || 0);
           totals.llm_tokens += Number(item?.llm_tokens || 0);
@@ -715,12 +1121,157 @@
         return -new Date().getTimezoneOffset();
       },
 
+      removeNotice(noticeId) {
+        const targetId = Number(noticeId || 0);
+        this.notices = (Array.isArray(this.notices) ? this.notices : []).filter(
+          (item) => Number(item?.id || 0) !== targetId,
+        );
+        this.notice = this.notices.length
+          ? String(this.notices[this.notices.length - 1]?.message || "")
+          : "";
+      },
+
       showNotice(message) {
-        this.notice = message;
-        window.clearTimeout(this.noticeTimer);
-        this.noticeTimer = window.setTimeout(() => {
-          this.notice = "";
+        const text = String(message || "").trim();
+        if (!text) return;
+        const id = ++this.noticeSeq;
+        const next = [...(Array.isArray(this.notices) ? this.notices : []), { id, message: text }];
+        this.notices = next.slice(-3);
+        this.notice = text;
+        window.setTimeout(() => {
+          this.removeNotice(id);
         }, 3600);
+      },
+
+      scheduleAssignmentsReload() {
+        window.clearTimeout(this.assignmentsFilterTimer);
+        this.assignmentsFilterTimer = window.setTimeout(() => {
+          this.loadAssignments();
+        }, 220);
+      },
+
+      async copyText(text, successMessage) {
+        const value = String(text || "").trim();
+        if (!value) return false;
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(value);
+          this.showNotice(successMessage || "内容已复制");
+          return true;
+        }
+        const input = document.createElement("textarea");
+        input.value = value;
+        input.setAttribute("readonly", "readonly");
+        input.style.position = "fixed";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.select();
+        input.setSelectionRange(0, input.value.length);
+        const ok = document.execCommand("copy");
+        document.body.removeChild(input);
+        if (!ok) {
+          throw new Error("复制失败，请手动复制");
+        }
+        this.showNotice(successMessage || "内容已复制");
+        return true;
+      },
+
+      async copyAssignmentUrl(item) {
+        await this.copyText(item?.url, "邀约链接已复制");
+      },
+
+      async copyAssignmentQr(item) {
+        const qrPath = String(item?.qr_url || "").trim();
+        if (!qrPath) return;
+        const qrUrl = new URL(qrPath, window.location.origin).toString();
+        try {
+          if (!navigator.clipboard?.write || typeof window.ClipboardItem === "undefined") {
+            throw new Error("image clipboard unsupported");
+          }
+          const response = await fetch(qrUrl, { credentials: "same-origin" });
+          if (!response.ok) {
+            throw new Error("qr fetch failed");
+          }
+          const blob = await response.blob();
+          await navigator.clipboard.write([
+            new window.ClipboardItem({
+              [blob.type || "image/png"]: blob,
+            }),
+          ]);
+          this.showNotice("二维码图片已复制");
+        } catch (_error) {
+          await this.copyText(qrUrl, "当前环境不支持复制图片，已复制二维码地址");
+        }
+      },
+
+      canDeleteAssignment(item) {
+        return Boolean(String(item?.token || "").trim());
+      },
+
+      async deleteAssignment(item) {
+        if (!this.canDeleteAssignment(item)) return;
+        const token = String(item?.token || "").trim();
+        if (!token) return;
+        const name = String(item?.candidate_name || "").trim() || "该邀约";
+        if (!window.confirm(`确定删除 ${name} 的邀约吗？这会同时删除该次答题归档，不影响候选人和简历。`)) return;
+        await this.api(`/api/admin/assignments/${encodeURIComponent(token)}`, { method: "DELETE" });
+        this.showNotice("邀约已删除");
+        const currentToken = String(this.attemptDetail?.quiz_paper?.token || this.attemptDetail?.assignment?.token || "").trim();
+        if (currentToken === token) {
+          await this.handleRoute("/admin/assignments");
+          return;
+        }
+        await this.loadAssignments();
+      },
+
+      updateAssignmentSummaryCount(previousItem, nextItem) {
+        const previousNeedsAttention = Boolean(previousItem?.needs_attention);
+        const nextNeedsAttention = Boolean(nextItem?.needs_attention);
+        if (previousNeedsAttention === nextNeedsAttention) return;
+        if (!this.assignments.summary || typeof this.assignments.summary !== "object") {
+          this.assignments.summary = { unhandled_finished_count: 0 };
+        }
+        const current = Number(this.assignments.summary.unhandled_finished_count || 0);
+        this.assignments.summary.unhandled_finished_count = Math.max(0, current + (nextNeedsAttention ? 1 : -1));
+      },
+
+      applyAssignmentItemUpdate(updatedItem) {
+        const token = String(updatedItem?.token || "").trim();
+        if (!token) return;
+        const items = Array.isArray(this.assignments?.items) ? this.assignments.items : [];
+        const nextItems = items.map((item) => {
+          if (String(item?.token || "").trim() !== token) {
+            return item;
+          }
+          this.updateAssignmentSummaryCount(item, updatedItem);
+          return { ...item, ...updatedItem };
+        });
+        this.assignments = {
+          ...(this.assignments || {}),
+          items: nextItems,
+          summary: this.assignments?.summary || { unhandled_finished_count: 0 },
+        };
+        if (String(this.attemptDetail?.quiz_paper?.token || "").trim() === token) {
+          this.attemptDetail = {
+            ...(this.attemptDetail || {}),
+            quiz_paper: { ...(this.attemptDetail?.quiz_paper || {}), ...updatedItem },
+          };
+        }
+      },
+
+      async toggleAssignmentHandling(item) {
+        if (!this.canToggleAssignmentHandling(item)) return;
+        const token = String(item?.token || "").trim();
+        if (!token) return;
+        const handled = Boolean(item?.needs_attention);
+        const result = await this.api(`/api/admin/assignments/${encodeURIComponent(token)}/handling`, {
+          method: "POST",
+          body: JSON.stringify({ handled }),
+          headers: { "Content-Type": "application/json" },
+        });
+        const updatedItem = result?.item;
+        if (!updatedItem || typeof updatedItem !== "object") return;
+        this.applyAssignmentItemUpdate(updatedItem);
+        this.showNotice(handled ? "已标记为已处理" : "已取消处理标记");
       },
 
       syncStatus() {
@@ -756,14 +1307,82 @@
         this.syncPollTimer = null;
       },
 
+      assignmentStatusValue(item) {
+        return String(item?.status || "").trim().toLowerCase();
+      },
+
+      assignmentStatusSnapshotMap(items) {
+        const out = {};
+        for (const item of Array.isArray(items) ? items : []) {
+          const token = String(item?.token || "").trim();
+          if (!token) continue;
+          out[token] = this.assignmentStatusValue(item);
+        }
+        return out;
+      },
+
+      notifyAssignmentTransitions(nextItems, previousSnapshot) {
+        const startedGradingItems = [];
+        const finishedItems = [];
+        for (const item of Array.isArray(nextItems) ? nextItems : []) {
+          const token = String(item?.token || "").trim();
+          if (!token) continue;
+          const previousStatus = String(previousSnapshot?.[token] || "").trim().toLowerCase();
+          const nextStatus = this.assignmentStatusValue(item);
+          if (previousStatus && previousStatus !== "grading" && previousStatus !== "finished" && nextStatus === "grading") {
+            startedGradingItems.push(item);
+            continue;
+          }
+          if (previousStatus === "grading" && nextStatus === "finished") {
+            finishedItems.push(item);
+          }
+        }
+        if (startedGradingItems.length === 1) {
+          const candidateName = String(startedGradingItems[0]?.candidate_name || "").trim() || "该答题";
+          this.showNotice(`${candidateName} 已结束答题，正在判卷`);
+        } else if (startedGradingItems.length > 1) {
+          this.showNotice(`${startedGradingItems.length} 条答题记录已结束，正在判卷`);
+        }
+        if (finishedItems.length === 1) {
+          const candidateName = String(finishedItems[0]?.candidate_name || "").trim() || "该答题";
+          this.showNotice(`${candidateName} 的判卷已结束`);
+          return;
+        }
+        if (finishedItems.length > 1) {
+          this.showNotice(`${finishedItems.length} 条答题记录已完成判卷`);
+        }
+      },
+
+      stopAssignmentsPolling() {
+        if (!this.assignmentsPollTimer) return;
+        window.clearTimeout(this.assignmentsPollTimer);
+        this.assignmentsPollTimer = null;
+      },
+
+      scheduleAssignmentsPolling() {
+        if (this.assignmentsPollTimer || !this.session.authenticated) return;
+        if (!["assignments", "attempt-detail"].includes(this.route.name)) return;
+        this.assignmentsPollTimer = window.setTimeout(async () => {
+          this.assignmentsPollTimer = null;
+          if (!this.session.authenticated) return;
+          if (this.route.name === "assignments") {
+            await this.loadAssignments({ quiet: true, source: "assignments-poll" });
+            return;
+          }
+          if (this.route.name === "attempt-detail") {
+            await this.loadAttemptDetail(this.route.params.token, { quiet: true, source: "assignments-poll" });
+          }
+        }, this.assignmentsPollIntervalMs);
+      },
+
       scheduleSyncPolling() {
-        if (this.syncPollTimer || !this.isSyncBusy() || this.route.name !== "exams") return;
+        if (this.syncPollTimer || !this.isSyncBusy() || this.route.name !== "quizzes") return;
         this.syncPollTimer = window.setTimeout(async () => {
           this.syncPollTimer = null;
-          if (this.route.name !== "exams" || !this.session.authenticated) return;
+          if (this.route.name !== "quizzes" || !this.session.authenticated) return;
           const previousSyncStatus = this.syncStatus();
           const previousSyncJobId = String(this.syncState?.last_job_id || "").trim();
-          await this.loadExams({
+          await this.loadQuizzes({
             quiet: true,
             source: "sync-poll",
             previousSyncStatus,
@@ -777,17 +1396,17 @@
         if (path === "/admin/login") {
           return { name: "login", path, title: "管理员登录", section: "Login", params: {} };
         }
-        if (path === "/admin" || path === "/admin/exams") {
-          return { name: "exams", path: "/admin/exams", title: "试卷", section: "Exams", params: {} };
+        if (path === "/admin" || path === "/admin/quizzes") {
+          return { name: "quizzes", path: "/admin/quizzes", title: "测验", section: "Quizzes", params: {} };
         }
-        let match = path.match(/^\/admin\/exams\/([^/]+)$/);
+        let match = path.match(/^\/admin\/(?:quizzes|exams)\/([^/]+)$/);
         if (match) {
           return {
-            name: "exam-detail",
+            name: "quiz-detail",
             path,
-            title: "试卷详情",
-            section: "Exams",
-            params: { examKey: decodeURIComponent(match[1]) },
+            title: "测验详情",
+            section: "Quizzes",
+            params: { quizKey: decodeURIComponent(match[1]) },
           };
         }
         if (path === "/admin/candidates") {
@@ -822,7 +1441,7 @@
         if (path === "/admin/status") {
           return { name: "status", path, title: "系统状态", section: "Status", params: {} };
         }
-        return { name: "exams", path: "/admin/exams", title: "试卷", section: "Exams", params: {} };
+        return { name: "quizzes", path: "/admin/quizzes", title: "测验", section: "Quizzes", params: {} };
       },
 
       async refreshSession() {
@@ -834,7 +1453,7 @@
       async loadBootstrap() {
         await Promise.all([
           this.loadStatusSummary(),
-          this.loadExams({ quiet: true }),
+          this.loadQuizzes({ quiet: true }),
           this.loadCandidates({ quiet: true }),
         ]);
       },
@@ -842,24 +1461,28 @@
       async handleRoute(pathname, { replace = false } = {}) {
         if (!this.session.authenticated && pathname !== "/admin/login") {
           this.stopSyncPolling();
+          this.stopAssignmentsPolling();
           history.replaceState({}, "", "/admin/login");
           this.route = this.resolveRoute("/admin/login");
           return;
         }
         this.route = this.resolveRoute(pathname);
-        if (this.route.name !== "exams") {
+        if (this.route.name !== "quizzes") {
           this.stopSyncPolling();
+        }
+        if (!["assignments", "attempt-detail"].includes(this.route.name)) {
+          this.stopAssignmentsPolling();
         }
         if (!replace) {
           history.pushState({}, "", this.route.path);
         }
         this.error = "";
         switch (this.route.name) {
-          case "exams":
-            await this.loadExams();
+          case "quizzes":
+            await this.loadQuizzes();
             break;
-          case "exam-detail":
-            await this.loadExamDetail(this.route.params.examKey);
+          case "quiz-detail":
+            await this.loadQuizDetail(this.route.params.quizKey);
             break;
           case "candidates":
             this.resetCandidateResumeUploadState();
@@ -899,7 +1522,7 @@
           });
           await this.refreshSession();
           await this.loadBootstrap();
-          await this.handleRoute("/admin/exams");
+          await this.handleRoute("/admin/quizzes");
         } catch (error) {
           this.error = error.message || "登录失败";
         }
@@ -908,6 +1531,7 @@
       async logout() {
         this.destroyLogsChart();
         this.stopSyncPolling();
+        this.stopAssignmentsPolling();
         await this.api("/api/admin/session/logout", { method: "POST", quiet: true });
         this.session = { authenticated: false, username: "" };
         this.repoBinding = {};
@@ -916,12 +1540,12 @@
         this.route = this.resolveRoute("/admin/login");
       },
 
-      async loadExams({ quiet = false, source = "manual", previousSyncStatus = "", previousSyncJobId = "" } = {}) {
+      async loadQuizzes({ quiet = false, source = "manual", previousSyncStatus = "", previousSyncJobId = "" } = {}) {
         const query = new URLSearchParams();
-        if (this.filters.exams.q) query.set("q", this.filters.exams.q);
-        const data = await this.api(`/api/admin/exams?${query.toString()}`, { quiet });
+        if (this.filters.quizzes.q) query.set("q", this.filters.quizzes.q);
+        const data = await this.api(`/api/admin/quizzes?${query.toString()}`, { quiet });
         if (!data) return;
-        this.exams = data;
+        this.quizzes = data;
         this.repoBinding = data.repo_binding || {};
         this.syncState = data.sync_state || {};
         if (!this.hasRepoBinding() && this.syncState.repo_url && (this.isSyncBusy() || !this.syncForm.repoUrl)) {
@@ -933,7 +1557,7 @@
           this.resetRebindForm();
         }
         const currentSyncStatus = this.syncStatus();
-        if (this.route.name === "exams" && this.isSyncBusy()) {
+        if (this.route.name === "quizzes" && this.isSyncBusy()) {
           this.scheduleSyncPolling();
         } else {
           this.stopSyncPolling();
@@ -945,14 +1569,14 @@
         ) {
           const finishedJobId = String(this.syncState?.last_job_id || "").trim();
           if (!previousSyncJobId || previousSyncJobId === finishedJobId) {
-            this.showNotice(currentSyncStatus === "done" ? "试卷同步完成，列表已刷新" : "试卷同步失败");
+            this.showNotice(currentSyncStatus === "done" ? "测验同步完成，列表已刷新" : "测验同步失败");
           }
         }
       },
 
       async bindRepo() {
         if (this.isSyncBusy() || this.hasRepoBinding()) return;
-        const result = await this.api("/api/admin/exams/binding", {
+        const result = await this.api("/api/admin/quizzes/binding", {
           method: "POST",
           body: JSON.stringify({ repo_url: this.syncForm.repoUrl || "" }),
           headers: { "Content-Type": "application/json" },
@@ -964,23 +1588,23 @@
         } else {
           this.showNotice("仓库已绑定，已开始同步");
         }
-        await this.loadExams({ quiet: true });
+        await this.loadQuizzes({ quiet: true });
       },
 
-      async syncExams() {
+      async syncQuizzes() {
         if (this.isSyncBusy() || !this.hasRepoBinding()) return;
-        const result = await this.api("/api/admin/exams/sync", {
+        const result = await this.api("/api/admin/quizzes/sync", {
           method: "POST",
           body: JSON.stringify({}),
           headers: { "Content-Type": "application/json" },
         });
-        this.showNotice(result.created ? "试卷同步任务已创建" : "已复用正在运行的同步任务");
-        await this.loadExams({ quiet: true });
+        this.showNotice(result.created ? "测验同步任务已创建" : "已复用正在运行的同步任务");
+        await this.loadQuizzes({ quiet: true });
       },
 
       async confirmRebind() {
         if (this.isSyncBusy() || !this.hasRepoBinding()) return;
-        const result = await this.api("/api/admin/exams/binding/rebind", {
+        const result = await this.api("/api/admin/quizzes/binding/rebind", {
           method: "POST",
           body: JSON.stringify({
             repo_url: this.rebindForm.repoUrl || "",
@@ -988,35 +1612,37 @@
           }),
           headers: { "Content-Type": "application/json" },
         });
-        this.exams = { items: [], page: 1, per_page: 20, total: 0, total_pages: 1 };
-        this.examDetail = { exam: {}, selected_version: {}, version_history: [], stats: {} };
+        this.quizzes = { items: [], page: 1, per_page: 20, total: 0, total_pages: 1 };
+        this.quizDetail = { quiz: {}, selected_quiz_version: {}, quiz_version_history: [], stats: {} };
         this.repoBinding = result.binding || {};
         this.resetRebindForm();
         if (result.sync?.error) {
-          this.showNotice("仓库已重新绑定，现有问卷数据已清空，但自动同步投递失败");
+          this.showNotice("仓库已重新绑定，现有测验数据已清空，但自动同步投递失败");
         } else {
-          this.showNotice("仓库已重新绑定，现有问卷数据已清空并开始同步");
+          this.showNotice("仓库已重新绑定，现有测验数据已清空并开始同步");
         }
-        await this.loadExams({ quiet: true });
+        await this.loadQuizzes({ quiet: true });
       },
 
-      async loadExamDetail(examKey) {
-        this.examDetail = await this.api(`/api/admin/exams/${encodeURIComponent(examKey)}`);
+      async loadQuizDetail(quizKey) {
+        this.quizDetail = await this.api(`/api/admin/quizzes/${encodeURIComponent(quizKey)}`);
       },
 
-    async loadExamVersion(versionId) {
-      this.examDetail = await this.api(`/api/admin/exam-versions/${versionId}`);
+    async loadQuizVersion(versionId) {
+      this.quizDetail = await this.api(`/api/admin/quiz-versions/${versionId}`);
     },
 
     async togglePublicInvite() {
-      const enabled = !Boolean(this.examDetail.exam?.public_invite_enabled);
-      const result = await this.api(`/api/admin/exams/${encodeURIComponent(this.examDetail.exam.exam_key)}/public-invite`, {
+      const enabled = !Boolean(this.quizDetail.quiz?.public_invite_enabled);
+      const result = await this.api(`/api/admin/quizzes/${encodeURIComponent(this.quizDetail.quiz.quiz_key)}/public-invite`, {
         method: "POST",
         body: JSON.stringify({ enabled }),
         headers: { "Content-Type": "application/json" },
       });
-      this.examDetail.exam.public_invite_enabled = result.enabled;
-      this.examDetail.exam.public_invite_url = result.public_url;
+      this.quizDetail.quiz.public_invite_enabled = result.enabled;
+      this.quizDetail.quiz.public_invite_token = result.token || "";
+      this.quizDetail.quiz.public_invite_url = result.public_url;
+      this.quizDetail.quiz.public_invite_qr_url = result.qr_url || "";
       this.showNotice(result.enabled ? "公开邀约已开启" : "公开邀约已关闭");
     },
 
@@ -1188,28 +1814,76 @@
       await this.handleRoute("/admin/candidates");
     },
 
-    async loadAssignments() {
+    async loadAssignments({ quiet = false, source = "manual" } = {}) {
       const query = new URLSearchParams();
       if (this.filters.assignments.q) query.set("q", this.filters.assignments.q);
-      this.assignments = await this.api(`/api/admin/assignments?${query.toString()}`);
+      if (this.filters.assignments.start_from) query.set("start_from", this.filters.assignments.start_from);
+      if (this.filters.assignments.end_to) query.set("end_to", this.filters.assignments.end_to);
+      const previousSnapshot = { ...(this.assignmentStatusSnapshot || {}) };
+      const data = await this.api(`/api/admin/assignments?${query.toString()}`, { quiet });
+      if (!data) return;
+      const nextItems = Array.isArray(data?.items) ? data.items : [];
+      this.assignments = {
+        items: nextItems,
+        summary: data?.summary || { unhandled_finished_count: 0 },
+        ...data,
+      };
+      this.assignmentStatusSnapshot = this.assignmentStatusSnapshotMap(nextItems);
+      if (source === "assignments-poll") {
+        this.notifyAssignmentTransitions(nextItems, previousSnapshot);
+      }
+      if (this.route.name === "assignments") {
+        this.scheduleAssignmentsPolling();
+      }
     },
 
     async createAssignment() {
       const payload = {
         ...this.assignmentForm,
         candidate_id: Number(this.assignmentForm.candidate_id),
+        require_phone_verification: Boolean(this.assignmentForm.require_phone_verification),
+        ignore_timing: Boolean(this.assignmentForm.ignore_timing),
       };
       const result = await this.api("/api/admin/assignments", {
         method: "POST",
         body: JSON.stringify(payload),
         headers: { "Content-Type": "application/json" },
       });
+      this.assignmentForm.ignore_timing = false;
+      this.resetAssignmentCandidateSelection();
       this.showNotice(`邀约已创建：${result.url}`);
       await this.loadAssignments();
     },
 
-      async loadAttemptDetail(token) {
-        this.attemptDetail = await this.api(`/api/admin/attempts/${encodeURIComponent(token)}`);
+      async loadAttemptDetail(token, { quiet = false, source = "manual" } = {}) {
+        const currentToken = String(token || "").trim();
+        const previousStatus = this.assignmentStatusValue(this.attemptDetail?.quiz_paper);
+        const data = await this.api(`/api/admin/attempts/${encodeURIComponent(currentToken)}`, { quiet });
+        if (!data) return;
+        this.attemptDetail = {
+          assignment: data?.assignment || {},
+          quiz_paper: data?.quiz_paper || {},
+          archive: data?.archive || {},
+          review: data?.review || { answers: [], evaluation: {} },
+        };
+        const nextStatus = this.assignmentStatusValue(this.attemptDetail?.quiz_paper);
+        if (currentToken) {
+          this.assignmentStatusSnapshot = {
+            ...(this.assignmentStatusSnapshot || {}),
+            [currentToken]: nextStatus,
+          };
+        }
+        if (source === "assignments-poll") {
+          const candidateName = String(this.attemptDetail?.quiz_paper?.candidate_name || "").trim() || "该答题";
+          if (previousStatus && previousStatus !== "grading" && previousStatus !== "finished" && nextStatus === "grading") {
+            this.showNotice(`${candidateName} 已结束答题，正在判卷`);
+          } else if (previousStatus === "grading" && nextStatus === "finished") {
+            this.showNotice(`${candidateName} 的判卷已结束`);
+          }
+        }
+        if (this.route.name === "attempt-detail") {
+          this.scheduleAssignmentsPolling();
+        }
       },
 
       destroyLogsChart() {
@@ -1305,6 +1979,8 @@
           },
           localization: {
             locale: "zh-CN",
+            priceFormatter: formatLogTrendCount,
+            tickmarksPriceFormatter: (prices) => prices.map((price) => formatLogTrendCount(price)),
           },
         });
         if (typeof ResizeObserver === "function") {
@@ -1334,6 +2010,11 @@
             series = this.createLogsChartSeries(chart, {
               color: item.color,
               lineWidth: 2,
+              priceFormat: {
+                type: "price",
+                precision: 0,
+                minMove: 1,
+              },
               priceLineVisible: false,
               lastValueVisible: false,
               crosshairMarkerRadius: 4,
@@ -1367,11 +2048,14 @@
         this.statusSummary = await this.api("/api/admin/system-status/summary", { quiet: true }) || {};
       },
 
-    async loadStatus() {
+      async loadStatus() {
       const data = await this.api("/api/admin/system-status");
       this.statusRange = data || { data: {} };
       this.statusConfig = { ...(data?.config || {}) };
-      await this.loadStatusSummary();
+      this.statusSummary = data?.summary || {};
+      if (!Object.keys(this.statusSummary || {}).length) {
+        await this.loadStatusSummary();
+      }
     },
 
     async saveStatusConfig() {

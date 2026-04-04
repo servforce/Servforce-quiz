@@ -23,7 +23,6 @@
 
 这些变量只定义“初始默认值”，实际运行时可再由 `/api/admin/config` 修改：
 
-- `RUNTIME_SMS_ENABLED`
 - `RUNTIME_TOKEN_DAILY_THRESHOLD`
 - `RUNTIME_SMS_DAILY_THRESHOLD`
 - `RUNTIME_ALLOW_PUBLIC_ASSIGNMENTS`
@@ -36,7 +35,6 @@
 
 环境变量只提供初始默认值；管理员在后台修改后，以数据库值为准。当前配置项包括：
 
-- `sms_enabled`
 - `token_daily_threshold`
 - `sms_daily_threshold`
 - `allow_public_assignments`
@@ -45,7 +43,7 @@
 
 ## 实例级仓库绑定
 
-试卷仓库绑定信息也保存在数据库表 `runtime_kv` 中，但使用独立键 `exam_repo_binding`，不属于 `runtime_config`，也不是环境变量配置。
+测验仓库绑定信息也保存在数据库表 `runtime_kv` 中，但使用独立键 `exam_repo_binding`，不属于 `runtime_config`，也不是环境变量配置。
 
 当前结构最小为：
 
@@ -65,6 +63,24 @@
 
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
-- 阿里云短信相关配置
+- `EXAM_REPO_SYNC_PROXY`
+- 阿里云号码认证短信认证相关配置：
+  - `ALIYUN_ACCESS_KEY_ID`
+  - `ALIYUN_ACCESS_KEY_SECRET`
+  - `ALIYUN_PNVS_ENDPOINT`
+  - `ALIYUN_PNVS_REGION_ID`
+  - `ALIYUN_PNVS_SIGN_NAME`
+  - `ALIYUN_PNVS_TEMPLATE_CODE`
+  - `ALIYUN_PNVS_TEMPLATE_PARAM`
+  - `ALIYUN_PNVS_SCHEME_NAME`
+  - `ALIYUN_PNVS_COUNTRY_CODE`
+  - `ALIYUN_PNVS_OUT_ID`
+  - `ALIYUN_PNVS_VALID_TIME`
+  - `ALIYUN_PNVS_CASE_AUTH_POLICY`
 
 它们不属于运行时后台配置，重启前后都依赖环境变量。
+
+补充说明：
+
+- `EXAM_REPO_SYNC_PROXY` 只用于测验 Git 仓库同步。
+- 同步服务不会再依赖全局 `HTTP_PROXY` / `HTTPS_PROXY` 环境变量污染整个进程，而是仅在执行 `git clone` 时显式传入 `git -c http.proxy=...`。

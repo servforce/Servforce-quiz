@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import mimetypes
 
-from backend.md_quiz.services.quiz_metadata import build_quiz_metadata
+from backend.md_quiz.services.quiz_metadata import build_quiz_metadata, compute_answer_time_total_seconds
 from backend.md_quiz.services.support_deps import *
 from backend.md_quiz.services.validation_helpers import *
 
@@ -64,8 +64,8 @@ _MARKDOWN_EXTENSIONS = [
 ]
 
 
-def get_public_invite_config(exam_key: str) -> dict[str, object]:
-    exam = get_exam_definition(str(exam_key or "").strip()) or {}
+def get_public_invite_config(quiz_key: str) -> dict[str, object]:
+    exam = get_quiz_definition(str(quiz_key or "").strip()) or {}
     if not exam:
         return {"enabled": False, "token": ""}
     enabled = bool(exam.get("public_invite_enabled"))
@@ -73,6 +73,10 @@ def get_public_invite_config(exam_key: str) -> dict[str, object]:
     if str(exam.get("status") or "").strip() != "active" or int(exam.get("current_version_id") or 0) <= 0:
         enabled = False
     return {"enabled": enabled, "token": token}
+
+
+def compute_quiz_time_limit_seconds(spec: dict[str, Any]) -> int:
+    return int(compute_answer_time_total_seconds(list((spec or {}).get("questions") or [])))
 
 def _hash_token_base64url(seed: str, *, length: int = 10) -> str:
     """
@@ -83,18 +87,18 @@ def _hash_token_base64url(seed: str, *, length: int = 10) -> str:
     return b64[:length]
 
 
-def _compute_public_invite_token_for_exam(*, exam_key: str, created_at: str, title: str, length: int = 10) -> str:
+def _compute_public_invite_token_for_exam(*, quiz_key: str, created_at: str, title: str, length: int = 10) -> str:
     """
     Generate a stable public invite token for an exam based on exam metadata.
 
-    Seed includes: created_at, exam_key (id), title. Token is base64url hash (10 chars).
+    Seed includes: created_at, quiz_key (id), title. Token is base64url hash (10 chars).
     Collision-safe: appends a suffix and re-hashes if token already taken by another exam.
     """
-    ek = str(exam_key or "").strip()
+    ek = str(quiz_key or "").strip()
     ca = str(created_at or "").strip()
     tt = str(title or "").strip()
     if not ek or not ca:
-        raise ValueError("missing exam_key/created_at")
+        raise ValueError("missing quiz_key/created_at")
 
     base_seed = f"{ek}\n{tt}\n{ca}"
     for n in range(0, 50):
@@ -102,17 +106,17 @@ def _compute_public_invite_token_for_exam(*, exam_key: str, created_at: str, tit
         t = _hash_token_base64url(seed, length=length)
         if not t:
             continue
-        bound = get_exam_key_by_public_invite_token(t)
+        bound = get_quiz_key_by_public_invite_token(t)
         if not bound or bound == ek:
             return t
     raise RuntimeError("Failed to allocate a collision-free public invite token")
 
 
-def set_public_invite_enabled(exam_key: str, enabled: bool) -> dict[str, object]:
-    ek = str(exam_key or "").strip()
+def set_public_invite_enabled(quiz_key: str, enabled: bool) -> dict[str, object]:
+    ek = str(quiz_key or "").strip()
     if not ek:
         return {"enabled": False, "token": ""}
-    exam = get_exam_definition(ek)
+    exam = get_quiz_definition(ek)
     if not exam:
         return {"enabled": False, "token": ""}
     if enabled:
@@ -126,7 +130,7 @@ def set_public_invite_enabled(exam_key: str, enabled: bool) -> dict[str, object]
         created_at0 = str(exam.get("created_at") or "").strip()
         title0 = str(exam.get("title") or "").strip()
         if enabled:
-            token = _compute_public_invite_token_for_exam(exam_key=ek, created_at=created_at0, title=title0, length=10)
+            token = _compute_public_invite_token_for_exam(quiz_key=ek, created_at=created_at0, title=title0, length=10)
         else:
             token = token0 if token0 else None
         try:
@@ -135,11 +139,11 @@ def set_public_invite_enabled(exam_key: str, enabled: bool) -> dict[str, object]
             return {"enabled": False, "token": ""}
     return {"enabled": bool(enabled), "token": token}
 
-def _resolve_public_invite_exam_key(public_token: str) -> str:
+def _resolve_public_invite_quiz_key(public_token: str) -> str:
     t = str(public_token or "").strip()
     if not t:
         return ""
-    return get_exam_key_by_public_invite_token(t)
+    return get_quiz_key_by_public_invite_token(t)
 
 
 def _protect_math_for_markdown(raw: str) -> tuple[str, list[tuple[str, str]]]:
@@ -286,29 +290,29 @@ def build_render_ready_public_spec(public_spec: dict[str, Any]) -> dict[str, Any
     return out
 
 
-def _asset_url(exam_key: str, relpath: str) -> str:
-    return f"/exams/{exam_key}/assets/{_safe_relpath(relpath)}"
+def _asset_url(quiz_key: str, relpath: str) -> str:
+    return f"/quizzes/{quiz_key}/assets/{_safe_relpath(relpath)}"
 
 
 def _version_asset_url(version_id: int, relpath: str) -> str:
-    return f"/exams/versions/{int(version_id)}/assets/{_safe_relpath(relpath)}"
+    return f"/quizzes/versions/{int(version_id)}/assets/{_safe_relpath(relpath)}"
 
 
-def get_exam_version_snapshot(version_id: int) -> dict[str, Any] | None:
+def get_quiz_version_snapshot(version_id: int) -> dict[str, Any] | None:
     try:
-        version = get_exam_version(int(version_id))
+        version = get_quiz_version(int(version_id))
     except Exception:
         version = None
     if not version:
         return None
     out = dict(version)
-    out["exam_version_id"] = int(version.get("id") or 0)
-    out["exam_key"] = str(version.get("exam_key") or "").strip()
+    out["quiz_version_id"] = int(version.get("id") or 0)
+    out["quiz_key"] = str(version.get("quiz_key") or "").strip()
     return out
 
 
-def resolve_exam_version_id_for_new_assignment(exam_key: str) -> int | None:
-    exam = get_exam_definition(str(exam_key or "").strip()) or {}
+def resolve_quiz_version_id_for_new_assignment(quiz_key: str) -> int | None:
+    exam = get_quiz_definition(str(quiz_key or "").strip()) or {}
     if not exam:
         return None
     if str(exam.get("status") or "").strip() != "active":
@@ -323,66 +327,66 @@ def resolve_exam_version_id_for_new_assignment(exam_key: str) -> int | None:
 def get_exam_snapshot_for_assignment(assignment: dict[str, Any]) -> dict[str, Any] | None:
     a = assignment or {}
     try:
-        version_id = int(a.get("exam_version_id") or 0)
+        version_id = int(a.get("quiz_version_id") or 0)
     except Exception:
         version_id = 0
     if version_id > 0:
-        snap = get_exam_version_snapshot(version_id)
+        snap = get_quiz_version_snapshot(version_id)
         if snap:
             return snap
-    exam_key = str(a.get("exam_key") or "").strip()
-    if not exam_key:
+    quiz_key = str(a.get("quiz_key") or "").strip()
+    if not quiz_key:
         return None
-    exam = get_exam_definition(exam_key) or {}
+    exam = get_quiz_definition(quiz_key) or {}
     if not exam:
         return None
     current_version_id = int(exam.get("current_version_id") or 0)
     if current_version_id > 0:
-        snap = get_exam_version_snapshot(current_version_id)
+        snap = get_quiz_version_snapshot(current_version_id)
         if snap:
             return snap
     return exam
 
 
-def _resolve_exam_asset_payload_by_version(version_id: int, relpath: str) -> tuple[bytes, str] | None:
+def _resolve_quiz_asset_payload_by_version(version_id: int, relpath: str) -> tuple[bytes, str] | None:
     rp = _safe_relpath(relpath)
     if not rp:
         return None
     if any(part == ".." for part in Path(rp).parts):
         return None
     try:
-        return get_exam_version_asset(int(version_id), rp)
+        return get_quiz_version_asset(int(version_id), rp)
     except Exception:
         return None
 
 
-def _resolve_exam_asset_payload(exam_key: str, relpath: str) -> tuple[bytes, str] | None:
+def _resolve_quiz_asset_payload(quiz_key: str, relpath: str) -> tuple[bytes, str] | None:
     rp = _safe_relpath(relpath)
     if not rp:
         return None
     if any(part == ".." for part in Path(rp).parts):
         return None
-    exam = get_exam_definition(str(exam_key or "").strip()) or {}
+    exam = get_quiz_definition(str(quiz_key or "").strip()) or {}
     try:
         version_id = int(exam.get("current_version_id") or 0)
     except Exception:
         version_id = 0
     if version_id > 0:
-        payload = _resolve_exam_asset_payload_by_version(version_id, rp)
+        payload = _resolve_quiz_asset_payload_by_version(version_id, rp)
         if payload:
             return payload
     try:
-        return get_exam_asset(str(exam_key or "").strip(), rp)
+        return get_quiz_asset(str(quiz_key or "").strip(), rp)
     except Exception:
         return None
 
 
-# 试卷资源处理：将 Markdown 中的本地资源路径统一重写为受控访问 URL。
-def _rewrite_exam_asset_paths(exam_key: str, spec: dict, public_spec: dict) -> None:
+# 测验资源处理：将 Markdown 中的本地资源路径统一重写为受控访问 URL。
+def _rewrite_quiz_asset_paths(quiz_key: str, spec: dict, public_spec: dict) -> None:
     def _rewrite_text_assets(text: str) -> str:
         out = str(text or "")
         for p in _collect_md_assets(out):
-            asset_url = _asset_url(exam_key, p)
+            asset_url = _asset_url(quiz_key, p)
             out = out.replace(f"({p})", f"({asset_url})")
 
         def _replace_html_img(match: re.Match[str]) -> str:
@@ -392,17 +396,17 @@ def _rewrite_exam_asset_paths(exam_key: str, spec: dict, public_spec: dict) -> N
             before = match.group("before") or ""
             quote = match.group("quote") or '"'
             after = match.group("after") or ""
-            return f'<img{before}src={quote}{_asset_url(exam_key, rel)}{quote}{after}>'
+            return f'<img{before}src={quote}{_asset_url(quiz_key, rel)}{quote}{after}>'
 
         return _HTML_IMG_SRC_RE.sub(_replace_html_img, out)
 
     for k in ("welcome_image", "end_image"):
         v = str(spec.get(k) or "").strip()
         if v:
-            spec[k] = _asset_url(exam_key, v) if _is_local_asset_path(v) else v
+            spec[k] = _asset_url(quiz_key, v) if _is_local_asset_path(v) else v
         v2 = str(public_spec.get(k) or "").strip()
         if v2:
-            public_spec[k] = _asset_url(exam_key, v2) if _is_local_asset_path(v2) else v2
+            public_spec[k] = _asset_url(quiz_key, v2) if _is_local_asset_path(v2) else v2
 
     for q in (spec.get("questions") or []):
         q["stem_md"] = _rewrite_text_assets(str(q.get("stem_md") or ""))
@@ -410,47 +414,47 @@ def _rewrite_exam_asset_paths(exam_key: str, spec: dict, public_spec: dict) -> N
         q["stem_md"] = _rewrite_text_assets(str(q.get("stem_md") or ""))
 
 
-# 首次写入试卷：解析 Markdown -> 落盘 source/spec/public -> 同步资源文件。
+# 首次写入测验：解析 Markdown -> 落盘 source/spec/public -> 同步资源文件。
 def _write_exam_to_storage(
     exam_text: str,
     *,
     assets: dict[str, bytes] | None = None,
     ensure_unique_key: bool = False,
 ) -> str:
-    raise RuntimeError("试卷上传/生成入口已下线，请改用 Git 仓库同步")
+    raise RuntimeError("测验上传/生成入口已下线，请改用 Git 仓库同步")
 
 
-# 覆写已有试卷目录（用于编辑保存）。
-def _rewrite_exam_in_dir(exam_key: str, exam_text: str) -> None:
-    raise RuntimeError("试卷在线编辑入口已下线，请改用外部 Git 仓库")
+# 覆写已有测验目录（用于编辑保存）。
+def _rewrite_exam_in_dir(quiz_key: str, exam_text: str) -> None:
+    raise RuntimeError("测验在线编辑入口已下线，请改用外部 Git 仓库")
 
 
-def _migrate_assignment_exam_key(old_exam_key: str, new_exam_key: str) -> int:
-    """exam_key 变更时，迁移 assignment 记录中的关联键。"""
+def _migrate_assignment_quiz_key(old_quiz_key: str, new_quiz_key: str) -> int:
+    """quiz_key 变更时，迁移 assignment 记录中的关联键。"""
     try:
-        return int(rename_assignment_exam_key(old_exam_key, new_exam_key) or 0)
+        return int(rename_assignment_quiz_key(old_quiz_key, new_quiz_key) or 0)
     except Exception:
-        logger.exception("Failed to migrate assignment exam_key: %s -> %s", old_exam_key, new_exam_key)
+        logger.exception("Failed to migrate assignment quiz_key: %s -> %s", old_quiz_key, new_quiz_key)
         return 0
 
 
-# exam_key 变更时，迁移历史归档文件名与归档内部 exam_key。
-def _migrate_archives_exam_key(old_exam_key: str, new_exam_key: str) -> int:
+# quiz_key 变更时，迁移历史归档文件名与归档内部 quiz_key。
+def _migrate_archives_quiz_key(old_quiz_key: str, new_quiz_key: str) -> int:
     try:
-        return int(rename_exam_archives_exam_key(old_exam_key, new_exam_key) or 0)
+        return int(rename_quiz_archives_quiz_key(old_quiz_key, new_quiz_key) or 0)
     except Exception:
-        logger.exception("Failed to migrate archives exam_key: %s -> %s", old_exam_key, new_exam_key)
+        logger.exception("Failed to migrate archives quiz_key: %s -> %s", old_quiz_key, new_quiz_key)
         return 0
 
 
-# 管理端更新试卷：必要时先改目录/关联键，再重写 spec/public。
-def _admin_update_exam_from_source(old_exam_key: str, new_source_md: str) -> str:
-    raise RuntimeError("试卷在线编辑入口已下线，请改用外部 Git 仓库")
+# 管理端更新测验：必要时先改目录/关联键，再重写 spec/public。
+def _admin_update_exam_from_source(old_quiz_key: str, new_source_md: str) -> str:
+    raise RuntimeError("测验在线编辑入口已下线，请改用外部 Git 仓库")
 
 
 def _list_exams():
     out = []
-    for row in list_exam_definitions():
+    for row in list_quiz_definitions():
         spec = row.get("spec") or {}
         metadata = build_quiz_metadata(spec)
         updated_at = row.get("last_sync_at") or row.get("updated_at") or row.get("created_at")
@@ -462,7 +466,7 @@ def _list_exams():
             mtime = 0.0
         out.append(
             {
-                "exam_key": str(row.get("exam_key") or "").strip(),
+                "quiz_key": str(row.get("quiz_key") or "").strip(),
                 "title": spec.get("title", ""),
                 "description": str(spec.get("description") or "").strip(),
                 "count": int(metadata["question_count"]),
@@ -490,7 +494,7 @@ def _list_exams():
     return out
 
 
-def _exam_key_from_sort_id(exam_id: int) -> str | None:
+def _quiz_key_from_sort_id(exam_id: int) -> str | None:
     try:
         exam_id = int(exam_id)
     except Exception:
@@ -500,19 +504,19 @@ def _exam_key_from_sort_id(exam_id: int) -> str | None:
     for e in _list_exams():
         try:
             if int(e.get("id") or 0) == exam_id:
-                v = str(e.get("exam_key") or "").strip()
+                v = str(e.get("quiz_key") or "").strip()
                 return v or None
         except Exception:
             continue
     return None
 
 
-def _sort_id_from_exam_key(exam_key: str) -> int | None:
-    k = str(exam_key or "").strip()
+def _sort_id_from_quiz_key(quiz_key: str) -> int | None:
+    k = str(quiz_key or "").strip()
     if not k:
         return None
     for e in _list_exams():
-        if str(e.get("exam_key") or "") == k:
+        if str(e.get("quiz_key") or "") == k:
             try:
                 v = int(e.get("id") or 0)
             except Exception:

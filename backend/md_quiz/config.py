@@ -85,11 +85,11 @@ class EnvironmentSettings:
     openai_api_key: str
     openai_base_url: str
     openai_model: str
+    exam_repo_sync_proxy: str
 
 
 @dataclass(frozen=True)
 class RuntimeConfigDefaults:
-    sms_enabled: bool
     token_daily_threshold: int
     sms_daily_threshold: int
     allow_public_assignments: bool
@@ -120,12 +120,12 @@ def load_environment_settings() -> EnvironmentSettings:
             "OPENAI_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3"
         ).rstrip("/"),
         openai_model=os.getenv("OPENAI_MODEL", ""),
+        exam_repo_sync_proxy=os.getenv("EXAM_REPO_SYNC_PROXY", "").strip(),
     )
 
 
 def load_runtime_defaults() -> RuntimeConfigDefaults:
     return RuntimeConfigDefaults(
-        sms_enabled=_env_bool("RUNTIME_SMS_ENABLED", False),
         token_daily_threshold=int(os.getenv("RUNTIME_TOKEN_DAILY_THRESHOLD", "500000")),
         sms_daily_threshold=int(os.getenv("RUNTIME_SMS_DAILY_THRESHOLD", "500")),
         allow_public_assignments=_env_bool("RUNTIME_ALLOW_PUBLIC_ASSIGNMENTS", True),
@@ -145,6 +145,7 @@ DATABASE_URL = settings.database_url
 OPENAI_API_KEY = settings.openai_api_key
 OPENAI_BASE_URL = settings.openai_base_url
 OPENAI_MODEL = settings.openai_model
+EXAM_REPO_SYNC_PROXY = settings.exam_repo_sync_proxy
 
 
 __all__ = [
@@ -153,6 +154,7 @@ __all__ = [
     "BACKEND_ROOT",
     "BASE_DIR",
     "DATABASE_URL",
+    "EXAM_REPO_SYNC_PROXY",
     "EnvironmentSettings",
     "LOG_LEVEL",
     "OPENAI_API_KEY",

@@ -11,7 +11,7 @@
 
 系统能力覆盖：
 
-- 试卷配置
+- 测验配置
 - 候选人管理
 - 邀约与验证
 - 在线答题
@@ -36,7 +36,7 @@
 - 前端基础品牌配色保留当前蓝绿体系
 - 核心业务概念不丢：
   - `candidate`
-  - `exam_definition`
+  - `quiz_definition`
   - `assignment`
   - `attempt`
   - `archive/result`

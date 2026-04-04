@@ -1,5 +1,5 @@
 """
-    qml.parser 是 markdown 解析，把试卷转变成结构化json
+    qml.parser 是 markdown 解析，把测验转变成结构化json
 """
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def _split_front_matter(text: str) -> tuple[dict[str, Any], str]:
 
 def _parse_answer_time_seconds(raw: Any, *, qid: str, line: int) -> int | None:
     if raw in {None, ""}:
-        return None
+        raise QmlParseError(f"{qid} 缺少 answer_time", line=line)
 
     seconds: int
     if isinstance(raw, bool):
@@ -122,7 +122,7 @@ def _extract_edge_image(lines: list[str]) -> str:
     return str(match.group("path") or "").strip()
 
 
-# 解析mardown试卷
+# 解析mardown测验
 def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, Any]]:
     front_matter, body = _split_front_matter(markdown_text)
     try:
@@ -374,7 +374,7 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             "max_points": max_points if qtype == "short" else points,
             "partial": partial,
             "media": media,
-            "answer_time_seconds": int(answer_time_seconds or 0),
+            "answer_time_seconds": int(answer_time_seconds),
             "stem_md": stem_md,
             "options": options,
             "rubric": rubric,
@@ -389,7 +389,7 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
             "max_points": q["max_points"],
             "partial": partial,
             "media": media,
-            "answer_time_seconds": int(answer_time_seconds or 0),
+            "answer_time_seconds": int(answer_time_seconds),
             "stem_md": stem_md,
             "options": [{"key": o["key"], "text": o["text"]} for o in options],
         }

@@ -20,7 +20,7 @@
 
 - [配置项说明](reference/configuration.md)
 - [REST API 约定](reference/api.md)
-- [QML 试卷格式](../qml.md)
+- [QML 测验格式](../qml.md)
 
 ## 项目内 Skills
 

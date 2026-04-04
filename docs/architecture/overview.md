@@ -4,7 +4,7 @@
 
 ### 进程
 
-- `API`：FastAPI，对外提供 `/api/*`、会话、SPA 入口、静态资源和试卷资源路由
+- `API`：FastAPI，对外提供 `/api/*`、会话、SPA 入口、静态资源和测验资源路由
 - `Worker`：执行异步任务
 - `Scheduler`：投递周期任务
 
