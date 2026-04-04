@@ -733,7 +733,10 @@ def public_invite_qr(public_token: str, request: Request):
     except Exception as exc:
         raise HTTPException(status_code=500, detail="二维码依赖不可用") from exc
     public_url = f"{_public_base_url(request)}/p/{token_value}"
-    image = qrcode.make(public_url)
+    qr = qrcode.QRCode(border=2)
+    qr.add_data(public_url)
+    qr.make(fit=True)
+    image = qr.make_image(fill_color="black", back_color="white")
     buffer = BytesIO()
     try:
         image.save(buffer, format="PNG")

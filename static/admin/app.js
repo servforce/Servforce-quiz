@@ -1,5 +1,64 @@
 (() => {
   const LOG_TREND_WINDOW_DAYS = 30;
+  const ADMIN_COMPACT_BREAKPOINT_QUERY = "(max-width: 1279px)";
+  const ADMIN_COMPACT_TAB_CONFIG = {
+    quizzes: {
+      defaultTab: "list",
+      tabs: [
+        { id: "list", label: "测验列表" },
+        { id: "repo", label: "仓库绑定" },
+      ],
+    },
+    "quiz-detail": {
+      defaultTab: "content",
+      tabs: [
+        { id: "content", label: "测验内容" },
+        { id: "history", label: "版本历史" },
+      ],
+    },
+    candidates: {
+      defaultTab: "list",
+      tabs: [
+        { id: "list", label: "候选人列表" },
+        { id: "create", label: "创建候选人" },
+      ],
+    },
+    "candidate-detail": {
+      defaultTab: "profile",
+      tabs: [
+        { id: "profile", label: "候选人档案" },
+        { id: "actions", label: "管理操作" },
+      ],
+    },
+    assignments: {
+      defaultTab: "list",
+      tabs: [
+        { id: "list", label: "邀约列表" },
+        { id: "create", label: "创建邀约" },
+      ],
+    },
+    "attempt-detail": {
+      defaultTab: "review",
+      tabs: [
+        { id: "review", label: "答题回放" },
+        { id: "evaluation", label: "智能评价" },
+      ],
+    },
+    logs: {
+      defaultTab: "list",
+      tabs: [
+        { id: "list", label: "日志列表" },
+        { id: "trend", label: "分类趋势" },
+      ],
+    },
+    status: {
+      defaultTab: "summary",
+      tabs: [
+        { id: "summary", label: "状态摘要" },
+        { id: "config", label: "阈值配置" },
+      ],
+    },
+  };
   const LOG_SERIES_META = [
     { key: "candidate", label: "候选人", color: "#2563eb", hint: "创建、编辑与简历入库" },
     { key: "quiz", label: "测验", color: "#14b8a6", hint: "测验查看、更新与同步" },
@@ -111,6 +170,10 @@
       logsChartSeries: {},
       logsChartResizeObserver: null,
       logsChartWindowResize: null,
+      isAdminCompactLayout: false,
+      adminCompactTabsState: {},
+      adminCompactMediaQuery: null,
+      adminCompactMediaQueryHandler: null,
       syncState: {},
       syncPollTimer: null,
       syncPollIntervalMs: 2000,
@@ -122,6 +185,7 @@
       statusConfig: { llm_tokens_limit: "", sms_calls_limit: "" },
 
       async boot() {
+        this.initAdminCompactLayout();
         window.addEventListener("popstate", () => this.handleRoute(location.pathname, { replace: true }));
         await this.refreshSession();
         if (this.session.authenticated) {
@@ -131,6 +195,122 @@
           this.route = this.resolveRoute("/admin/login");
         }
         this.booting = false;
+      },
+
+      initAdminCompactLayout() {
+        if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+          return;
+        }
+        if (!this.adminCompactMediaQuery) {
+          this.adminCompactMediaQuery = window.matchMedia(ADMIN_COMPACT_BREAKPOINT_QUERY);
+          this.adminCompactMediaQueryHandler = (event) => {
+            this.handleAdminCompactLayoutChange(Boolean(event?.matches));
+          };
+          if (typeof this.adminCompactMediaQuery.addEventListener === "function") {
+            this.adminCompactMediaQuery.addEventListener("change", this.adminCompactMediaQueryHandler);
+          } else if (typeof this.adminCompactMediaQuery.addListener === "function") {
+            this.adminCompactMediaQuery.addListener(this.adminCompactMediaQueryHandler);
+          }
+        }
+        this.handleAdminCompactLayoutChange(Boolean(this.adminCompactMediaQuery.matches));
+      },
+
+      async handleAdminCompactLayoutChange(matches) {
+        this.isAdminCompactLayout = Boolean(matches);
+        this.ensureAdminCompactTab(this.route?.name);
+        if (this.route?.name === "logs") {
+          await this.$nextTick();
+          if (this.shouldRenderLogsChart()) {
+            this.renderLogsChart();
+          } else {
+            this.destroyLogsChart();
+          }
+        }
+      },
+
+      adminCompactTabConfig(routeName) {
+        return ADMIN_COMPACT_TAB_CONFIG[String(routeName || "").trim()] || null;
+      },
+
+      adminCompactTabs(routeName) {
+        return this.adminCompactTabConfig(routeName)?.tabs || [];
+      },
+
+      ensureAdminCompactTab(routeName) {
+        const key = String(routeName || "").trim();
+        const config = this.adminCompactTabConfig(key);
+        if (!config) return;
+        const currentTab = String(this.adminCompactTabsState?.[key] || "").trim();
+        const validTabIds = new Set((config.tabs || []).map((item) => item.id));
+        if (!validTabIds.has(currentTab)) {
+          this.adminCompactTabsState = {
+            ...(this.adminCompactTabsState || {}),
+            [key]: config.defaultTab,
+          };
+        }
+      },
+
+      adminCompactTab(routeName) {
+        const key = String(routeName || "").trim();
+        const config = this.adminCompactTabConfig(key);
+        if (!config) return "";
+        this.ensureAdminCompactTab(key);
+        return String(this.adminCompactTabsState?.[key] || config.defaultTab || "").trim();
+      },
+
+      adminCompactPanelVisible(routeName, tabId) {
+        if (!this.isAdminCompactLayout || !this.adminCompactTabs(routeName).length) {
+          return true;
+        }
+        return this.adminCompactTab(routeName) === String(tabId || "").trim();
+      },
+
+      shouldShowAdminCompactTabs(routeName) {
+        return this.isAdminCompactLayout && this.adminCompactTabs(routeName).length > 0;
+      },
+
+      async setAdminCompactTab(routeName, tabId, { scroll = false } = {}) {
+        const key = String(routeName || "").trim();
+        const nextTab = String(tabId || "").trim();
+        const config = this.adminCompactTabConfig(key);
+        if (!config || !(config.tabs || []).some((item) => item.id === nextTab)) {
+          return;
+        }
+        this.adminCompactTabsState = {
+          ...(this.adminCompactTabsState || {}),
+          [key]: nextTab,
+        };
+        await this.$nextTick();
+        if (key === "logs") {
+          if (this.shouldRenderLogsChart()) {
+            this.renderLogsChart();
+          } else {
+            this.destroyLogsChart();
+          }
+        }
+        if (scroll && this.isAdminCompactLayout) {
+          this.scrollAdminCompactTabsIntoView(key);
+        }
+      },
+
+      resetAdminCompactTab(routeName) {
+        const key = String(routeName || "").trim();
+        if (!this.adminCompactTabConfig(key)) return;
+        const nextState = { ...(this.adminCompactTabsState || {}) };
+        delete nextState[key];
+        this.adminCompactTabsState = nextState;
+      },
+
+      shouldRenderLogsChart() {
+        if (this.route?.name !== "logs") return false;
+        return !this.isAdminCompactLayout || this.adminCompactPanelVisible("logs", "trend");
+      },
+
+      scrollAdminCompactTabsIntoView(routeName) {
+        if (typeof document === "undefined") return;
+        const target = document.querySelector(`[data-admin-compact-tabs="${String(routeName || "").trim()}"]`);
+        if (!target || typeof target.scrollIntoView !== "function") return;
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
       },
 
       pretty(value) {
@@ -1460,13 +1640,23 @@
 
       async handleRoute(pathname, { replace = false } = {}) {
         if (!this.session.authenticated && pathname !== "/admin/login") {
+          this.destroyLogsChart();
           this.stopSyncPolling();
           this.stopAssignmentsPolling();
           history.replaceState({}, "", "/admin/login");
           this.route = this.resolveRoute("/admin/login");
           return;
         }
-        this.route = this.resolveRoute(pathname);
+        const previousRouteName = String(this.route?.name || "").trim();
+        const nextRoute = this.resolveRoute(pathname);
+        if (previousRouteName === "logs" && nextRoute.name !== "logs") {
+          this.destroyLogsChart();
+        }
+        if (previousRouteName && previousRouteName !== nextRoute.name) {
+          this.resetAdminCompactTab(previousRouteName);
+        }
+        this.route = nextRoute;
+        this.ensureAdminCompactTab(this.route.name);
         if (this.route.name !== "quizzes") {
           this.stopSyncPolling();
         }
@@ -1532,6 +1722,7 @@
         this.destroyLogsChart();
         this.stopSyncPolling();
         this.stopAssignmentsPolling();
+        this.adminCompactTabsState = {};
         await this.api("/api/admin/session/logout", { method: "POST", quiet: true });
         this.session = { authenticated: false, username: "" };
         this.repoBinding = {};
@@ -1628,232 +1819,235 @@
         this.quizDetail = await this.api(`/api/admin/quizzes/${encodeURIComponent(quizKey)}`);
       },
 
-    async loadQuizVersion(versionId) {
-      this.quizDetail = await this.api(`/api/admin/quiz-versions/${versionId}`);
-    },
+      async loadQuizVersion(versionId) {
+        this.quizDetail = await this.api(`/api/admin/quiz-versions/${versionId}`);
+        if (this.route.name === "quiz-detail" && this.isAdminCompactLayout) {
+          await this.setAdminCompactTab("quiz-detail", "content", { scroll: true });
+        }
+      },
 
-    async togglePublicInvite() {
-      const enabled = !Boolean(this.quizDetail.quiz?.public_invite_enabled);
-      const result = await this.api(`/api/admin/quizzes/${encodeURIComponent(this.quizDetail.quiz.quiz_key)}/public-invite`, {
-        method: "POST",
-        body: JSON.stringify({ enabled }),
-        headers: { "Content-Type": "application/json" },
-      });
-      this.quizDetail.quiz.public_invite_enabled = result.enabled;
-      this.quizDetail.quiz.public_invite_token = result.token || "";
-      this.quizDetail.quiz.public_invite_url = result.public_url;
-      this.quizDetail.quiz.public_invite_qr_url = result.qr_url || "";
-      this.showNotice(result.enabled ? "公开邀约已开启" : "公开邀约已关闭");
-    },
-
-    async loadCandidates({ quiet = false } = {}) {
-      const query = new URLSearchParams();
-      if (this.filters.candidates.q) query.set("q", this.filters.candidates.q);
-      const data = await this.api(`/api/admin/candidates?${query.toString()}`, { quiet });
-      if (!data) return;
-      this.candidates = data;
-    },
-
-    async createCandidate() {
-      await this.api("/api/admin/candidates", {
-        method: "POST",
-        body: JSON.stringify(this.candidateForm),
-        headers: { "Content-Type": "application/json" },
-      });
-      this.candidateForm = { name: "", phone: "" };
-      this.showNotice("候选人创建成功");
-      await this.loadCandidates({ quiet: true });
-    },
-
-    openCandidateResumeUploadPicker() {
-      if (this.candidateResumeUploadState.busy) return;
-      this.openFilePicker("candidateResumeUpload");
-    },
-
-    async handleCandidateResumeUploadSelected(event) {
-      const file = event?.target?.files?.[0];
-      if (!file || this.candidateResumeUploadState.busy) return;
-      this.candidateResumeUploadState = {
-        ...createCandidateResumeUploadState(),
-        phase: "running",
-        busy: true,
-        fileName: file.name,
-        message: "正在上传并解析手机号、姓名和简历详情。",
-      };
-      const form = new FormData();
-      form.append("file", file);
-      try {
-        const data = await this.api("/api/admin/candidates/resume/upload", {
+      async togglePublicInvite() {
+        const enabled = !Boolean(this.quizDetail.quiz?.public_invite_enabled);
+        const result = await this.api(`/api/admin/quizzes/${encodeURIComponent(this.quizDetail.quiz.quiz_key)}/public-invite`, {
           method: "POST",
-          body: form,
-          quiet: true,
+          body: JSON.stringify({ enabled }),
+          headers: { "Content-Type": "application/json" },
         });
-        if (!data) {
-          this.resetCandidateResumeUploadState();
-          return;
-        }
-        const created = Boolean(data?.created);
-        const candidateName = String(data?.candidate?.name || "").trim();
-        this.candidateResumeUploadState = {
-          ...createCandidateResumeUploadState(),
-          phase: "success",
-          fileName: String(data?.candidate?.resume_filename || file.name),
-          message: created ? "已创建候选人并写入简历。" : "已更新候选人并更新简历。",
-          created,
-          candidateName,
-          candidateId: Number(data?.candidate?.id || 0),
-        };
-        this.showNotice(created ? "简历已入库并创建候选人" : "简历已入库并更新候选人");
+        this.quizDetail.quiz.public_invite_enabled = result.enabled;
+        this.quizDetail.quiz.public_invite_token = result.token || "";
+        this.quizDetail.quiz.public_invite_url = result.public_url;
+        this.quizDetail.quiz.public_invite_qr_url = result.qr_url || "";
+        this.showNotice(result.enabled ? "公开邀约已开启" : "公开邀约已关闭");
+      },
+
+      async loadCandidates({ quiet = false } = {}) {
+        const query = new URLSearchParams();
+        if (this.filters.candidates.q) query.set("q", this.filters.candidates.q);
+        const data = await this.api(`/api/admin/candidates?${query.toString()}`, { quiet });
+        if (!data) return;
+        this.candidates = data;
+      },
+
+      async createCandidate() {
+        await this.api("/api/admin/candidates", {
+          method: "POST",
+          body: JSON.stringify(this.candidateForm),
+          headers: { "Content-Type": "application/json" },
+        });
+        this.candidateForm = { name: "", phone: "" };
+        this.showNotice("候选人创建成功");
         await this.loadCandidates({ quiet: true });
-        if (data?.candidate?.id) {
-          await this.handleRoute(`/admin/candidates/${data.candidate.id}`);
-        }
-      } catch (error) {
+      },
+
+      openCandidateResumeUploadPicker() {
+        if (this.candidateResumeUploadState.busy) return;
+        this.openFilePicker("candidateResumeUpload");
+      },
+
+      async handleCandidateResumeUploadSelected(event) {
+        const file = event?.target?.files?.[0];
+        if (!file || this.candidateResumeUploadState.busy) return;
         this.candidateResumeUploadState = {
           ...createCandidateResumeUploadState(),
-          phase: "error",
+          phase: "running",
+          busy: true,
           fileName: file.name,
-          message: "本次简历入库失败，请重新选择文件。",
-          error: error.message || "简历入库失败",
+          message: "正在上传并解析手机号、姓名和简历详情。",
         };
-      }
-    },
-
-    async loadCandidateDetail(candidateId) {
-      this.candidateDetail = await this.api(`/api/admin/candidates/${candidateId}`);
-      this.candidateEvaluation = "";
-      this.resetCandidateResumeReparseState();
-    },
-
-    async saveCandidateEvaluation() {
-      const payload = { evaluation: this.candidateEvaluation };
-      this.candidateDetail = await this.api(`/api/admin/candidates/${this.candidateDetail.candidate.id}/evaluation`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-        headers: { "Content-Type": "application/json" },
-      });
-      this.candidateEvaluation = "";
-      this.showNotice("管理员评价已保存");
-    },
-
-    downloadCandidateResume() {
-      if (!this.candidateDetail.candidate?.id) return;
-      window.location.href = `/api/admin/candidates/${this.candidateDetail.candidate.id}/resume`;
-    },
-
-    openCandidateResumeReparsePicker() {
-      if (this.candidateResumeReparseState.busy) return;
-      this.openFilePicker("candidateResumeReparse");
-    },
-
-    handleCandidateResumeReparseSelected(event) {
-      const file = event?.target?.files?.[0];
-      if (!file || this.candidateResumeReparseState.busy) return;
-      this.candidateResumeReparseState = {
-        ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),
-        phase: "confirm",
-        fileName: file.name,
-        message: "确认后会覆盖当前简历并重算解析结果。",
-        pendingFile: file,
-      };
-    },
-
-    cancelCandidateResumeReparse() {
-      if (this.candidateResumeReparseState.busy) return;
-      this.resetCandidateResumeReparseState();
-    },
-
-    async confirmCandidateResumeReparse() {
-      const file = this.candidateResumeReparseState.pendingFile;
-      if (!file || this.candidateResumeReparseState.busy || !this.candidateDetail.candidate?.id) return;
-      this.candidateResumeReparseState = {
-        ...this.candidateResumeReparseState,
-        phase: "running",
-        busy: true,
-        error: "",
-        message: "正在上传新简历并重新解析。",
-      };
-      const form = new FormData();
-      form.append("file", file);
-      try {
-        const data = await this.api(
-          `/api/admin/candidates/${this.candidateDetail.candidate.id}/resume/reparse`,
-          {
+        const form = new FormData();
+        form.append("file", file);
+        try {
+          const data = await this.api("/api/admin/candidates/resume/upload", {
             method: "POST",
             body: form,
             quiet: true,
-          },
-        );
-        if (!data) {
-          this.resetCandidateResumeReparseState();
-          return;
+          });
+          if (!data) {
+            this.resetCandidateResumeUploadState();
+            return;
+          }
+          const created = Boolean(data?.created);
+          const candidateName = String(data?.candidate?.name || "").trim();
+          this.candidateResumeUploadState = {
+            ...createCandidateResumeUploadState(),
+            phase: "success",
+            fileName: String(data?.candidate?.resume_filename || file.name),
+            message: created ? "已创建候选人并写入简历。" : "已更新候选人并更新简历。",
+            created,
+            candidateName,
+            candidateId: Number(data?.candidate?.id || 0),
+          };
+          this.showNotice(created ? "简历已入库并创建候选人" : "简历已入库并更新候选人");
+          await this.loadCandidates({ quiet: true });
+          if (data?.candidate?.id) {
+            await this.handleRoute(`/admin/candidates/${data.candidate.id}`);
+          }
+        } catch (error) {
+          this.candidateResumeUploadState = {
+            ...createCandidateResumeUploadState(),
+            phase: "error",
+            fileName: file.name,
+            message: "本次简历入库失败，请重新选择文件。",
+            error: error.message || "简历入库失败",
+          };
         }
-        this.candidateDetail = data;
+      },
+
+      async loadCandidateDetail(candidateId) {
+        this.candidateDetail = await this.api(`/api/admin/candidates/${candidateId}`);
+        this.candidateEvaluation = "";
+        this.resetCandidateResumeReparseState();
+      },
+
+      async saveCandidateEvaluation() {
+        const payload = { evaluation: this.candidateEvaluation };
+        this.candidateDetail = await this.api(`/api/admin/candidates/${this.candidateDetail.candidate.id}/evaluation`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json" },
+        });
+        this.candidateEvaluation = "";
+        this.showNotice("管理员评价已保存");
+      },
+
+      downloadCandidateResume() {
+        if (!this.candidateDetail.candidate?.id) return;
+        window.location.href = `/api/admin/candidates/${this.candidateDetail.candidate.id}/resume`;
+      },
+
+      openCandidateResumeReparsePicker() {
+        if (this.candidateResumeReparseState.busy) return;
+        this.openFilePicker("candidateResumeReparse");
+      },
+
+      handleCandidateResumeReparseSelected(event) {
+        const file = event?.target?.files?.[0];
+        if (!file || this.candidateResumeReparseState.busy) return;
         this.candidateResumeReparseState = {
           ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),
-          phase: "success",
-          fileName: String(data?.candidate?.resume_filename || file.name),
-          message: "新简历已覆盖，解析结果已刷新。",
-        };
-        this.showNotice("简历重新解析完成");
-      } catch (error) {
-        this.candidateResumeReparseState = {
-          ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),
-          phase: "error",
+          phase: "confirm",
           fileName: file.name,
-          message: "重新解析失败，请重新选择文件。",
-          error: error.message || "简历重新解析失败",
+          message: "确认后会覆盖当前简历并重算解析结果。",
+          pendingFile: file,
         };
-      }
-    },
+      },
 
-    async deleteCandidate() {
-      if (!window.confirm("确定删除该候选人吗？")) return;
-      await this.api(`/api/admin/candidates/${this.candidateDetail.candidate.id}`, { method: "DELETE" });
-      this.showNotice("候选人已删除");
-      await this.handleRoute("/admin/candidates");
-    },
+      cancelCandidateResumeReparse() {
+        if (this.candidateResumeReparseState.busy) return;
+        this.resetCandidateResumeReparseState();
+      },
 
-    async loadAssignments({ quiet = false, source = "manual" } = {}) {
-      const query = new URLSearchParams();
-      if (this.filters.assignments.q) query.set("q", this.filters.assignments.q);
-      if (this.filters.assignments.start_from) query.set("start_from", this.filters.assignments.start_from);
-      if (this.filters.assignments.end_to) query.set("end_to", this.filters.assignments.end_to);
-      const previousSnapshot = { ...(this.assignmentStatusSnapshot || {}) };
-      const data = await this.api(`/api/admin/assignments?${query.toString()}`, { quiet });
-      if (!data) return;
-      const nextItems = Array.isArray(data?.items) ? data.items : [];
-      this.assignments = {
-        items: nextItems,
-        summary: data?.summary || { unhandled_finished_count: 0 },
-        ...data,
-      };
-      this.assignmentStatusSnapshot = this.assignmentStatusSnapshotMap(nextItems);
-      if (source === "assignments-poll") {
-        this.notifyAssignmentTransitions(nextItems, previousSnapshot);
-      }
-      if (this.route.name === "assignments") {
-        this.scheduleAssignmentsPolling();
-      }
-    },
+      async confirmCandidateResumeReparse() {
+        const file = this.candidateResumeReparseState.pendingFile;
+        if (!file || this.candidateResumeReparseState.busy || !this.candidateDetail.candidate?.id) return;
+        this.candidateResumeReparseState = {
+          ...this.candidateResumeReparseState,
+          phase: "running",
+          busy: true,
+          error: "",
+          message: "正在上传新简历并重新解析。",
+        };
+        const form = new FormData();
+        form.append("file", file);
+        try {
+          const data = await this.api(
+            `/api/admin/candidates/${this.candidateDetail.candidate.id}/resume/reparse`,
+            {
+              method: "POST",
+              body: form,
+              quiet: true,
+            },
+          );
+          if (!data) {
+            this.resetCandidateResumeReparseState();
+            return;
+          }
+          this.candidateDetail = data;
+          this.candidateResumeReparseState = {
+            ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),
+            phase: "success",
+            fileName: String(data?.candidate?.resume_filename || file.name),
+            message: "新简历已覆盖，解析结果已刷新。",
+          };
+          this.showNotice("简历重新解析完成");
+        } catch (error) {
+          this.candidateResumeReparseState = {
+            ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),
+            phase: "error",
+            fileName: file.name,
+            message: "重新解析失败，请重新选择文件。",
+            error: error.message || "简历重新解析失败",
+          };
+        }
+      },
 
-    async createAssignment() {
-      const payload = {
-        ...this.assignmentForm,
-        candidate_id: Number(this.assignmentForm.candidate_id),
-        require_phone_verification: Boolean(this.assignmentForm.require_phone_verification),
-        ignore_timing: Boolean(this.assignmentForm.ignore_timing),
-      };
-      const result = await this.api("/api/admin/assignments", {
-        method: "POST",
-        body: JSON.stringify(payload),
-        headers: { "Content-Type": "application/json" },
-      });
-      this.assignmentForm.ignore_timing = false;
-      this.resetAssignmentCandidateSelection();
-      this.showNotice(`邀约已创建：${result.url}`);
-      await this.loadAssignments();
-    },
+      async deleteCandidate() {
+        if (!window.confirm("确定删除该候选人吗？")) return;
+        await this.api(`/api/admin/candidates/${this.candidateDetail.candidate.id}`, { method: "DELETE" });
+        this.showNotice("候选人已删除");
+        await this.handleRoute("/admin/candidates");
+      },
+
+      async loadAssignments({ quiet = false, source = "manual" } = {}) {
+        const query = new URLSearchParams();
+        if (this.filters.assignments.q) query.set("q", this.filters.assignments.q);
+        if (this.filters.assignments.start_from) query.set("start_from", this.filters.assignments.start_from);
+        if (this.filters.assignments.end_to) query.set("end_to", this.filters.assignments.end_to);
+        const previousSnapshot = { ...(this.assignmentStatusSnapshot || {}) };
+        const data = await this.api(`/api/admin/assignments?${query.toString()}`, { quiet });
+        if (!data) return;
+        const nextItems = Array.isArray(data?.items) ? data.items : [];
+        this.assignments = {
+          items: nextItems,
+          summary: data?.summary || { unhandled_finished_count: 0 },
+          ...data,
+        };
+        this.assignmentStatusSnapshot = this.assignmentStatusSnapshotMap(nextItems);
+        if (source === "assignments-poll") {
+          this.notifyAssignmentTransitions(nextItems, previousSnapshot);
+        }
+        if (this.route.name === "assignments") {
+          this.scheduleAssignmentsPolling();
+        }
+      },
+
+      async createAssignment() {
+        const payload = {
+          ...this.assignmentForm,
+          candidate_id: Number(this.assignmentForm.candidate_id),
+          require_phone_verification: Boolean(this.assignmentForm.require_phone_verification),
+          ignore_timing: Boolean(this.assignmentForm.ignore_timing),
+        };
+        const result = await this.api("/api/admin/assignments", {
+          method: "POST",
+          body: JSON.stringify(payload),
+          headers: { "Content-Type": "application/json" },
+        });
+        this.assignmentForm.ignore_timing = false;
+        this.resetAssignmentCandidateSelection();
+        this.showNotice(`邀约已创建：${result.url}`);
+        await this.loadAssignments();
+      },
 
       async loadAttemptDetail(token, { quiet = false, source = "manual" } = {}) {
         const currentToken = String(token || "").trim();
@@ -2041,7 +2235,11 @@
         if (!data) return;
         this.logs = data;
         await this.$nextTick();
-        this.renderLogsChart();
+        if (this.shouldRenderLogsChart()) {
+          this.renderLogsChart();
+        } else {
+          this.destroyLogsChart();
+        }
       },
 
       async loadStatusSummary() {
@@ -2049,24 +2247,24 @@
       },
 
       async loadStatus() {
-      const data = await this.api("/api/admin/system-status");
-      this.statusRange = data || { data: {} };
-      this.statusConfig = { ...(data?.config || {}) };
-      this.statusSummary = data?.summary || {};
-      if (!Object.keys(this.statusSummary || {}).length) {
-        await this.loadStatusSummary();
-      }
-    },
+        const data = await this.api("/api/admin/system-status");
+        this.statusRange = data || { data: {} };
+        this.statusConfig = { ...(data?.config || {}) };
+        this.statusSummary = data?.summary || {};
+        if (!Object.keys(this.statusSummary || {}).length) {
+          await this.loadStatusSummary();
+        }
+      },
 
-    async saveStatusConfig() {
-      const data = await this.api("/api/admin/system-status/config", {
-        method: "PUT",
-        body: JSON.stringify(this.statusConfig),
-        headers: { "Content-Type": "application/json" },
-      });
-      this.statusSummary = data.summary || {};
-      this.showNotice("系统阈值已保存");
-    },
+      async saveStatusConfig() {
+        const data = await this.api("/api/admin/system-status/config", {
+          method: "PUT",
+          body: JSON.stringify(this.statusConfig),
+          headers: { "Content-Type": "application/json" },
+        });
+        this.statusSummary = data.summary || {};
+        this.showNotice("系统阈值已保存");
+      },
 
     async api(url, options = {}) {
       const { quiet = false, ...fetchOptions } = options;

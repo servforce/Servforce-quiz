@@ -2041,7 +2041,10 @@ def get_assignment_qr(token: str, request: Request):
     except Exception as exc:
         raise HTTPException(status_code=500, detail="二维码依赖不可用") from exc
     url = f"{_admin_base_url(request)}/t/{str(token or '').strip()}"
-    image = qrcode.make(url)
+    qr = qrcode.QRCode(border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    image = qr.make_image(fill_color="black", back_color="white")
     buffer = BytesIO()
     try:
         image.save(buffer, format="PNG")

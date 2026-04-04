@@ -623,6 +623,9 @@
   .w-8 {
     width: calc(var(--spacing) * 8);
   }
+  .w-11 {
+    width: calc(var(--spacing) * 11);
+  }
   .w-14 {
     width: calc(var(--spacing) * 14);
   }
@@ -1567,6 +1570,12 @@
       background-color: color-mix(in oklab, var(--color-white) 12%, transparent);
     }
   }
+  .bg-white\/14 {
+    background-color: color-mix(in srgb, #fff 14%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-white) 14%, transparent);
+    }
+  }
   .bg-white\/55 {
     background-color: color-mix(in srgb, #fff 55%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -1714,6 +1723,9 @@
   .object-center {
     -o-object-position: center;
        object-position: center;
+  }
+  .p-1\.5 {
+    padding: calc(var(--spacing) * 1.5);
   }
   .p-4 {
     padding: calc(var(--spacing) * 4);
@@ -2189,6 +2201,10 @@
   }
   .shadow-\[0_0_0_8px_rgba\(34\,197\,94\,0\.16\)\] {
     --tw-shadow: 0 0 0 8px var(--tw-shadow-color, rgba(34,197,94,0.16));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .shadow-\[0_12px_28px_rgba\(15\,23\,42\,0\.12\)\] {
+    --tw-shadow: 0 12px 28px var(--tw-shadow-color, rgba(15,23,42,0.12));
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
   .shadow-\[0_12px_28px_rgba\(37\,99\,235\,0\.10\)\] {
@@ -3047,6 +3063,11 @@
   .xl\:top-6 {
     @media (width >= 80rem) {
       top: calc(var(--spacing) * 6);
+    }
+  }
+  .xl\:hidden {
+    @media (width >= 80rem) {
+      display: none;
     }
   }
   .xl\:grid-cols-1 {

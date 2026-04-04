@@ -623,6 +623,9 @@
   .w-8 {
     width: calc(var(--spacing) * 8);
   }
+  .w-11 {
+    width: calc(var(--spacing) * 11);
+  }
   .w-14 {
     width: calc(var(--spacing) * 14);
   }
@@ -1567,6 +1570,12 @@
       background-color: color-mix(in oklab, var(--color-white) 12%, transparent);
     }
   }
+  .bg-white\/14 {
+    background-color: color-mix(in srgb, #fff 14%, transparent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-white) 14%, transparent);
+    }
+  }
   .bg-white\/55 {
     background-color: color-mix(in srgb, #fff 55%, transparent);
     @supports (color: color-mix(in lab, red, red)) {
@@ -1714,6 +1723,9 @@
   .object-center {
     -o-object-position: center;
        object-position: center;
+  }
+  .p-1\.5 {
+    padding: calc(var(--spacing) * 1.5);
   }
   .p-4 {
     padding: calc(var(--spacing) * 4);
@@ -2189,6 +2201,10 @@
   }
   .shadow-\[0_0_0_8px_rgba\(34\,197\,94\,0\.16\)\] {
     --tw-shadow: 0 0 0 8px var(--tw-shadow-color, rgba(34,197,94,0.16));
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .shadow-\[0_12px_28px_rgba\(15\,23\,42\,0\.12\)\] {
+    --tw-shadow: 0 12px 28px var(--tw-shadow-color, rgba(15,23,42,0.12));
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
   .shadow-\[0_12px_28px_rgba\(37\,99\,235\,0\.10\)\] {
@@ -3049,6 +3065,11 @@
       top: calc(var(--spacing) * 6);
     }
   }
+  .xl\:hidden {
+    @media (width >= 80rem) {
+      display: none;
+    }
+  }
   .xl\:grid-cols-1 {
     @media (width >= 80rem) {
       grid-template-columns: repeat(1, minmax(0, 1fr));
@@ -3686,6 +3707,98 @@
   .assignment-action--danger:hover {
     background: rgba(255, 228, 230, 0.98);
   }
+  .admin-compact-tabs {
+    position: sticky;
+    top: 0.75rem;
+    z-index: 20;
+    scroll-margin-top: 1rem;
+  }
+  .admin-compact-tabs__track {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.4rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(37, 99, 235, 0.14);
+    background: rgba(255, 255, 255, 0.82);
+    padding: 0.35rem;
+    box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08),
+      0 1px 0 rgba(255, 255, 255, 0.7) inset;
+    backdrop-filter: blur(18px);
+  }
+  .admin-compact-tab {
+    display: inline-flex;
+    min-height: 2.65rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.8rem;
+    border: 1px solid transparent;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    transition: background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease,
+      box-shadow 180ms ease,
+      transform 180ms ease;
+  }
+  .admin-compact-tab--inactive {
+    color: #64748b;
+  }
+  .admin-compact-tab--inactive:hover {
+    background: rgba(248, 250, 252, 0.92);
+    color: #1e3a8a;
+  }
+  .admin-compact-tab--active {
+    border-color: rgba(59, 130, 246, 0.18);
+    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    color: #fff;
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.22);
+  }
+  .admin-compact-tab:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(191, 219, 254, 0.88),
+      0 12px 28px rgba(37, 99, 235, 0.18);
+  }
+  .admin-quiz-summary-split {
+    display: flex;
+    align-items: stretch;
+    min-height: 100%;
+  }
+  .admin-quiz-summary-split > * + * {
+    border-left: 1px solid rgb(219 234 254 / 0.95);
+  }
+  .admin-quiz-summary-score {
+    width: 14rem;
+    flex: 0 0 14rem;
+  }
+  .admin-quiz-summary-traits {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .admin-public-invite-card {
+    min-height: 100%;
+  }
+  .admin-public-invite-qr-button {
+    padding: 0.25rem;
+  }
+  @media (max-width: 767px) {
+    .admin-quiz-overview-card {
+      min-height: auto;
+    }
+    .admin-quiz-summary-split {
+      flex-direction: column;
+    }
+    .admin-quiz-summary-split > * + * {
+      border-top: 1px solid rgb(219 234 254 / 0.95);
+      border-left: 0;
+    }
+    .admin-quiz-summary-score {
+      width: auto;
+      flex-basis: auto;
+    }
+  }
 }
 @keyframes assignment-progress-sheen {
   0% {
@@ -3732,6 +3845,11 @@
     box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
     transform: translateY(-50%) scale(0.95);
   }
+}
+.admin-public-invite-qr {
+  width: 5rem;
+  height: 5rem;
+  display: block;
 }
 @keyframes grading-placeholder-ring {
   0% {

@@ -253,11 +253,35 @@
 
           <div x-show="route.name === 'quizzes'" class="space-y-4">
             <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-              <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <div
+                x-show="shouldShowAdminCompactTabs('quizzes')"
+                x-cloak
+                data-admin-compact-tabs="quizzes"
+                class="admin-compact-tabs xl:hidden"
+              >
+                <div class="admin-compact-tabs__track" role="tablist" aria-label="测验页面内容切换">
+                  <template x-for="tab in adminCompactTabs('quizzes')" :key="tab.id">
+                    <button
+                      type="button"
+                      role="tab"
+                      @click="setAdminCompactTab('quizzes', tab.id)"
+                      :class="adminCompactTab('quizzes') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                      :aria-selected="String(adminCompactTab('quizzes') === tab.id)"
+                      class="admin-compact-tab"
+                      x-text="tab.label"
+                    ></button>
+                  </template>
+                </div>
+              </div>
+
+              <section
+                x-show="adminCompactPanelVisible('quizzes', 'list')"
+                class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              >
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">测验列表</h2>
-                    <p class="mt-1 text-sm text-slate-600">只保留 Git 仓库同步，不再开放 AI 生成、上传、在线编辑与删除。</p>
+                    <p class="mt-1 text-sm text-slate-600">只保留 Git 仓库同步</p>
                   </div>
                   <div class="flex gap-2">
                     <input x-model="filters.quizzes.q" @keydown.enter.prevent="loadQuizzes" class="w-52 rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="搜索标题 / ID / tags" />
@@ -293,7 +317,10 @@
                 </div>
               </section>
 
-              <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <section
+                x-show="adminCompactPanelVisible('quizzes', 'repo')"
+                class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              >
                 <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">绑定仓库</h2>
                 <p class="mt-1 text-sm text-slate-600">每套实例只绑定一个 Git 仓库；首次绑定后自动同步，后续同步仅针对当前绑定仓库执行。</p>
 
@@ -427,7 +454,31 @@
           </div>
 
           <div x-show="route.name === 'quiz-detail'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
-            <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <div
+              x-show="shouldShowAdminCompactTabs('quiz-detail')"
+              x-cloak
+              data-admin-compact-tabs="quiz-detail"
+              class="admin-compact-tabs xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="测验详情内容切换">
+                <template x-for="tab in adminCompactTabs('quiz-detail')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('quiz-detail', tab.id)"
+                    :class="adminCompactTab('quiz-detail') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('quiz-detail') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('quiz-detail', 'content')"
+              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
               <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
@@ -453,19 +504,38 @@
                 </button>
               </div>
 
-              <div class="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-                <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">总分</div>
-                  <div class="mt-3 text-3xl font-semibold text-slate-900" x-text="quizDetail.stats?.total_points || 0"></div>
+              <div class="mt-5 grid gap-4">
+                <div class="admin-quiz-overview-card overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/70">
+                  <div class="admin-quiz-summary-split">
+                    <section class="admin-quiz-summary-score px-4 py-4 md:px-5">
+                      <div class="text-xs uppercase tracking-[0.18em] text-slate-500">总分</div>
+                      <div class="mt-3 text-3xl font-semibold text-slate-900" x-text="quizDetail.stats?.total_points || 0"></div>
+                    </section>
+                    <section x-show="traitDimensions().length" class="admin-quiz-summary-traits px-4 py-4 md:px-5">
+                      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="text-xs uppercase tracking-[0.18em] text-slate-500">Traits 维度</div>
+                        <div class="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600">
+                          <span x-text="traitDimensions().length"></span>
+                          个维度
+                        </div>
+                      </div>
+                      <div class="mt-4 flex flex-wrap gap-2.5">
+                        <template x-for="dimension in traitDimensions()" :key="dimension.name">
+                          <span :style="traitBadgeStyle(dimension.name)" class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold">
+                            <span :style="traitDotStyle(dimension.name)" class="h-2 w-2 rounded-full"></span>
+                            <span x-text="dimension.name"></span>
+                          </span>
+                        </template>
+                      </div>
+                    </section>
+                  </div>
                 </div>
-                <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">资源路径</div>
-                  <div class="mt-3 break-all text-sm text-slate-700" x-text="quizDetail.quiz?.source_path || '-'"></div>
-                </div>
-                <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 md:col-span-2 2xl:col-span-2">
+                <div
+                  x-show="quizDetail.quiz?.public_invite_enabled && quizDetail.quiz?.public_invite_url"
+                  class="admin-quiz-overview-card rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3"
+                >
                   <div
-                    x-show="quizDetail.quiz?.public_invite_enabled && quizDetail.quiz?.public_invite_url"
-                    class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"
+                    class="admin-public-invite-card flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"
                   >
                     <div class="min-w-0 flex-1">
                       <div class="text-sm font-medium text-slate-700">公开链接</div>
@@ -487,40 +557,17 @@
                       <button
                         type="button"
                         @click="copyAssignmentQr({ qr_url: quizDetail.quiz?.public_invite_qr_url })"
-                        class="overflow-hidden rounded-xl transition hover:opacity-85"
+                        class="admin-public-invite-qr-button overflow-hidden rounded-xl transition hover:opacity-85"
                         title="点击复制二维码"
                         aria-label="点击复制公开邀约二维码"
                       >
                         <img
                           :src="quizDetail.quiz?.public_invite_qr_url"
                           alt="公开邀约二维码"
-                          class="h-28 w-28 rounded-xl object-contain"
+                          class="admin-public-invite-qr rounded-xl object-contain"
                         />
                       </button>
                     </div>
-                  </div>
-                  <div
-                    x-show="!(quizDetail.quiz?.public_invite_enabled && quizDetail.quiz?.public_invite_url)"
-                    class="mt-3 text-sm text-slate-700"
-                  >
-                    未开启
-                  </div>
-                </div>
-                <div x-show="traitDimensions().length" class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 md:col-span-2 2xl:col-span-4">
-                  <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div class="text-xs uppercase tracking-[0.18em] text-slate-500">Traits 维度</div>
-                    <div class="rounded-full border border-slate-200 bg-white/80 px-3 py-1 text-xs font-semibold text-slate-600">
-                      <span x-text="traitDimensions().length"></span>
-                      个维度
-                    </div>
-                  </div>
-                  <div class="mt-4 flex flex-wrap gap-2.5">
-                    <template x-for="dimension in traitDimensions()" :key="dimension.name">
-                      <span :style="traitBadgeStyle(dimension.name)" class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold">
-                        <span :style="traitDotStyle(dimension.name)" class="h-2 w-2 rounded-full"></span>
-                        <span x-text="dimension.name"></span>
-                      </span>
-                    </template>
                   </div>
                 </div>
               </div>
@@ -646,7 +693,10 @@
               </div>
             </section>
 
-            <section class="self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6">
+            <section
+              x-show="adminCompactPanelVisible('quiz-detail', 'history')"
+              class="self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6"
+            >
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">版本历史</h2>
@@ -699,7 +749,31 @@
           </div>
 
           <div x-show="route.name === 'candidates'" class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <div
+              x-show="shouldShowAdminCompactTabs('candidates')"
+              x-cloak
+              data-admin-compact-tabs="candidates"
+              class="admin-compact-tabs xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="候选人页面内容切换">
+                <template x-for="tab in adminCompactTabs('candidates')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('candidates', tab.id)"
+                    :class="adminCompactTab('candidates') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('candidates') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('candidates', 'list')"
+              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
               <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">候选人</h2>
@@ -728,7 +802,10 @@
               </div>
             </section>
 
-            <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <section
+              x-show="adminCompactPanelVisible('candidates', 'create')"
+              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
               <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建候选人</h2>
               <div class="mt-4 space-y-4">
                 <label class="block">
@@ -805,7 +882,31 @@
           </div>
 
           <div x-show="route.name === 'candidate-detail'" class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-            <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <div
+              x-show="shouldShowAdminCompactTabs('candidate-detail')"
+              x-cloak
+              data-admin-compact-tabs="candidate-detail"
+              class="admin-compact-tabs xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="候选人详情内容切换">
+                <template x-for="tab in adminCompactTabs('candidate-detail')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('candidate-detail', tab.id)"
+                    :class="adminCompactTab('candidate-detail') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('candidate-detail') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('candidate-detail', 'profile')"
+              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
               <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div class="flex flex-wrap items-center gap-2">
@@ -1045,7 +1146,7 @@
               </div>
             </section>
 
-            <section class="space-y-4">
+            <section x-show="adminCompactPanelVisible('candidate-detail', 'actions')" class="space-y-4">
               <div class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
                 <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">管理员评价</h2>
                 <textarea x-model="candidateEvaluation" class="mt-4 h-44 w-full rounded-2xl border border-blue-100 bg-white px-4 py-4 text-sm leading-7 outline-none focus:border-blue-300" placeholder="记录你的评估结论"></textarea>
@@ -1128,7 +1229,31 @@
           </div>
 
           <div x-show="route.name === 'assignments'" class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-            <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <div
+              x-show="shouldShowAdminCompactTabs('assignments')"
+              x-cloak
+              data-admin-compact-tabs="assignments"
+              class="admin-compact-tabs xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="邀约与答题内容切换">
+                <template x-for="tab in adminCompactTabs('assignments')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('assignments', tab.id)"
+                    :class="adminCompactTab('assignments') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('assignments') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('assignments', 'list')"
+              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
               <div class="flex flex-col gap-4">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -1236,7 +1361,10 @@
               </div>
             </section>
 
-            <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <section
+              x-show="adminCompactPanelVisible('assignments', 'create')"
+              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
               <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建邀约</h2>
               <div class="mt-4 space-y-4">
                 <label class="block">
@@ -1367,7 +1495,32 @@
           </div>
 
           <div x-show="route.name === 'attempt-detail'" class="grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
-            <section class="assignment-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl" :class="assignmentDetailSectionClass(attemptDetail.quiz_paper)">
+            <div
+              x-show="shouldShowAdminCompactTabs('attempt-detail')"
+              x-cloak
+              data-admin-compact-tabs="attempt-detail"
+              class="admin-compact-tabs xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="答题详情内容切换">
+                <template x-for="tab in adminCompactTabs('attempt-detail')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('attempt-detail', tab.id)"
+                    :class="adminCompactTab('attempt-detail') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('attempt-detail') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('attempt-detail', 'review')"
+              class="assignment-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              :class="assignmentDetailSectionClass(attemptDetail.quiz_paper)"
+            >
               <div class="flex flex-col gap-3">
                 <div>
                   <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">答题回放</h2>
@@ -1492,7 +1645,10 @@
               </div>
             </section>
 
-            <section class="self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6">
+            <section
+              x-show="adminCompactPanelVisible('attempt-detail', 'evaluation')"
+              class="self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6"
+            >
               <div>
                 <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">智能评价</h2>
                 <p class="mt-1 text-sm text-slate-600">汇总总分、主倾向、综合分析和候选人简评。</p>
@@ -1594,7 +1750,31 @@
           </div>
 
           <div x-show="route.name === 'logs'" class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-            <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <div
+              x-show="shouldShowAdminCompactTabs('logs')"
+              x-cloak
+              data-admin-compact-tabs="logs"
+              class="admin-compact-tabs xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="系统日志内容切换">
+                <template x-for="tab in adminCompactTabs('logs')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('logs', tab.id)"
+                    :class="adminCompactTab('logs') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('logs') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('logs', 'list')"
+              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
               <div class="flex items-center justify-between gap-3">
                 <div>
                   <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">系统日志</h2>
@@ -1617,7 +1797,10 @@
                 </div>
               </div>
             </section>
-            <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <section
+              x-show="adminCompactPanelVisible('logs', 'trend')"
+              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">分类趋势</h2>
@@ -1657,7 +1840,31 @@
           </div>
 
           <div x-show="route.name === 'status'" class="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
-            <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <div
+              x-show="shouldShowAdminCompactTabs('status')"
+              x-cloak
+              data-admin-compact-tabs="status"
+              class="admin-compact-tabs xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="系统状态内容切换">
+                <template x-for="tab in adminCompactTabs('status')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('status', tab.id)"
+                    :class="adminCompactTab('status') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('status') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('status', 'summary')"
+              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">系统状态摘要</h2>
@@ -1728,7 +1935,10 @@
                 </div>
               </div>
             </section>
-            <section class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+            <section
+              x-show="adminCompactPanelVisible('status', 'config')"
+              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
               <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">阈值配置</h2>
               <div class="mt-4 space-y-4">
                 <div class="grid gap-3 lg:grid-cols-2">
