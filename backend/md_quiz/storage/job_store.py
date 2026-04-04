@@ -7,6 +7,7 @@ from backend.md_quiz.models import JobRecord
 from backend.md_quiz.storage.db import (
     claim_next_runtime_job,
     create_runtime_job,
+    get_runtime_job,
     list_runtime_jobs,
     update_runtime_job,
     upsert_runtime_job,
@@ -20,6 +21,10 @@ def _utc_now() -> str:
 class JobStore:
     def list_jobs(self) -> list[JobRecord]:
         return [JobRecord.model_validate(item) for item in list_runtime_jobs()]
+
+    def get_job(self, job_id: str) -> JobRecord | None:
+        raw = get_runtime_job(str(job_id or "").strip())
+        return JobRecord.model_validate(raw) if raw else None
 
     def enqueue(self, kind: str, *, payload: dict | None = None, source: str = "manual") -> JobRecord:
         now = _utc_now()

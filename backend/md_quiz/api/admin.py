@@ -243,13 +243,24 @@ def _build_review_answer_item(
     score_max = _coerce_int_or_none(raw_question.get("score_max"))
     if score_max is None:
         score_max = max_points
+    rubric = str(raw_question.get("rubric") or (spec_question or {}).get("rubric") or "").strip()
     stem_md = str(
         raw_question.get("stem_md")
         or (public_question or {}).get("stem_md")
         or (spec_question or {}).get("stem_md")
         or ""
     )
-    stem_html = str(raw_question.get("stem_html") or "").strip() or exam_helpers._render_markdown_html(stem_md)
+    display_question = exam_helpers.build_render_ready_question(
+        {
+            "stem_md": stem_md,
+            "options": options,
+            "rubric": rubric,
+        },
+        include_rubric_html=True,
+    )
+    stem_html = str(raw_question.get("stem_html") or "").strip() or str(display_question.get("stem_html") or "")
+    options = display_question.get("options") if isinstance(display_question.get("options"), list) else options
+    rubric_html = str(raw_question.get("rubric_html") or "").strip() or str(display_question.get("rubric_html") or "")
     answer = raw_question.get("answer")
     selected_options = _normalize_answer_keys(answer) if qtype in {"single", "multiple"} else []
     correct_options = [
@@ -285,7 +296,8 @@ def _build_review_answer_item(
         "is_correct": is_correct,
         "is_partial": is_partial,
         "reason": str(raw_question.get("reason") or "").strip(),
-        "rubric": str(raw_question.get("rubric") or (spec_question or {}).get("rubric") or "").strip(),
+        "rubric": rubric,
+        "rubric_html": rubric_html,
     }
 
 
@@ -564,7 +576,10 @@ def _serialize_exam_detail(
     selected = selected_version or {}
     selected_version_id = int(selected.get("id") or 0)
     raw_spec = selected.get("spec") if isinstance(selected.get("spec"), dict) else exam.get("spec") or {}
-    spec = exam_helpers.build_render_ready_public_spec(raw_spec if isinstance(raw_spec, dict) else {})
+    spec = exam_helpers.build_render_ready_public_spec(
+        raw_spec if isinstance(raw_spec, dict) else {},
+        include_rubric_html=True,
+    )
     quiz_metadata = exam_helpers.build_quiz_metadata(spec)
     stats = _compute_exam_stats(spec if isinstance(spec, dict) else {})
     cfg = exam_helpers.get_public_invite_config(quiz_key)

@@ -12,7 +12,7 @@
 - 沿着现有结构改，不随手引入新的框架层或目录体系。
 - 修改路由时，同时检查对应模板、静态资源、服务函数和测试是否受影响。
 - 修改数据库读写时，以 `db.py` 中的 schema 和接口为准；不要让文档或模板反向定义数据结构。
-- 修改 QML 解析或试题生成时，同时核对 `qml.md`、`backend/md_quiz/parsers/qml.py`、`skills/qml-authoring/` 和相关测试。
+- 修改 QML 解析或试题生成时，同时核对 `skills/qml-authoring/references/qml-spec.md`、`skills/qml-authoring/references/parser-truth.md`、`backend/md_quiz/parsers/qml.py`、`skills/qml-authoring/` 和相关测试。
 - 修改 quiz 仓库同步、资源路径或 manifest 规则时，同时核对 `skills/quiz-repo-spec/`、`backend/md_quiz/services/exam_repo_sync_service.py` 和相关测试。
 - 涉及 LLM、短信、号码认证时，优先保证“未配置时失败可解释、已配置时行为清晰”。
 

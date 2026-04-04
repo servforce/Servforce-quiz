@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from backend.md_quiz.mcp import build_mcp_bootstrap_payload
+
 from .deps import get_container
 
 router = APIRouter(prefix="/api/system", tags=["system"])
@@ -37,4 +39,5 @@ def get_bootstrap(container=Depends(get_container)):
             "path": "/admin",
         },
         "runtime_config": container.runtime_service.get_runtime_config().model_dump(),
+        "mcp": build_mcp_bootstrap_payload(container.settings),
     }

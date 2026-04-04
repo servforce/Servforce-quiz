@@ -6,6 +6,8 @@
     <title>MD Quiz</title>
     <link href="/static/assets/css/material-symbols.css" rel="stylesheet" />
     <link href="/static/public.css" rel="stylesheet" />
+    <script defer src="/static/assets/js/math-render.js"></script>
+    <script defer src="/static/assets/js/vendor/mathjax/tex-svg.js"></script>
     <script defer src="/static/public/app.js"></script>
     <script defer src="/static/assets/js/alpine.min.js"></script>
   </head>
@@ -283,7 +285,7 @@
             >
               <div class="rounded-xl border border-white/10 bg-slate-950/58 px-5 py-5 sm:px-6 sm:py-6">
                 <div class="mb-4">
-                  <div class="public-rich min-w-0 text-base leading-8 text-slate-100/92 [&_p]:m-0 [&_p]:leading-8" x-html="currentQuestion()?.stem_html || ''"></div>
+                  <div class="quiz-rich public-rich min-w-0 text-base leading-8 text-slate-100/92 [&_p]:m-0 [&_p]:leading-8" x-html="currentQuestion()?.stem_html || ''"></div>
                 </div>
 
                 <div class="mt-6 space-y-3" x-show="currentQuestion()?.type === 'single'">
@@ -300,7 +302,7 @@
                       >
                         <span class="block leading-none" x-text="option.key"></span>
                       </span>
-                      <span x-text="option.text"></span>
+                      <div class="quiz-rich public-rich min-w-0 flex-1 text-sm leading-7 text-slate-200/92" x-html="option.text_html || ''"></div>
                     </button>
                   </template>
                 </div>
@@ -319,7 +321,7 @@
                       >
                         <span class="block leading-none" x-text="option.key"></span>
                       </span>
-                      <span x-text="option.text"></span>
+                      <div class="quiz-rich public-rich min-w-0 flex-1 text-sm leading-7 text-slate-200/92" x-html="option.text_html || ''"></div>
                     </button>
                   </template>
                 </div>

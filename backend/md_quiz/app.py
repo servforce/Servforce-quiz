@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import AsyncExitStack
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from backend.md_quiz.api import admin_router, public_router, system_router
 from backend.md_quiz.config import PROJECT_ROOT, load_environment_settings, load_runtime_defaults
+from backend.md_quiz.mcp import MCP_DOCS_PATH, MCP_PATH, create_mcp_server
 from backend.md_quiz.models import RuntimeConfig
 from backend.md_quiz.services import JobService, RuntimeService
 from backend.md_quiz.services import exam_helpers, runtime_bootstrap
@@ -55,14 +57,22 @@ def create_app() -> FastAPI:
     container = _build_container()
     settings = container.settings
     static_root = PROJECT_ROOT / "static"
+    docs_root = PROJECT_ROOT / "docs"
+    mcp_server = None
+    mcp_subapp = None
+    if settings.mcp_enabled:
+        mcp_server, mcp_subapp = create_mcp_server(container=container, settings=settings)
 
     @asynccontextmanager
     async def _lifespan(_: FastAPI):
-        runtime_bootstrap.bootstrap_runtime()
-        container.runtime_service.heartbeat(
-            "api", name="api", status="running", message="startup-complete"
-        )
-        yield
+        async with AsyncExitStack() as stack:
+            runtime_bootstrap.bootstrap_runtime()
+            if mcp_server is not None:
+                await stack.enter_async_context(mcp_server.session_manager.run())
+            container.runtime_service.heartbeat(
+                "api", name="api", status="running", message="startup-complete"
+            )
+            yield
 
     app = FastAPI(
         title="md-quiz",
@@ -83,10 +93,16 @@ def create_app() -> FastAPI:
 
     if static_root.exists():
         app.mount("/static", StaticFiles(directory=static_root), name="static")
-
     @app.get("/healthz", include_in_schema=False)
     def _healthz():
         return {"ok": True}
+
+    @app.get(MCP_DOCS_PATH, include_in_schema=False)
+    def docs_mcp_markdown():
+        path = docs_root / "reference" / "mcp.md"
+        if not path.exists():
+            return Response(status_code=404)
+        return FileResponse(path, media_type="text/markdown; charset=utf-8")
 
     @app.get("/quizzes/{quiz_key}/assets/{relpath:path}", include_in_schema=False)
     @app.get("/exams/{quiz_key}/assets/{relpath:path}", include_in_schema=False)
@@ -145,5 +161,8 @@ def create_app() -> FastAPI:
     def public_spa(token: str):
         _ = token
         return _serve_spa(static_root, "public/index.html")
+
+    if mcp_subapp is not None:
+        app.mount("/", mcp_subapp)
 
     return app

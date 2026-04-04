@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import copy
 import mimetypes
+from typing import Callable
 
-from backend.md_quiz.services.quiz_metadata import build_quiz_metadata, compute_answer_time_total_seconds
+from backend.md_quiz.services.quiz_metadata import (
+    QUIZ_SCHEMA_VERSION,
+    apply_quiz_metadata,
+    build_quiz_metadata,
+    compute_answer_time_total_seconds,
+)
 from backend.md_quiz.services.support_deps import *
 from backend.md_quiz.services.validation_helpers import *
 
@@ -50,6 +56,12 @@ _HTML_IMG_SRC_RE = re.compile(
     r"""<img\b(?P<before>[^>]*?)\bsrc\s*=\s*(?P<quote>["']?)(?P<path>[^"'>\s]+)(?P=quote)(?P<after>[^>]*)>""",
     re.IGNORECASE,
 )
+_DISPLAY_ESCAPE_RE = re.compile(r"\\(?P<char>[_{}\[\]#*])")
+_STANDALONE_MD_IMAGE_RE = re.compile(r"^\s*!\[[^\]]*]\((?P<path>[^)]+)\)\s*$")
+_LIST_ITEM_RE = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)")
+_FENCED_BLOCK_RE = re.compile(r"^\s*(```|~~~)")
+_HORIZONTAL_RULE_RE = re.compile(r"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$")
+_TRAILING_HARD_BREAK_RE = re.compile(r"(?:\\|[ \t]{2,})\s*$")
 _FILENAME_UNSAFE_RE = re.compile(r'[\\\\/:*?"<>|]+')
 _PUBLIC_INVITE_GUARD = threading.Lock()
 _MARKDOWN_EXTENSIONS = [
@@ -232,6 +244,143 @@ def _protect_math_for_markdown(raw: str) -> tuple[str, list[tuple[str, str]]]:
     return "".join(out), replacements
 
 
+def _strip_display_escapes(raw: str) -> str:
+    return _DISPLAY_ESCAPE_RE.sub(lambda match: str(match.group("char") or ""), str(raw or ""))
+
+
+def _split_display_blocks(raw: str) -> list[list[str]]:
+    text = str(raw or "").strip()
+    if not text:
+        return []
+
+    blocks: list[list[str]] = []
+    current: list[str] = []
+    in_fenced_block = False
+    fence_marker = ""
+
+    def flush_current() -> None:
+        nonlocal current
+        if current:
+            blocks.append(current)
+            current = []
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+
+        if in_fenced_block:
+            current.append(line)
+            if stripped.startswith(fence_marker):
+                in_fenced_block = False
+                fence_marker = ""
+            continue
+
+        if not stripped:
+            flush_current()
+            continue
+
+        if _FENCED_BLOCK_RE.match(stripped):
+            flush_current()
+            current.append(line)
+            in_fenced_block = True
+            fence_marker = stripped[:3]
+            continue
+
+        is_list_item = bool(_LIST_ITEM_RE.match(stripped))
+        prev_stripped = current[-1].strip() if current else ""
+        if is_list_item and prev_stripped and not _LIST_ITEM_RE.match(prev_stripped):
+            flush_current()
+
+        current.append(line)
+
+    flush_current()
+    return blocks
+
+
+def _is_simple_display_block(block: list[str]) -> bool:
+    if not block:
+        return False
+
+    for line in block:
+        stripped = line.strip()
+        if not stripped:
+            return False
+        if stripped.startswith(("$$", "\\[", "```", "~~~", "#", ">", "|")):
+            return False
+        if _HORIZONTAL_RULE_RE.fullmatch(stripped):
+            return False
+        if _LIST_ITEM_RE.match(stripped):
+            return False
+        if _STANDALONE_MD_IMAGE_RE.fullmatch(stripped):
+            return False
+        if stripped.startswith("<") and stripped.endswith(">"):
+            return False
+        if line.startswith(("    ", "\t")):
+            return False
+    return True
+
+
+def _is_inline_math_only_block(block: str) -> bool:
+    text = str(block or "").strip()
+    if not text:
+        return False
+    if text.startswith("$$") and text.endswith("$$"):
+        return False
+    if text.startswith("$") and text.endswith("$") and text.count("$") >= 2:
+        return True
+    if text.startswith("\\(") and text.endswith("\\)"):
+        return True
+    return False
+
+
+def _normalize_simple_display_block(block: list[str]) -> str:
+    parts: list[str] = []
+    for line in block:
+        compact = _TRAILING_HARD_BREAK_RE.sub("", line).strip()
+        if compact:
+            parts.append(compact)
+    return " ".join(parts)
+
+
+def _normalize_display_markdown(raw: str) -> str:
+    blocks = _split_display_blocks(raw)
+    if not blocks:
+        return ""
+
+    out: list[str] = []
+    i = 0
+    while i < len(blocks):
+        block = blocks[i]
+        if not _is_simple_display_block(block):
+            out.append("\n".join(block).strip())
+            i += 1
+            continue
+
+        run: list[str] = []
+        has_inline_math_only = False
+        j = i
+        while j < len(blocks) and _is_simple_display_block(blocks[j]):
+            normalized = _normalize_simple_display_block(blocks[j])
+            if normalized:
+                run.append(normalized)
+                has_inline_math_only = has_inline_math_only or _is_inline_math_only_block(normalized)
+            j += 1
+
+        if has_inline_math_only:
+            out.append(" ".join(run))
+        else:
+            out.extend(run)
+        i = j
+
+    return "\n\n".join(out)
+
+
+def _prepare_display_markdown(markdown_text: str) -> tuple[str, list[tuple[str, str]]]:
+    normalized = _normalize_display_markdown(markdown_text)
+    protected, math_repls = _protect_math_for_markdown(normalized)
+    return _strip_display_escapes(protected), math_repls
+
+
 def _safe_relpath(raw: str) -> str:
     p = (raw or "").strip().strip('"').strip("'")
     p = p.split("#", 1)[0].strip()
@@ -268,7 +417,7 @@ def _render_markdown_html(markdown_text: str) -> str:
     if not text:
         return ""
 
-    protected, math_repls = _protect_math_for_markdown(text)
+    protected, math_repls = _prepare_display_markdown(text)
     rendered = mdlib.markdown(
         protected,
         extensions=_MARKDOWN_EXTENSIONS,
@@ -279,15 +428,123 @@ def _render_markdown_html(markdown_text: str) -> str:
     return rendered
 
 
-def build_render_ready_public_spec(public_spec: dict[str, Any]) -> dict[str, Any]:
+def build_render_ready_question(question: dict[str, Any], *, include_rubric_html: bool = False) -> dict[str, Any]:
+    q2 = copy.deepcopy(question or {})
+    q2["stem_html"] = _render_markdown_html(str(q2.get("stem_md") or ""))
+    options_out = []
+    for option in q2.get("options") or []:
+        if not isinstance(option, dict):
+            options_out.append(option)
+            continue
+        opt = dict(option)
+        opt["text_html"] = _render_markdown_html(str(opt.get("text") or ""))
+        options_out.append(opt)
+    if isinstance(q2.get("options"), list):
+        q2["options"] = options_out
+    if include_rubric_html:
+        q2["rubric_html"] = _render_markdown_html(str(q2.get("rubric") or ""))
+    return q2
+
+
+def build_render_ready_public_spec(
+    public_spec: dict[str, Any],
+    *,
+    include_rubric_html: bool = False,
+) -> dict[str, Any]:
     out = copy.deepcopy(public_spec or {})
     questions_out = []
     for q in out.get("questions") or []:
-        q2 = dict(q)
-        q2["stem_html"] = _render_markdown_html(str(q2.get("stem_md") or ""))
-        questions_out.append(q2)
+        if not isinstance(q, dict):
+            continue
+        questions_out.append(
+            build_render_ready_question(q, include_rubric_html=include_rubric_html)
+        )
     out["questions"] = questions_out
     return out
+
+
+def _rewrite_text_assets_with_builder(text: str, make_url: Callable[[str], str]) -> str:
+    out = str(text or "")
+    for p in _collect_md_assets(out):
+        out = out.replace(f"({p})", f"({make_url(p)})")
+
+    def _replace_html_img(match: re.Match[str]) -> str:
+        rel = _safe_relpath(match.group("path"))
+        if not rel or not _is_local_asset_path(rel):
+            return match.group(0)
+        before = match.group("before") or ""
+        quote = match.group("quote") or '"'
+        after = match.group("after") or ""
+        return f'<img{before}src={quote}{make_url(rel)}{quote}{after}>'
+
+    return _HTML_IMG_SRC_RE.sub(_replace_html_img, out)
+
+
+def _rewrite_quiz_asset_paths_for_version(version_id: int, spec: dict, public_spec: dict) -> None:
+    def make_url(relpath: str) -> str:
+        return _version_asset_url(version_id, relpath)
+
+    for doc in (spec, public_spec):
+        for key in ("welcome_image", "end_image"):
+            raw = str(doc.get(key) or "").strip()
+            if raw and _is_local_asset_path(raw):
+                doc[key] = make_url(raw)
+        for q in (doc.get("questions") or []):
+            q["stem_md"] = _rewrite_text_assets_with_builder(str(q.get("stem_md") or ""), make_url)
+            media = str(q.get("media") or "").strip()
+            if media and _is_local_asset_path(media):
+                q["media"] = make_url(media)
+            if q.get("rubric") is not None:
+                q["rubric"] = _rewrite_text_assets_with_builder(str(q.get("rubric") or ""), make_url)
+
+
+def _quiz_payload_has_blank_option_text(payload: dict[str, Any]) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    for question in (payload.get("questions") or []):
+        if not isinstance(question, dict):
+            continue
+        qtype = str(question.get("type") or "").strip().lower()
+        if qtype not in {"single", "multiple"}:
+            continue
+        for option in (question.get("options") or []):
+            if not isinstance(option, dict):
+                continue
+            key = str(option.get("key") or "").strip()
+            text = str(option.get("text") or "").strip()
+            if key and not text:
+                return True
+    return False
+
+
+def _repair_quiz_snapshot_payloads(snapshot: dict[str, Any]) -> dict[str, Any]:
+    raw = dict(snapshot or {})
+    spec = raw.get("spec") if isinstance(raw.get("spec"), dict) else {}
+    public_spec = raw.get("public_spec") if isinstance(raw.get("public_spec"), dict) else {}
+    if not (_quiz_payload_has_blank_option_text(spec) or _quiz_payload_has_blank_option_text(public_spec)):
+        return raw
+
+    source_md = str(raw.get("source_md") or "")
+    if not source_md.strip():
+        return raw
+
+    try:
+        repaired_spec, repaired_public = parse_qml_markdown(source_md)
+        repaired_spec = apply_quiz_metadata(repaired_spec, default_schema_version=QUIZ_SCHEMA_VERSION)
+        repaired_public = apply_quiz_metadata(repaired_public, default_schema_version=QUIZ_SCHEMA_VERSION)
+    except Exception:
+        return raw
+
+    version_id = int(raw.get("quiz_version_id") or raw.get("id") or raw.get("current_version_id") or 0)
+    quiz_key = str(raw.get("quiz_key") or "").strip()
+    if version_id > 0:
+        _rewrite_quiz_asset_paths_for_version(version_id, repaired_spec, repaired_public)
+    elif quiz_key:
+        _rewrite_quiz_asset_paths(quiz_key, repaired_spec, repaired_public)
+
+    raw["spec"] = repaired_spec
+    raw["public_spec"] = repaired_public
+    return raw
 
 
 def _asset_url(quiz_key: str, relpath: str) -> str:
@@ -308,7 +565,7 @@ def get_quiz_version_snapshot(version_id: int) -> dict[str, Any] | None:
     out = dict(version)
     out["quiz_version_id"] = int(version.get("id") or 0)
     out["quiz_key"] = str(version.get("quiz_key") or "").strip()
-    return out
+    return _repair_quiz_snapshot_payloads(out)
 
 
 def resolve_quiz_version_id_for_new_assignment(quiz_key: str) -> int | None:
@@ -345,7 +602,7 @@ def get_exam_snapshot_for_assignment(assignment: dict[str, Any]) -> dict[str, An
         snap = get_quiz_version_snapshot(current_version_id)
         if snap:
             return snap
-    return exam
+    return _repair_quiz_snapshot_payloads(exam)
 
 
 def _resolve_quiz_asset_payload_by_version(version_id: int, relpath: str) -> tuple[bytes, str] | None:
@@ -410,8 +667,12 @@ def _rewrite_quiz_asset_paths(quiz_key: str, spec: dict, public_spec: dict) -> N
 
     for q in (spec.get("questions") or []):
         q["stem_md"] = _rewrite_text_assets(str(q.get("stem_md") or ""))
+        if q.get("rubric") is not None:
+            q["rubric"] = _rewrite_text_assets(str(q.get("rubric") or ""))
     for q in (public_spec.get("questions") or []):
         q["stem_md"] = _rewrite_text_assets(str(q.get("stem_md") or ""))
+        if q.get("rubric") is not None:
+            q["rubric"] = _rewrite_text_assets(str(q.get("rubric") or ""))
 
 
 # 首次写入测验：解析 Markdown -> 落盘 source/spec/public -> 同步资源文件。

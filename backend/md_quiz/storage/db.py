@@ -1990,6 +1990,23 @@ def clear_exam_domain_data() -> dict[str, int]:
             return _delete_exam_domain_rows(cur)
 
 
+def delete_exam_domain_data_by_quiz_key(quiz_key: str) -> dict[str, int]:
+    quiz_key_str = str(quiz_key or "").strip()
+    if not quiz_key_str:
+        raise ValueError("missing quiz_key")
+    counts: dict[str, int] = {}
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM quiz_version_asset WHERE quiz_version_id IN (SELECT id FROM quiz_version WHERE quiz_key=%s)", (quiz_key_str,))
+            row = cur.fetchone()
+            counts["quiz_version_asset"] = int((row[0] if row else 0) or 0)
+            cur.execute("DELETE FROM quiz_version_asset WHERE quiz_version_id IN (SELECT id FROM quiz_version WHERE quiz_key=%s)", (quiz_key_str,))
+            for table in ("quiz_archive", "quiz_paper", "assignment_record", "quiz_asset", "quiz_version", "quiz_definition"):
+                cur.execute(f"DELETE FROM {table} WHERE quiz_key=%s", (quiz_key_str,))
+                counts[table] = int(cur.rowcount or 0)
+    return counts
+
+
 def clear_exam_domain_data_and_set_repo_binding(
     *,
     binding_key: str,
@@ -2118,6 +2135,33 @@ ORDER BY created_at DESC, id DESC
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql)
             return [_runtime_job_row_to_dict(dict(row)) or {} for row in cur.fetchall()]
+
+
+def get_runtime_job(job_id: str) -> dict[str, Any] | None:
+    sql = """
+SELECT
+  id,
+  kind,
+  source,
+  status,
+  payload,
+  attempts,
+  error,
+  result,
+  worker_name,
+  created_at,
+  updated_at,
+  started_at,
+  finished_at
+FROM runtime_job
+WHERE id = %s
+LIMIT 1
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(job_id or "").strip(),))
+            row = cur.fetchone()
+    return _runtime_job_row_to_dict(dict(row)) if row else None
 
 
 def create_runtime_job(record: dict[str, Any]) -> dict[str, Any]:

@@ -12,6 +12,9 @@
 - `ADMIN_PASSWORD`
 - `DATABASE_URL`
 - `LOG_LEVEL`
+- `MCP_ENABLED`
+- `MCP_AUTH_TOKEN`
+- `MCP_CORS_ALLOW_ORIGINS`
 
 ### Worker / Scheduler
 
@@ -84,3 +87,6 @@
 
 - `EXAM_REPO_SYNC_PROXY` 只用于测验 Git 仓库同步。
 - 同步服务不会再依赖全局 `HTTP_PROXY` / `HTTPS_PROXY` 环境变量污染整个进程，而是仅在执行 `git clone` 时显式传入 `git -c http.proxy=...`。
+- `MCP_ENABLED=1` 时，应用会在 `/mcp` 挂载远程 MCP 服务。
+- `MCP_AUTH_TOKEN` 是 MCP Bearer Token，未设置时不允许启用 MCP。
+- `MCP_CORS_ALLOW_ORIGINS` 仅在浏览器型 MCP 客户端需要跨域访问时设置，使用逗号分隔。

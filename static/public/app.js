@@ -144,6 +144,14 @@
 
         this.autosaveMessage = this.state.quiz?.entered_at ? this.deferredSaveText(question) : "";
         this.syncQuestionTimer();
+        this.$nextTick(() => this.queueMathTypeset());
+      },
+
+      queueMathTypeset(root = null) {
+        const target = root instanceof Element ? root : this.$root;
+        if (target && typeof window.mdQuizQueueMathTypeset === "function") {
+          window.mdQuizQueueMathTypeset(target);
+        }
       },
 
       clearAutosaveTimer() {

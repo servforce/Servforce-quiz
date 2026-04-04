@@ -48,6 +48,7 @@ def test_rewrite_asset_paths_for_version_rewrites_local_and_legacy_urls():
                 "qid": "Q1",
                 "media": "/quizzes/demo/assets/assets/q1.png",
                 "stem_md": "题干 ![](assets/q1.png) 和 ![](/quizzes/demo/assets/assets/q2.png)",
+                "rubric": "评分图 ![](assets/rubric.png)",
             }
         ],
     }
@@ -62,6 +63,7 @@ def test_rewrite_asset_paths_for_version_rewrites_local_and_legacy_urls():
     assert out_spec["questions"][0]["media"] == "/quizzes/versions/12/assets/assets/q1.png"
     assert "/quizzes/versions/12/assets/assets/q1.png" in out_spec["questions"][0]["stem_md"]
     assert "/quizzes/versions/12/assets/assets/q2.png" in out_spec["questions"][0]["stem_md"]
+    assert "/quizzes/versions/12/assets/assets/rubric.png" in out_spec["questions"][0]["rubric"]
     assert out_public["end_image"] == "/quizzes/versions/12/assets/assets/end.png"
 
 
@@ -120,6 +122,7 @@ def test_rewrite_archive_asset_urls_rewrites_exam_and_question_assets():
             {
                 "media": "/quizzes/demo/assets/assets/q1.png",
                 "stem_md": "题干 ![](/quizzes/demo/assets/assets/q2.png)",
+                "rubric": "评分图 ![](/quizzes/demo/assets/assets/a15.png)",
             }
         ],
     }
@@ -131,6 +134,7 @@ def test_rewrite_archive_asset_urls_rewrites_exam_and_question_assets():
     assert out["exam"]["end_image"] == "/quizzes/versions/9/assets/assets/end.png"
     assert out["questions"][0]["media"] == "/quizzes/versions/9/assets/assets/q1.png"
     assert "/quizzes/versions/9/assets/assets/q2.png" in out["questions"][0]["stem_md"]
+    assert "/quizzes/versions/9/assets/assets/a15.png" in out["questions"][0]["rubric"]
 
 
 def test_load_quiz_repo_manifest_requires_manifest(tmp_path):
@@ -451,3 +455,79 @@ def test_perform_exam_repo_sync_marks_invalid_existing_source_as_sync_error(monk
     assert result["error_count"] == 1
     assert result["retired_exams"] == 0
     assert saved_statuses == ["sync_error"]
+
+
+def test_perform_exam_repo_sync_deletes_missing_quiz_not_in_current_manifest(monkeypatch):
+    deleted_quiz_keys: list[str] = []
+
+    def _fake_clone(repo_url, workdir):
+        _write_manifest(workdir, "quizzes/keep/quiz.md")
+        _write_text(
+            workdir / "quizzes/keep/quiz.md",
+            """
+---
+id: keep
+title: Keep
+format: qml-v2
+---
+
+## Q1 [single] (5) {answer_time=60s}
+题目一
+
+- A*) 正确
+""".strip()
+            + "\n",
+        )
+        return "deadbeef"
+
+    def _fake_build(repo_root, repo_url, git_commit, source_path):
+        return {
+            "quiz_key": "keep",
+            "title": "Keep",
+            "source_md": "---\nid: keep\n---\n",
+            "spec": {"id": "keep", "title": "Keep", "questions": []},
+            "public_spec": {"id": "keep", "title": "Keep", "questions": []},
+            "source_path": source_path,
+            "git_repo_url": repo_url,
+            "git_commit": git_commit,
+            "content_hash": "hash-keep",
+            "assets": {},
+        }
+
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._clone_repo", _fake_clone)
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._build_exam_candidate", _fake_build)
+    monkeypatch.setattr(
+        "backend.md_quiz.services.exam_repo_sync_service._sync_exam_candidate",
+        lambda candidate, synced_at: {"quiz_key": "keep", "action": "unchanged"},
+    )
+    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._write_git_sync_state", lambda **kwargs: kwargs)
+    monkeypatch.setattr(
+        "backend.md_quiz.services.exam_repo_sync_service.list_quiz_definitions",
+        lambda: [
+            {
+                "quiz_key": "keep",
+                "source_path": "quizzes/keep/quiz.md",
+                "git_repo_url": "https://example.com/repo.git",
+            },
+            {
+                "quiz_key": "remove-me",
+                "source_path": "quizzes/remove-me/quiz.md",
+                "git_repo_url": "https://example.com/repo.git",
+            },
+            {
+                "quiz_key": "other-repo",
+                "source_path": "quizzes/other/quiz.md",
+                "git_repo_url": "https://example.com/other.git",
+            },
+        ],
+    )
+    monkeypatch.setattr(
+        "backend.md_quiz.services.exam_repo_sync_service.delete_exam_domain_data_by_quiz_key",
+        lambda quiz_key: deleted_quiz_keys.append(str(quiz_key)) or {"quiz_definition": 1},
+    )
+
+    result = perform_exam_repo_sync("https://example.com/repo.git")
+
+    assert deleted_quiz_keys == ["remove-me", "other-repo"]
+    assert result["retired_exams"] == 2
+    assert result["deleted_exams"] == 2

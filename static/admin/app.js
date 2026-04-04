@@ -1,6 +1,76 @@
 (() => {
   const LOG_TREND_WINDOW_DAYS = 30;
   const ADMIN_COMPACT_BREAKPOINT_QUERY = "(max-width: 1279px)";
+  const MCP_CAPABILITY_GROUPS = [
+    {
+      key: "system",
+      label: "系统与运维",
+      icon: "monitoring",
+      tools: [
+        "system_health",
+        "system_processes",
+        "runtime_config_get",
+        "runtime_config_update",
+        "system_status_summary",
+        "system_status_range",
+        "system_status_update_thresholds",
+        "job_list",
+        "job_get",
+        "job_wait",
+      ],
+    },
+    {
+      key: "quiz",
+      label: "测验与同步",
+      icon: "library_books",
+      tools: [
+        "quiz_repo_get_binding",
+        "quiz_repo_bind",
+        "quiz_repo_rebind",
+        "quiz_repo_sync",
+        "quiz_list",
+        "quiz_get",
+        "quiz_set_public_invite",
+      ],
+    },
+    {
+      key: "candidate",
+      label: "候选人与档案",
+      icon: "group",
+      tools: [
+        "candidate_list",
+        "candidate_ensure",
+        "candidate_get",
+        "candidate_add_evaluation",
+        "candidate_delete",
+      ],
+    },
+    {
+      key: "assignment",
+      label: "邀约与结果",
+      icon: "assignment",
+      tools: [
+        "assignment_list",
+        "assignment_create",
+        "assignment_get",
+        "assignment_set_handling",
+        "assignment_delete",
+      ],
+    },
+  ];
+  const MCP_FLOW_STEPS = [
+    "1. 绑定或同步测验仓库，确保题库版本已落库。",
+    "2. 使用 candidate_ensure 建立候选人，避免重复建档。",
+    "3. 调用 assignment_create 生成邀约，再分发链接或二维码。",
+    "4. 通过 assignment_get / assignment_list 查看作答进度与结果摘要。",
+    "5. 通过 system_status_* 与 runtime_config_* 查看或调整系统状态。",
+  ];
+  const MCP_SECURITY_RULES = [
+    "默认脱敏返回手机号、简历敏感字段与答卷细节。",
+    "需要明文时，工具需显式传 include_sensitive=true。",
+    "重新绑定仓库、删除候选人、删除邀约等高危操作默认只预检，confirm=true 才执行。",
+    "远程 MCP 走 Bearer Token 鉴权，不复用后台浏览器登录态。",
+  ];
   const ADMIN_COMPACT_TAB_CONFIG = {
     quizzes: {
       defaultTab: "list",
@@ -56,6 +126,13 @@
       tabs: [
         { id: "summary", label: "状态摘要" },
         { id: "config", label: "阈值配置" },
+      ],
+    },
+    mcp: {
+      defaultTab: "overview",
+      tabs: [
+        { id: "overview", label: "接入摘要" },
+        { id: "capabilities", label: "能力范围" },
       ],
     },
   };
@@ -132,6 +209,7 @@
         { href: "/admin/assignments", label: "邀约与答题", icon: "assignment" },
         { href: "/admin/logs", label: "系统日志", icon: "receipt_long" },
         { href: "/admin/status", label: "系统状态", icon: "monitoring" },
+        { href: "/admin/mcp", label: "MCP", iconKind: "mcp" },
       ],
       loginForm: { username: "admin", password: "password" },
       filters: {
@@ -174,6 +252,7 @@
       adminCompactTabsState: {},
       adminCompactMediaQuery: null,
       adminCompactMediaQueryHandler: null,
+      adminCompactScrollHandler: null,
       syncState: {},
       syncPollTimer: null,
       syncPollIntervalMs: 2000,
@@ -183,6 +262,10 @@
       statusSummary: {},
       statusRange: { data: {} },
       statusConfig: { llm_tokens_limit: "", sms_calls_limit: "" },
+      systemBootstrap: {},
+      mcpCapabilityGroups: MCP_CAPABILITY_GROUPS,
+      mcpFlowSteps: MCP_FLOW_STEPS,
+      mcpSecurityRules: MCP_SECURITY_RULES,
 
       async boot() {
         this.initAdminCompactLayout();
@@ -201,6 +284,10 @@
         if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
           return;
         }
+        if (!this.adminCompactScrollHandler) {
+          this.adminCompactScrollHandler = () => this.updateAdminCompactTabsStickyState();
+          window.addEventListener("scroll", this.adminCompactScrollHandler, { passive: true });
+        }
         if (!this.adminCompactMediaQuery) {
           this.adminCompactMediaQuery = window.matchMedia(ADMIN_COMPACT_BREAKPOINT_QUERY);
           this.adminCompactMediaQueryHandler = (event) => {
@@ -218,14 +305,15 @@
       async handleAdminCompactLayoutChange(matches) {
         this.isAdminCompactLayout = Boolean(matches);
         this.ensureAdminCompactTab(this.route?.name);
+        await this.$nextTick();
         if (this.route?.name === "logs") {
-          await this.$nextTick();
           if (this.shouldRenderLogsChart()) {
             this.renderLogsChart();
           } else {
             this.destroyLogsChart();
           }
         }
+        this.updateAdminCompactTabsStickyState();
       },
 
       adminCompactTabConfig(routeName) {
@@ -269,6 +357,29 @@
         return this.isAdminCompactLayout && this.adminCompactTabs(routeName).length > 0;
       },
 
+      updateAdminCompactTabsStickyState() {
+        if (typeof window === "undefined" || typeof document === "undefined") {
+          return;
+        }
+        const nodes = Array.from(document.querySelectorAll(".admin-compact-tabs"));
+        for (const node of nodes) {
+          if (!(node instanceof HTMLElement)) {
+            continue;
+          }
+          const isVisible = node.getClientRects().length > 0;
+          const stickyTop = Number.parseFloat(window.getComputedStyle(node).top || "0") || 0;
+          const rect = node.getBoundingClientRect();
+          const isStuck = Boolean(isVisible && window.scrollY > 0 && rect.top <= stickyTop + 1);
+          node.dataset.stuck = String(isStuck);
+        }
+      },
+
+      isPrimaryNavItemActive(href) {
+        const target = String(href || "").trim();
+        if (!target) return false;
+        return String(this.route?.path || "").startsWith(target);
+      },
+
       async setAdminCompactTab(routeName, tabId, { scroll = false } = {}) {
         const key = String(routeName || "").trim();
         const nextTab = String(tabId || "").trim();
@@ -291,6 +402,7 @@
         if (scroll && this.isAdminCompactLayout) {
           this.scrollAdminCompactTabsIntoView(key);
         }
+        this.updateAdminCompactTabsStickyState();
       },
 
       resetAdminCompactTab(routeName) {
@@ -308,13 +420,22 @@
 
       scrollAdminCompactTabsIntoView(routeName) {
         if (typeof document === "undefined") return;
-        const target = document.querySelector(`[data-admin-compact-tabs="${String(routeName || "").trim()}"]`);
+        const selector = `[data-admin-compact-tabs="${String(routeName || "").trim()}"]`;
+        const candidates = Array.from(document.querySelectorAll(selector));
+        const target = candidates.find((node) => node instanceof HTMLElement && node.getClientRects().length > 0) || candidates[0];
         if (!target || typeof target.scrollIntoView !== "function") return;
         target.scrollIntoView({ behavior: "smooth", block: "start" });
       },
 
       pretty(value) {
         return JSON.stringify(value || {}, null, 2);
+      },
+
+      queueMathTypeset(root = null) {
+        const target = root instanceof Element ? root : this.$root;
+        if (target && typeof window.mdQuizQueueMathTypeset === "function") {
+          window.mdQuizQueueMathTypeset(target);
+        }
       },
 
       selectedAssignmentQuiz() {
@@ -1621,6 +1742,9 @@
         if (path === "/admin/status") {
           return { name: "status", path, title: "系统状态", section: "Status", params: {} };
         }
+        if (path === "/admin/mcp") {
+          return { name: "mcp", path, title: "MCP", section: "MCP", params: {} };
+        }
         return { name: "quizzes", path: "/admin/quizzes", title: "测验", section: "Quizzes", params: {} };
       },
 
@@ -1632,6 +1756,7 @@
 
       async loadBootstrap() {
         await Promise.all([
+          this.loadSystemBootstrap(),
           this.loadStatusSummary(),
           this.loadQuizzes({ quiet: true }),
           this.loadCandidates({ quiet: true }),
@@ -1657,6 +1782,7 @@
         }
         this.route = nextRoute;
         this.ensureAdminCompactTab(this.route.name);
+        await this.$nextTick();
         if (this.route.name !== "quizzes") {
           this.stopSyncPolling();
         }
@@ -1693,9 +1819,14 @@
           case "status":
             await this.loadStatus();
             break;
+          case "mcp":
+            await this.loadMcpPage();
+            break;
           default:
             break;
         }
+        await this.$nextTick();
+        this.updateAdminCompactTabsStickyState();
       },
 
       async go(path) {
@@ -1817,6 +1948,8 @@
 
       async loadQuizDetail(quizKey) {
         this.quizDetail = await this.api(`/api/admin/quizzes/${encodeURIComponent(quizKey)}`);
+        await this.$nextTick();
+        this.queueMathTypeset();
       },
 
       async loadQuizVersion(versionId) {
@@ -1824,6 +1957,8 @@
         if (this.route.name === "quiz-detail" && this.isAdminCompactLayout) {
           await this.setAdminCompactTab("quiz-detail", "content", { scroll: true });
         }
+        await this.$nextTick();
+        this.queueMathTypeset();
       },
 
       async togglePublicInvite() {
@@ -2078,6 +2213,8 @@
         if (this.route.name === "attempt-detail") {
           this.scheduleAssignmentsPolling();
         }
+        await this.$nextTick();
+        this.queueMathTypeset();
       },
 
       destroyLogsChart() {
@@ -2246,6 +2383,10 @@
         this.statusSummary = await this.api("/api/admin/system-status/summary", { quiet: true }) || {};
       },
 
+      async loadSystemBootstrap() {
+        this.systemBootstrap = await this.api("/api/system/bootstrap", { quiet: true }) || {};
+      },
+
       async loadStatus() {
         const data = await this.api("/api/admin/system-status");
         this.statusRange = data || { data: {} };
@@ -2254,6 +2395,45 @@
         if (!Object.keys(this.statusSummary || {}).length) {
           await this.loadStatusSummary();
         }
+      },
+
+      async loadMcpPage() {
+        if (!this.systemBootstrap?.mcp) {
+          await this.loadSystemBootstrap();
+        }
+      },
+
+      mcpInfo() {
+        return this.systemBootstrap?.mcp || {};
+      },
+
+      absoluteUrl(path) {
+        const value = String(path || "").trim();
+        if (!value) return "";
+        if (/^https?:\/\//i.test(value)) return value;
+        if (typeof window === "undefined") return value;
+        return `${window.location.origin}${value.startsWith("/") ? value : `/${value}`}`;
+      },
+
+      mcpUrl() {
+        return this.absoluteUrl(this.mcpInfo().path || "");
+      },
+
+      mcpDocsUrl() {
+        return this.absoluteUrl(this.mcpInfo().docs_path || "");
+      },
+
+      async copyMcpUrl() {
+        const value = this.mcpUrl();
+        if (!value) return;
+        await this.copyText(value);
+        this.showNotice("MCP 地址已复制");
+      },
+
+      openMcpDocs() {
+        const target = this.mcpDocsUrl();
+        if (!target || typeof window === "undefined") return;
+        window.open(target, "_blank", "noopener,noreferrer");
       },
 
       async saveStatusConfig() {

@@ -7,6 +7,8 @@
     <link rel="icon" type="image/png" href="/static/logo.png" />
     <link href="/static/assets/css/material-symbols.css" rel="stylesheet" />
     <link href="/static/admin.css" rel="stylesheet" />
+    <script defer src="/static/assets/js/math-render.js"></script>
+    <script defer src="/static/assets/js/vendor/mathjax/tex-svg.js"></script>
     <script defer src="/static/vendor/lightweight-charts/lightweight-charts.standalone.production.js"></script>
     <script defer src="/static/admin/app.js"></script>
     <script defer src="/static/assets/js/alpine.min.js"></script>
@@ -31,158 +33,154 @@
       </div>
     </div>
 
-    <main class="min-h-screen p-4 sm:p-6" x-cloak>
+    <main class="min-h-screen p-3 sm:p-5 xl:p-6" x-cloak>
       <template x-if="!session.authenticated">
-        <section class="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[1024px] items-center justify-center">
+        <section class="mx-auto flex min-h-[calc(100vh-1.5rem)] w-full max-w-[1120px] items-center justify-center sm:min-h-[calc(100vh-2.5rem)]">
           <div class="relative w-full overflow-hidden rounded-3xl border border-white/70 bg-white/76 shadow-[var(--admin-shadow)] backdrop-blur-xl">
             <div class="pointer-events-none absolute -left-20 top-0 h-72 w-72 rounded-full bg-blue-500/14 blur-3xl"></div>
             <div class="pointer-events-none absolute right-0 top-6 h-72 w-72 rounded-full bg-violet-400/12 blur-3xl"></div>
             <div class="pointer-events-none absolute bottom-0 left-1/3 h-56 w-56 rounded-full bg-sky-300/16 blur-3xl"></div>
 
-            <div class="relative grid gap-0 lg:grid-cols-[1.18fr_auto_0.82fr]">
-              <div class="order-2 p-6 sm:p-7 lg:order-1 xl:p-8">
-                <div class="flex h-full flex-col">
-                  <div class="overflow-hidden rounded-2xl border border-blue-200/50 bg-gradient-to-r from-blue-600 to-emerald-500 px-5 py-4 text-white shadow-[0_16px_40px_rgba(37,99,235,0.18)] sm:px-6">
-                    <div class="flex items-center gap-3.5">
-                      <img src="/static/logo.png" alt="" aria-hidden="true" class="h-8 w-8 shrink-0 sm:h-9 sm:w-9" />
-                      <div class="min-w-0">
-                        <h1 class="text-[2rem] font-black tracking-[-0.05em] text-white sm:text-[2.5rem]">MD Quiz</h1>
-                      </div>
-                    </div>
-
-                    <p class="ms-1 max-w-5xl text-sm leading-6 text-white/88 sm:text-base lg:text-[1.05rem]">
-                      智能体时代的招聘搭子
-                    </p>
-                  </div>
-
-                  <div class="mt-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/78 divide-y divide-slate-200/80">
-                    <div class="grid sm:grid-cols-2 sm:divide-x sm:divide-slate-200/80">
-                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 p-4">
-                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600">
-                          <span class="material-symbols-rounded text-3xl">description</span>
-                        </div>
-                        <div class="min-w-0">
-                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">测验管理</div>
-                          <p class="mt-1 text-sm leading-6 text-slate-600">题目整理、版本留档，更新时心里有数</p>
-                        </div>
-                      </div>
-                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 border-t border-slate-200/80 p-4 sm:border-t-0">
-                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
-                          <span class="material-symbols-rounded text-3xl">groups</span>
-                        </div>
-                        <div class="min-w-0">
-                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">候选人管理</div>
-                          <p class="mt-1 text-sm leading-6 text-slate-600">简历入库、标签归档，需要时一搜就到</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="grid sm:grid-cols-2 sm:divide-x sm:divide-slate-200/80">
-                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 p-4">
-                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600">
-                          <span class="material-symbols-rounded text-3xl">edit_square</span>
-                        </div>
-                        <div class="min-w-0">
-                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">答题邀约</div>
-                          <p class="mt-1 text-sm leading-6 text-slate-600">链接和二维码直接发出，进度看得见</p>
-                        </div>
-                      </div>
-                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 border-t border-slate-200/80 p-4 sm:border-t-0">
-                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
-                          <span class="material-symbols-rounded text-3xl">grading</span>
-                        </div>
-                        <div class="min-w-0">
-                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">智能判卷</div>
-                          <p class="mt-1 text-sm leading-6 text-slate-600">先给分，再给评语，帮你更快进入复盘</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="grid sm:grid-cols-2 sm:divide-x sm:divide-slate-200/80">
-                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 p-4">
-                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600">
-                          <span class="material-symbols-rounded text-3xl">article</span>
-                        </div>
-                        <div class="min-w-0">
-                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">系统日志</div>
-                          <p class="mt-1 text-sm leading-6 text-slate-600">关键操作自动记下，回头排查不靠回忆</p>
-                        </div>
-                      </div>
-                      <div class="grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 border-t border-slate-200/80 p-4 sm:border-t-0">
-                        <div class="grid h-14 w-14 place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
-                          <span class="material-symbols-rounded text-3xl">monitor_heart</span>
-                        </div>
-                        <div class="min-w-0">
-                          <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">系统状态</div>
-                          <p class="mt-1 text-sm leading-6 text-slate-600">Token 和短信消耗及时提醒，避免临时掉链子</p>
-                        </div>
-                      </div>
+            <div class="relative grid gap-5 p-4 sm:gap-6 sm:p-6 md:grid-cols-[minmax(0,1fr)_minmax(22rem,25rem)] md:grid-rows-[auto_1fr] xl:grid-cols-[minmax(0,1fr)_minmax(24rem,28rem)]">
+              <div class="order-1 min-w-0 md:col-start-1 md:row-start-1">
+                <div class="overflow-hidden rounded-2xl border border-blue-200/50 bg-gradient-to-r from-blue-600 to-emerald-500 px-5 py-4 text-white shadow-[0_16px_40px_rgba(37,99,235,0.18)] sm:px-6 sm:py-5">
+                  <div class="flex items-center gap-3.5">
+                    <img src="/static/logo.png" alt="" aria-hidden="true" class="h-8 w-8 shrink-0 sm:h-9 sm:w-9" />
+                    <div class="min-w-0">
+                      <h1 class="text-[2rem] font-black tracking-[-0.05em] text-white sm:text-[2.5rem]">MD Quiz</h1>
                     </div>
                   </div>
 
-                  <div class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold tracking-[-0.02em] text-slate-600 sm:text-base">
-                    <span class="font-bold text-blue-600">备卷</span>
-                    <span class="material-symbols-rounded text-slate-400">chevron_right</span>
-                    <span class="font-bold text-blue-500">邀约</span>
-                    <span class="material-symbols-rounded text-slate-400">chevron_right</span>
-                    <span class="font-bold text-cyan-600">作答</span>
-                    <span class="material-symbols-rounded text-slate-400">chevron_right</span>
-                    <span class="font-bold text-emerald-600">判卷</span>
-                    <span class="material-symbols-rounded text-slate-400">chevron_right</span>
-                    <span class="font-bold text-emerald-700">复盘</span>
-                  </div>
+                  <p class="ms-1 max-w-5xl text-sm leading-6 text-white/88 sm:text-base lg:text-[1.05rem]">
+                    智能体时代的招聘搭子
+                  </p>
+                </div>
+              </div>
 
-                  <div class="mt-7 inline-flex w-fit items-center gap-3 rounded-full border border-slate-200/90 bg-white/82 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-[0_14px_30px_rgba(15,23,42,0.06)]">
-                    <span class="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_0_8px_rgba(34,197,94,0.16)]"></span>
-                    <span>服务运行中</span>
+              <div class="order-2 flex min-w-0 md:col-start-2 md:row-span-2 md:self-stretch md:items-stretch md:justify-end">
+                <div class="relative w-full overflow-hidden rounded-2xl border border-blue-200/70 bg-white/88 p-5 shadow-none sm:p-6 md:flex md:h-full md:max-w-[25rem] md:flex-col md:bg-transparent xl:max-w-[28rem]">
+                  <div class="pointer-events-none absolute inset-0 bg-linear-to-b from-white/60 via-white/18 to-white/34 md:from-white/28 md:via-white/8 md:to-white/20"></div>
+                  <div class="relative flex h-full flex-col">
+                    <form
+                      @submit.prevent="login"
+                      class="w-full md:pt-5"
+                    >
+                      <div class="mb-8">
+                        <div class="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                          <span class="material-symbols-rounded text-sm">shield_person</span>
+                          后台入口
+                        </div>
+                        <h2 class="mt-4 text-2xl font-semibold tracking-[-0.03em] text-slate-900">管理员登录</h2>
+                      </div>
+                      <div class="space-y-5">
+                        <label class="block">
+                          <span class="mb-2 block text-sm font-semibold text-slate-500">账号</span>
+                          <input
+                            x-model="loginForm.username"
+                            class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm text-slate-800 outline-none ring-0 transition focus:border-blue-300 focus:bg-blue-50/40"
+                            placeholder="admin"
+                            autocomplete="username"
+                          />
+                        </label>
+                        <label class="block">
+                          <span class="mb-2 block text-sm font-semibold text-slate-500">密码</span>
+                          <input
+                            x-model="loginForm.password"
+                            type="password"
+                            class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm text-slate-800 outline-none ring-0 transition focus:border-blue-300 focus:bg-blue-50/40"
+                            placeholder="password"
+                            autocomplete="current-password"
+                          />
+                        </label>
+                      </div>
+                      <p x-show="error" class="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" x-text="error"></p>
+                      <button
+                        type="submit"
+                        class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                      >
+                        <span class="material-symbols-rounded text-base">login</span>
+                        登录后台
+                      </button>
+                    </form>
+
+                    <div class="mt-8 border-t border-blue-100/70 pt-5 md:mt-auto md:pt-6">
+                      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm font-semibold tracking-[-0.02em] text-slate-600 sm:text-base">
+                        <span class="font-bold text-blue-600">同步</span>
+                        <span class="material-symbols-rounded text-slate-400">chevron_right</span>
+                        <span class="font-bold text-blue-500">建档</span>
+                        <span class="material-symbols-rounded text-slate-400">chevron_right</span>
+                        <span class="font-bold text-cyan-600">邀约</span>
+                        <span class="material-symbols-rounded text-slate-400">chevron_right</span>
+                        <span class="font-bold text-emerald-600">作答</span>
+                        <span class="material-symbols-rounded text-slate-400">chevron_right</span>
+                        <span class="font-bold text-emerald-700">判卷</span>
+                      </div>
+
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div class="order-3 hidden w-px bg-slate-200/80 lg:order-2 lg:my-8 lg:block"></div>
-
-              <div class="order-1 border-b border-slate-200/80 p-6 sm:p-7 lg:order-3 lg:border-b-0 xl:p-8">
-                <div class="mx-auto w-full max-w-xl lg:flex lg:min-h-full lg:items-center">
-                  <form
-                    @submit.prevent="login"
-                    class="w-full"
-                  >
-                    <div class="mb-8">
-                      <div class="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
-                        <span class="material-symbols-rounded text-sm">shield_person</span>
-                        后台入口
+              <div class="order-3 min-w-0 space-y-4 md:col-start-1 md:row-start-2 md:self-start">
+                <div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white/78 shadow-[0_12px_30px_rgba(15,23,42,0.04)] backdrop-blur-sm">
+                  <div class="grid gap-px bg-slate-200/80 sm:grid-cols-2">
+                    <div class="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-4 bg-white/88 p-4 sm:p-5">
+                      <div class="grid h-[3.25rem] w-[3.25rem] place-items-center rounded-2xl bg-blue-50 text-blue-600">
+                        <span class="material-symbols-rounded text-[1.9rem]">description</span>
                       </div>
-                      <h2 class="mt-4 text-2xl font-semibold tracking-[-0.03em] text-slate-900">管理员登录</h2>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">测验管理</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">题目整理、版本留档，更新时心里有数</p>
+                      </div>
                     </div>
-                    <div class="space-y-5">
-                      <label class="block">
-                        <span class="mb-2 block text-sm font-semibold text-slate-500">账号</span>
-                        <input
-                          x-model="loginForm.username"
-                          class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm text-slate-800 outline-none ring-0 transition focus:border-blue-300 focus:bg-blue-50/40"
-                          placeholder="admin"
-                          autocomplete="username"
-                        />
-                      </label>
-                      <label class="block">
-                        <span class="mb-2 block text-sm font-semibold text-slate-500">密码</span>
-                        <input
-                          x-model="loginForm.password"
-                          type="password"
-                          class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm text-slate-800 outline-none ring-0 transition focus:border-blue-300 focus:bg-blue-50/40"
-                          placeholder="password"
-                          autocomplete="current-password"
-                        />
-                      </label>
+                    <div class="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-4 bg-white/88 p-4 sm:p-5">
+                      <div class="grid h-[3.25rem] w-[3.25rem] place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                        <span class="material-symbols-rounded text-[1.9rem]">groups</span>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">候选人管理</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">简历入库、标签归档，需要时一搜就到</p>
+                      </div>
                     </div>
-                    <p x-show="error" class="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" x-text="error"></p>
-                    <button
-                      type="submit"
-                      class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                    >
-                      <span class="material-symbols-rounded text-base">login</span>
-                      登录后台
-                    </button>
-                  </form>
+                    <div class="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-4 bg-white/88 p-4 sm:p-5">
+                      <div class="grid h-[3.25rem] w-[3.25rem] place-items-center rounded-2xl bg-blue-50 text-blue-600">
+                        <span class="material-symbols-rounded text-[1.9rem]">edit_square</span>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">答题邀约</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">链接和二维码直接发出，进度看得见</p>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-4 bg-white/88 p-4 sm:p-5">
+                      <div class="grid h-[3.25rem] w-[3.25rem] place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                        <span class="material-symbols-rounded text-[1.9rem]">grading</span>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">智能判卷</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">先给分，再给评语，帮你更快进入复盘</p>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-4 bg-white/88 p-4 sm:p-5">
+                      <div class="grid h-[3.25rem] w-[3.25rem] place-items-center rounded-2xl bg-blue-50 text-blue-600">
+                        <img src="/static/assets/mcp-mark.svg" alt="" class="h-[1.9rem] w-[1.9rem]" />
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">MCP 集成</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">让智能体通过统一协议完成同步测验、建档邀约与结果查询</p>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-[3.25rem_minmax(0,1fr)] items-start gap-4 bg-white/88 p-4 sm:p-5">
+                      <div class="grid h-[3.25rem] w-[3.25rem] place-items-center rounded-2xl bg-emerald-50 text-emerald-600">
+                        <span class="material-symbols-rounded text-[1.9rem]">monitor_heart</span>
+                      </div>
+                      <div class="min-w-0">
+                        <div class="text-base font-bold tracking-[-0.02em] text-slate-900 sm:text-[17px]">系统状态</div>
+                        <p class="mt-1 text-sm leading-6 text-slate-600">Token 和短信消耗及时提醒，避免临时掉链子</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
               </div>
             </div>
           </div>
@@ -190,9 +188,9 @@
       </template>
 
       <template x-if="session.authenticated">
-        <section class="mx-auto flex max-w-[1700px] gap-4">
-        <aside class="hidden w-64 shrink-0 lg:block">
-          <div class="sticky top-6 rounded-3xl border border-white/70 bg-white/78 p-4 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+        <section class="admin-shell mx-auto flex max-w-[1700px] gap-4">
+        <aside class="admin-shell__aside hidden w-64 shrink-0 md:block">
+          <div class="admin-surface admin-sidebar-surface sticky top-6 rounded-3xl border border-white/70 bg-white/78 p-4 shadow-[var(--admin-shadow)] backdrop-blur-xl">
             <div class="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-emerald-500 px-4 py-4 text-white">
               <img
                 src="/static/logo.png"
@@ -209,14 +207,23 @@
                 <button
                   type="button"
                   @click="go(item.href)"
-                  :class="route.path.startsWith(item.href) ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/85 text-slate-600 hover:bg-blue-50 hover:text-blue-700'"
-                  class="flex w-full items-center justify-between rounded-2xl border border-blue-100/80 px-4 py-3 text-left text-sm font-medium transition"
+                  :class="isPrimaryNavItemActive(item.href) ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'bg-white/85 text-slate-600 hover:bg-blue-50 hover:text-blue-700'"
+                  class="admin-sidebar-nav__item flex w-full items-center justify-between rounded-2xl border border-blue-100/80 px-4 py-3 text-left text-sm font-medium transition"
                 >
                   <span class="flex items-center gap-3">
-                    <span class="material-symbols-rounded text-[20px]" x-text="item.icon"></span>
+                    <template x-if="item.iconKind === 'mcp'">
+                      <svg viewBox="0 0 195 195" aria-hidden="true" class="shrink-0" style="width: 24px; height: 24px;" fill="none">
+                        <path d="M25 97.8528L92.8823 29.9706C102.255 20.598 117.451 20.598 126.823 29.9706C136.196 39.3431 136.196 54.5391 126.823 63.9117L75.5581 115.177" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
+                        <path d="M76.2653 114.47L126.823 63.9117C136.196 54.5391 151.392 54.5391 160.765 63.9117L161.118 64.2652C170.491 73.6378 170.491 88.8338 161.118 98.2063L99.7248 159.6C96.6006 162.724 96.6006 167.789 99.7248 170.913L112.331 183.52" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
+                        <path d="M109.853 46.9411L59.6482 97.1457C50.2757 106.518 50.2757 121.714 59.6482 131.087C69.0208 140.459 84.2168 140.459 93.5894 131.087L143.794 80.8822" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
+                      </svg>
+                    </template>
+                    <template x-if="item.iconKind !== 'mcp'">
+                      <span class="material-symbols-rounded text-[20px]" x-text="item.icon"></span>
+                    </template>
                     <span x-text="item.label"></span>
                   </span>
-                  <span class="text-xs opacity-70" x-text="route.path.startsWith(item.href) ? '当前' : ''"></span>
+                  <span class="text-xs opacity-70" x-text="isPrimaryNavItemActive(item.href) ? '当前' : ''"></span>
                 </button>
               </template>
             </nav>
@@ -231,33 +238,95 @@
           </div>
         </aside>
 
-        <div class="min-w-0 flex-1">
-          <header class="mb-4 rounded-3xl border border-white/70 bg-white/76 px-5 py-4 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+        <div class="admin-shell__main min-w-0 flex-1">
+          <header class="admin-surface admin-header-surface mb-4 rounded-3xl border border-white/70 bg-white/76 px-4 py-4 shadow-[var(--admin-shadow)] backdrop-blur-xl sm:px-5">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div class="min-w-0">
                 <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500" x-text="route.section"></div>
                 <h1 class="mt-1 truncate text-3xl font-semibold tracking-[-0.04em] text-slate-900" x-text="route.title"></h1>
               </div>
-              <div class="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-                <div class="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5">
-                  当前用户：
+              <div class="admin-header-meta flex flex-wrap items-center gap-3 text-sm text-slate-600">
+                <div class="admin-header-meta__pill rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5">
+                  <span class="admin-header-meta__label">当前用户：</span>
                   <span class="font-semibold text-slate-900" x-text="session.username || 'admin'"></span>
                 </div>
-                <div class="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5">
-                  系统状态：
+                <div class="admin-header-meta__pill rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5">
+                  <span class="admin-header-meta__label">系统状态：</span>
                   <span class="font-semibold text-emerald-700" x-text="statusSummary.overall_level || 'ok'"></span>
                 </div>
+                <button
+                  x-show="isAdminCompactLayout"
+                  type="button"
+                  @click="logout"
+                  class="admin-header-meta__logout inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/88 px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 md:hidden"
+                  aria-label="退出登录"
+                >
+                  <span class="material-symbols-rounded text-base">logout</span>
+                  <span class="admin-header-meta__logout-text">退出</span>
+                </button>
               </div>
             </div>
           </header>
 
+          <div x-show="isAdminCompactLayout" x-cloak class="admin-mobile-nav-shell md:hidden">
+            <div class="admin-primary-nav">
+              <div class="admin-primary-nav__track" role="navigation" aria-label="后台主导航">
+                <template x-for="item in navItems" :key="'compact-' + item.href">
+                  <button
+                    type="button"
+                    @click="go(item.href)"
+                    :aria-label="item.label"
+                    :title="item.label"
+                    :class="isPrimaryNavItemActive(item.href) ? 'admin-primary-nav__item--active' : 'admin-primary-nav__item--inactive'"
+                    class="admin-primary-nav__item"
+                  >
+                    <template x-if="item.iconKind === 'mcp'">
+                      <svg viewBox="0 0 195 195" aria-hidden="true" class="shrink-0" style="width: 24px; height: 24px;" fill="none">
+                        <path d="M25 97.8528L92.8823 29.9706C102.255 20.598 117.451 20.598 126.823 29.9706C136.196 39.3431 136.196 54.5391 126.823 63.9117L75.5581 115.177" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
+                        <path d="M76.2653 114.47L126.823 63.9117C136.196 54.5391 151.392 54.5391 160.765 63.9117L161.118 64.2652C170.491 73.6378 170.491 88.8338 161.118 98.2063L99.7248 159.6C96.6006 162.724 96.6006 167.789 99.7248 170.913L112.331 183.52" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
+                        <path d="M109.853 46.9411L59.6482 97.1457C50.2757 106.518 50.2757 121.714 59.6482 131.087C69.0208 140.459 84.2168 140.459 93.5894 131.087L143.794 80.8822" stroke="currentColor" stroke-width="12" stroke-linecap="round"/>
+                      </svg>
+                    </template>
+                    <template x-if="item.iconKind !== 'mcp'">
+                      <span class="material-symbols-rounded text-[20px]" x-text="item.icon"></span>
+                    </template>
+                  </button>
+                </template>
+              </div>
+            </div>
+            <div
+              x-show="shouldShowAdminCompactTabs(route.name)"
+              x-cloak
+              :data-admin-compact-tabs="route.name"
+              class="admin-compact-tabs"
+            >
+              <div
+                class="admin-compact-tabs__track"
+                role="tablist"
+                :aria-label="`${route.title || '当前页面'}内容切换`"
+              >
+                <template x-for="tab in adminCompactTabs(route.name)" :key="`${route.name || 'route'}-${tab.id}`">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab(route.name, tab.id)"
+                    :class="adminCompactTab(route.name) === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab(route.name) === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+          </div>
+
           <div x-show="route.name === 'quizzes'" class="space-y-4">
-            <div class="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+            <div class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
               <div
                 x-show="shouldShowAdminCompactTabs('quizzes')"
                 x-cloak
                 data-admin-compact-tabs="quizzes"
-                class="admin-compact-tabs xl:hidden"
+                class="hidden admin-compact-tabs md:block xl:hidden"
               >
                 <div class="admin-compact-tabs__track" role="tablist" aria-label="测验页面内容切换">
                   <template x-for="tab in adminCompactTabs('quizzes')" :key="tab.id">
@@ -276,16 +345,23 @@
 
               <section
                 x-show="adminCompactPanelVisible('quizzes', 'list')"
-                class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+                class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
               >
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">测验列表</h2>
                     <p class="mt-1 text-sm text-slate-600">只保留 Git 仓库同步</p>
                   </div>
-                  <div class="flex gap-2">
-                    <input x-model="filters.quizzes.q" @keydown.enter.prevent="loadQuizzes" class="w-52 rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="搜索标题 / ID / tags" />
-                    <button @click="loadQuizzes" type="button" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100">查询</button>
+                  <div x-data="{ composing: false }" class="min-w-0 w-full lg:w-[20rem]">
+                    <input
+                      x-model="filters.quizzes.q"
+                      @change="loadQuizzes"
+                      @compositionstart="composing = true"
+                      @compositionend="composing = false"
+                      @keydown.enter.prevent="if (!composing) $event.target.blur()"
+                      class="min-w-0 w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300"
+                      placeholder="搜索标题 / ID / tags"
+                    />
                   </div>
                 </div>
                 <div class="mt-5 grid gap-3">
@@ -293,7 +369,7 @@
                     <button
                       type="button"
                       @click="go('/admin/quizzes/' + item.quiz_key)"
-                      class="grid gap-3 rounded-2xl border border-blue-100/80 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50/50 md:grid-cols-[1fr_auto]"
+                      class="admin-subsurface grid gap-3 rounded-lg border border-blue-100/80 bg-white p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-300 hover:bg-blue-50/50 md:grid-cols-[1fr_auto]"
                     >
                       <div class="min-w-0">
                         <div class="flex flex-wrap items-center gap-2">
@@ -319,7 +395,7 @@
 
               <section
                 x-show="adminCompactPanelVisible('quizzes', 'repo')"
-                class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+                class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
               >
                 <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">绑定仓库</h2>
                 <p class="mt-1 text-sm text-slate-600">每套实例只绑定一个 Git 仓库；首次绑定后自动同步，后续同步仅针对当前绑定仓库执行。</p>
@@ -327,7 +403,7 @@
                 <div x-show="!hasRepoBinding()" class="mt-5">
                   <label class="block">
                     <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">仓库地址</span>
-                    <div class="flex items-center gap-0 overflow-hidden rounded-xl border border-blue-100 bg-white">
+                    <div class="flex items-center gap-0 overflow-hidden rounded-lg border border-blue-100 bg-white">
                       <input
                         x-model="syncForm.repoUrl"
                         :readonly="isSyncBusy()"
@@ -353,7 +429,7 @@
                 <div x-show="hasRepoBinding()" class="mt-5 space-y-4">
                   <div>
                     <div class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">当前绑定仓库</div>
-                    <div class="flex items-center gap-0 overflow-hidden rounded-xl border border-blue-100 bg-white">
+                    <div class="flex items-center gap-0 overflow-hidden rounded-lg border border-blue-100 bg-white">
                       <input
                         :value="repoBinding.repo_url || ''"
                         readonly
@@ -387,7 +463,7 @@
                         @click="openRebindForm"
                         type="button"
                         :disabled="isSyncBusy()"
-                        class="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100"
+                        class="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100"
                         :style="isSyncBusy() ? 'opacity:0.72; cursor:not-allowed;' : ''"
                       >
                         <span class="material-symbols-rounded text-base">warning</span>
@@ -401,7 +477,7 @@
                         <input
                           x-model="rebindForm.repoUrl"
                           :readonly="isSyncBusy()"
-                          class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm outline-none"
+                          class="w-full rounded-lg border border-rose-200 bg-white px-4 py-3 text-sm outline-none"
                           placeholder="https://example.com/repo.git"
                         />
                       </label>
@@ -410,7 +486,7 @@
                         <input
                           x-model="rebindForm.confirmationText"
                           :readonly="isSyncBusy()"
-                          class="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm outline-none"
+                          class="w-full rounded-lg border border-rose-200 bg-white px-4 py-3 text-sm outline-none"
                           placeholder="请输入：重新绑定"
                         />
                       </label>
@@ -424,7 +500,7 @@
                           @click="confirmRebind"
                           type="button"
                           :disabled="isSyncBusy() || rebindForm.confirmationText !== '重新绑定'"
-                          class="inline-flex items-center gap-2 rounded-2xl bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-700"
+                          class="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-700"
                           :style="(isSyncBusy() || rebindForm.confirmationText !== '重新绑定') ? 'opacity:0.72; cursor:not-allowed;' : ''"
                         >
                           <span class="material-symbols-rounded text-base">delete_forever</span>
@@ -434,7 +510,7 @@
                           @click="closeRebindForm"
                           type="button"
                           :disabled="isSyncBusy()"
-                          class="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100"
+                          class="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100"
                           :style="isSyncBusy() ? 'opacity:0.72; cursor:not-allowed;' : ''"
                         >
                           <span class="material-symbols-rounded text-base">close</span>
@@ -453,12 +529,12 @@
             </div>
           </div>
 
-          <div x-show="route.name === 'quiz-detail'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <div x-show="route.name === 'quiz-detail'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_24rem]">
             <div
               x-show="shouldShowAdminCompactTabs('quiz-detail')"
               x-cloak
               data-admin-compact-tabs="quiz-detail"
-              class="admin-compact-tabs xl:hidden"
+              class="hidden admin-compact-tabs md:block xl:hidden"
             >
               <div class="admin-compact-tabs__track" role="tablist" aria-label="测验详情内容切换">
                 <template x-for="tab in adminCompactTabs('quiz-detail')" :key="tab.id">
@@ -475,10 +551,10 @@
               </div>
             </div>
 
-            <section
-              x-show="adminCompactPanelVisible('quiz-detail', 'content')"
-              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
-            >
+              <section
+                x-show="adminCompactPanelVisible('quiz-detail', 'content')"
+                class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              >
               <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
@@ -499,7 +575,7 @@
                     </template>
                   </div>
                 </div>
-                <button @click="togglePublicInvite" type="button" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100">
+                <button @click="togglePublicInvite" type="button" class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100">
                   <span x-text="quizDetail.quiz?.public_invite_enabled ? '关闭公开邀约' : '开启公开邀约'"></span>
                 </button>
               </div>
@@ -581,7 +657,7 @@
                   alt="测验 intro 图片"
                   class="block h-64 w-full object-cover object-center"
                 />
-                <div class="pointer-events-none absolute inset-0 bg-linear-to-t from-slate-950/88 via-slate-950/28 to-transparent"></div>
+                <div class="pointer-events-none absolute inset-0 bg-linear-to-t from-slate-950/88 via-slate-950/20 to-transparent"></div>
                 <div class="absolute inset-x-0 bottom-0 p-5 sm:p-6">
                   <div class="inline-flex rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/90">
                     Intro 图片
@@ -613,13 +689,13 @@
                   <template x-for="(question, index) in quizQuestions()" :key="question.qid || index">
                     <article class="overflow-hidden rounded-3xl border border-blue-100/90 bg-white shadow-[0_12px_30px_rgba(37,99,235,0.08)]">
                       <div class="border-b border-slate-200/80 bg-linear-to-r from-blue-50/90 via-white to-emerald-50/70 px-4 py-3">
-                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div class="flex min-w-0 flex-wrap items-center gap-2">
-                            <span class="text-[17px] font-black tracking-[-0.03em] text-slate-900" x-text="question.label || question.qid || ('Q' + (index + 1))"></span>
-                            <span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700" x-text="questionTypeLabel(question.type)"></span>
-                            <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700" x-text="(question.max_points || 0) + ' 分'"></span>
+                        <div class="flex items-center justify-between gap-3">
+                          <div class="flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden">
+                            <span class="shrink-0 text-[17px] font-black tracking-[-0.03em] text-slate-900" x-text="question.label || question.qid || ('Q' + (index + 1))"></span>
+                            <span class="shrink-0 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700" x-text="questionTypeLabel(question.type)"></span>
+                            <span class="shrink-0 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700" x-text="(question.max_points || 0) + ' 分'"></span>
                           </div>
-                          <div class="flex items-center justify-end sm:pl-4">
+                          <div class="flex shrink-0 items-center justify-end pl-2">
                             <div
                               x-show="Number(question.answer_time_seconds || 0) > 0"
                               class="text-[11px] font-medium tabular-nums text-slate-400"
@@ -630,7 +706,7 @@
                       </div>
 
                       <div class="px-4 py-3">
-                        <div class="admin-markdown text-sm leading-6 text-slate-800" x-html="question.stem_html || ''"></div>
+                        <div class="quiz-rich admin-markdown text-sm leading-6 text-slate-800" x-html="question.stem_html || ''"></div>
 
                         <template x-if="(question.options || []).length">
                           <div class="mt-3 overflow-hidden rounded-xl border border-blue-100 bg-slate-50/80 divide-y divide-blue-100">
@@ -640,7 +716,7 @@
                                 class="flex items-center gap-2.5 px-3 py-2.5"
                               >
                                 <span class="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-white px-1.5 text-[11px] font-semibold text-blue-700" x-text="option.key || '-'"></span>
-                                <div class="min-w-0 flex-1 text-sm leading-5 text-slate-700" x-text="option.text || ''"></div>
+                                <div class="quiz-rich admin-markdown min-w-0 flex-1 text-sm leading-5 text-slate-700" x-html="option.text_html || ''"></div>
                                 <div x-show="optionTraits(option).length" class="ml-auto flex flex-wrap justify-end gap-1.5 pl-2">
                                     <template x-for="trait in optionTraits(option)" :key="`${option.key || ''}-${trait.name}`">
                                       <span :style="traitBadgeStyle(trait.name)" class="rounded-full border px-2 py-0.5 text-[11px] font-medium">
@@ -658,7 +734,7 @@
                         <template x-if="question.rubric">
                           <details class="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/80">
                             <summary class="cursor-pointer px-3.5 py-2.5 text-[13px] font-medium text-slate-700">评分标准</summary>
-                            <pre class="border-t border-slate-200 px-3.5 py-2.5 whitespace-pre-wrap text-[11px] leading-5 text-slate-600" x-text="question.rubric"></pre>
+                            <div class="quiz-rich admin-markdown border-t border-slate-200 px-3.5 py-2.5 text-[11px] leading-5 text-slate-600" x-html="question.rubric_html || ''"></div>
                           </details>
                         </template>
                       </div>
@@ -680,7 +756,7 @@
                     alt="测验 outro 图片"
                     class="block h-64 w-full object-cover object-center"
                   />
-                  <div class="pointer-events-none absolute inset-0 bg-linear-to-t from-slate-950/88 via-slate-950/28 to-transparent"></div>
+                  <div class="pointer-events-none absolute inset-0 bg-linear-to-t from-slate-950/88 via-slate-950/20 to-transparent"></div>
                   <div class="absolute inset-x-0 bottom-0 p-5 sm:p-6">
                     <div class="inline-flex rounded-full border border-white/20 bg-white/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/90">
                       Outro 图片
@@ -695,7 +771,7 @@
 
             <section
               x-show="adminCompactPanelVisible('quiz-detail', 'history')"
-              class="self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6"
+              class="admin-surface self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6"
             >
               <div class="flex items-start justify-between gap-3">
                 <div>
@@ -748,12 +824,12 @@
             </section>
           </div>
 
-          <div x-show="route.name === 'candidates'" class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <div x-show="route.name === 'candidates'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <div
               x-show="shouldShowAdminCompactTabs('candidates')"
               x-cloak
               data-admin-compact-tabs="candidates"
-              class="admin-compact-tabs xl:hidden"
+              class="hidden admin-compact-tabs md:block xl:hidden"
             >
               <div class="admin-compact-tabs__track" role="tablist" aria-label="候选人页面内容切换">
                 <template x-for="tab in adminCompactTabs('candidates')" :key="tab.id">
@@ -772,21 +848,28 @@
 
             <section
               x-show="adminCompactPanelVisible('candidates', 'list')"
-              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">候选人</h2>
                   <p class="mt-1 text-sm text-slate-600">支持搜索、创建、详情查看与简历入库。</p>
                 </div>
-                <div class="flex gap-2">
-                  <input x-model="filters.candidates.q" @keydown.enter.prevent="loadCandidates" class="w-52 rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="搜索姓名/手机号" />
-                  <button @click="loadCandidates" type="button" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100">查询</button>
+                <div x-data="{ composing: false }" class="min-w-0 w-full lg:w-[20rem]">
+                  <input
+                    x-model="filters.candidates.q"
+                    @change="loadCandidates"
+                    @compositionstart="composing = true"
+                    @compositionend="composing = false"
+                    @keydown.enter.prevent="if (!composing) $event.target.blur()"
+                    class="min-w-0 w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300"
+                    placeholder="搜索姓名/手机号"
+                  />
                 </div>
               </div>
               <div class="mt-5 grid gap-3">
                 <template x-for="item in candidates.items" :key="item.id">
-                  <button type="button" @click="go('/admin/candidates/' + item.id)" class="rounded-2xl border border-blue-100 bg-white p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/40">
+                  <button type="button" @click="go('/admin/candidates/' + item.id)" class="admin-subsurface rounded-lg border border-blue-100 bg-white p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/40">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <div class="text-lg font-semibold text-slate-900" x-text="item.name"></div>
@@ -804,19 +887,19 @@
 
             <section
               x-show="adminCompactPanelVisible('candidates', 'create')"
-              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建候选人</h2>
               <div class="mt-4 space-y-4">
                 <label class="block">
                   <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">姓名</span>
-                  <input x-model="candidateForm.name" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="张三" />
+                  <input x-model="candidateForm.name" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="张三" />
                 </label>
                 <label class="block">
                   <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">手机号</span>
-                  <input x-model="candidateForm.phone" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="13800138000" />
+                  <input x-model="candidateForm.phone" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="13800138000" />
                 </label>
-                <button @click="createCandidate" type="button" class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
+                <button @click="createCandidate" type="button" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
                   <span class="material-symbols-rounded text-base">person_add</span>
                   创建候选人
                 </button>
@@ -832,7 +915,7 @@
                     @click="openCandidateResumeUploadPicker"
                     type="button"
                     :disabled="candidateResumeUploadState.busy"
-                    class="inline-flex w-auto shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    class="inline-flex w-auto shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <span
                       class="material-symbols-rounded text-base"
@@ -881,12 +964,12 @@
             </section>
           </div>
 
-          <div x-show="route.name === 'candidate-detail'" class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <div x-show="route.name === 'candidate-detail'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
             <div
               x-show="shouldShowAdminCompactTabs('candidate-detail')"
               x-cloak
               data-admin-compact-tabs="candidate-detail"
-              class="admin-compact-tabs xl:hidden"
+              class="hidden admin-compact-tabs md:block xl:hidden"
             >
               <div class="admin-compact-tabs__track" role="tablist" aria-label="候选人详情内容切换">
                 <template x-for="tab in adminCompactTabs('candidate-detail')" :key="tab.id">
@@ -905,7 +988,7 @@
 
             <section
               x-show="adminCompactPanelVisible('candidate-detail', 'profile')"
-              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -915,7 +998,7 @@
                   </div>
                   <div class="mt-2 font-mono text-sm text-slate-500" x-text="candidateDetail.candidate?.phone"></div>
                 </div>
-                <button @click="deleteCandidate" type="button" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100">
+                <button @click="deleteCandidate" type="button" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100">
                   删除候选人
                 </button>
               </div>
@@ -1147,16 +1230,16 @@
             </section>
 
             <section x-show="adminCompactPanelVisible('candidate-detail', 'actions')" class="space-y-4">
-              <div class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <div class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
                 <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">管理员评价</h2>
-                <textarea x-model="candidateEvaluation" class="mt-4 h-44 w-full rounded-2xl border border-blue-100 bg-white px-4 py-4 text-sm leading-7 outline-none focus:border-blue-300" placeholder="记录你的评估结论"></textarea>
-                <button @click="saveCandidateEvaluation" type="button" class="mt-4 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">保存评价</button>
+                <textarea x-model="candidateEvaluation" class="mt-4 h-44 w-full rounded-lg border border-blue-100 bg-white px-4 py-4 text-sm leading-7 outline-none focus:border-blue-300" placeholder="记录你的评估结论"></textarea>
+                <button @click="saveCandidateEvaluation" type="button" class="mt-4 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">保存评价</button>
               </div>
 
-              <div class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+              <div class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
                 <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">简历文件</h2>
                 <div class="mt-4 flex flex-col gap-3">
-                  <button @click="downloadCandidateResume" type="button" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">下载当前简历</button>
+                  <button @click="downloadCandidateResume" type="button" class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">下载当前简历</button>
                   <div class="rounded-2xl border px-4 py-4" :style="resumeStatePanelStyle(candidateResumeReparseState.phase)">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                       <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">当前状态</div>
@@ -1189,14 +1272,14 @@
                         <button
                           @click="cancelCandidateResumeReparse"
                           type="button"
-                          class="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                          class="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                         >
                           取消
                         </button>
                         <button
                           @click="confirmCandidateResumeReparse"
                           type="button"
-                          class="rounded-2xl border border-emerald-200 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                          class="rounded-lg border border-emerald-200 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
                         >
                           确认替换
                         </button>
@@ -1214,7 +1297,7 @@
                     @click="openCandidateResumeReparsePicker"
                     type="button"
                     :disabled="candidateResumeReparseState.busy"
-                    class="inline-flex w-auto shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    class="inline-flex w-auto shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     <span
                       class="material-symbols-rounded text-base"
@@ -1228,12 +1311,12 @@
             </section>
           </div>
 
-          <div x-show="route.name === 'assignments'" class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <div x-show="route.name === 'assignments'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
             <div
               x-show="shouldShowAdminCompactTabs('assignments')"
               x-cloak
               data-admin-compact-tabs="assignments"
-              class="admin-compact-tabs xl:hidden"
+              class="hidden admin-compact-tabs md:block xl:hidden"
             >
               <div class="admin-compact-tabs__track" role="tablist" aria-label="邀约与答题内容切换">
                 <template x-for="tab in adminCompactTabs('assignments')" :key="tab.id">
@@ -1252,7 +1335,7 @@
 
             <section
               x-show="adminCompactPanelVisible('assignments', 'list')"
-              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <div class="flex flex-col gap-4">
                 <div class="flex flex-wrap items-start justify-between gap-3">
@@ -1267,15 +1350,15 @@
                 <div class="grid gap-3 lg:grid-cols-3">
                   <label class="block">
                     <span class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">搜索姓名</span>
-                    <input x-model="filters.assignments.q" @input="scheduleAssignmentsReload" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="姓名 / 手机号 / token" />
+                    <input x-model="filters.assignments.q" @input="scheduleAssignmentsReload" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="姓名 / 手机号 / token" />
                   </label>
                   <label class="block">
                     <span class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">开始时间</span>
-                    <input x-model="filters.assignments.start_from" @change="loadAssignments" type="date" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" />
+                    <input x-model="filters.assignments.start_from" @change="loadAssignments" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" />
                   </label>
                   <label class="block">
                     <span class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">结束时间</span>
-                    <input x-model="filters.assignments.end_to" @change="loadAssignments" type="date" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" />
+                    <input x-model="filters.assignments.end_to" @change="loadAssignments" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" />
                   </label>
                 </div>
               </div>
@@ -1348,7 +1431,7 @@
                             <button @click.stop="copyAssignmentUrl(item)" type="button" class="shrink-0 rounded-xl border border-blue-100 bg-white px-2.5 py-1 text-[11px] font-medium text-blue-700 transition hover:bg-blue-50">复制</button>
                           </div>
                         </div>
-                        <button @click.stop="copyAssignmentQr(item)" type="button" class="-mb-2 -mr-2 shrink-0 self-end overflow-hidden rounded-2xl transition hover:opacity-85" title="点击复制二维码">
+                        <button @click.stop="copyAssignmentQr(item)" type="button" class="-mb-2 -mr-2 shrink-0 self-end overflow-hidden rounded-lg transition hover:opacity-85" title="点击复制二维码">
                           <img :src="item.qr_url" alt="邀约二维码" class="h-16 w-16 rounded-xl object-cover" />
                         </button>
                       </div>
@@ -1363,14 +1446,14 @@
 
             <section
               x-show="adminCompactPanelVisible('assignments', 'create')"
-              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建邀约</h2>
               <div class="mt-4 space-y-4">
                 <label class="block">
                   <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">测验</span>
                   <div class="relative" @click.outside="closeAssignmentSelect('quiz')">
-                    <div class="flex items-center gap-2 rounded-xl border border-blue-100 bg-white px-4 py-3 transition focus-within:border-blue-300">
+                    <div class="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-4 py-3 transition focus-within:border-blue-300">
                       <input
                         :value="assignmentSelectDisplayValue('quiz')"
                         @focus="openAssignmentSelect('quiz')"
@@ -1416,7 +1499,7 @@
                 <label class="block">
                   <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">候选人</span>
                   <div class="relative" @click.outside="closeAssignmentSelect('candidate')">
-                    <div class="flex items-center gap-2 rounded-xl border border-blue-100 bg-white px-4 py-3 transition focus-within:border-blue-300">
+                    <div class="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-4 py-3 transition focus-within:border-blue-300">
                       <input
                         :value="assignmentSelectDisplayValue('candidate')"
                         @focus="openAssignmentSelect('candidate')"
@@ -1461,11 +1544,11 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                   <label class="block">
                     <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">开始日期</span>
-                    <input x-model="assignmentForm.invite_start_date" type="date" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
+                    <input x-model="assignmentForm.invite_start_date" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
                   </label>
                   <label class="block">
                     <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">结束日期</span>
-                    <input x-model="assignmentForm.invite_end_date" type="date" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
+                    <input x-model="assignmentForm.invite_end_date" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
                   </label>
                 </div>
                 <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-sm text-slate-700">
@@ -1486,7 +1569,7 @@
                     <span class="mt-1 block text-xs leading-5 text-slate-500">开启后，候选人需先填写姓名、手机号并完成短信验证码校验，才能开始答题。</span>
                   </span>
                 </label>
-                <button @click="createAssignment" type="button" class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
+                <button @click="createAssignment" type="button" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
                   <span class="material-symbols-rounded text-base">assignment_add</span>
                   创建邀请链接
                 </button>
@@ -1494,12 +1577,12 @@
             </section>
           </div>
 
-          <div x-show="route.name === 'attempt-detail'" class="grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
+          <div x-show="route.name === 'attempt-detail'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
             <div
               x-show="shouldShowAdminCompactTabs('attempt-detail')"
               x-cloak
               data-admin-compact-tabs="attempt-detail"
-              class="admin-compact-tabs xl:hidden"
+              class="hidden admin-compact-tabs md:block xl:hidden"
             >
               <div class="admin-compact-tabs__track" role="tablist" aria-label="答题详情内容切换">
                 <template x-for="tab in adminCompactTabs('attempt-detail')" :key="tab.id">
@@ -1518,7 +1601,7 @@
 
             <section
               x-show="adminCompactPanelVisible('attempt-detail', 'review')"
-              class="assignment-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="assignment-surface admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
               :class="assignmentDetailSectionClass(attemptDetail.quiz_paper)"
             >
               <div class="flex flex-col gap-3">
@@ -1577,7 +1660,7 @@
                     </div>
 
                     <div class="px-4 py-3">
-                      <div class="admin-markdown text-sm leading-6 text-slate-800" x-html="question.stem_html || ''"></div>
+                      <div class="quiz-rich admin-markdown text-sm leading-6 text-slate-800" x-html="question.stem_html || ''"></div>
 
                       <template x-if="attemptReviewHasOptions(question)">
                         <div class="mt-3 overflow-hidden rounded-xl border border-blue-100 bg-slate-50/80 divide-y divide-blue-100">
@@ -1585,7 +1668,7 @@
                             <div :class="attemptReviewOptionRowClass(question, option)">
                               <span class="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-white px-1.5 text-[11px] font-semibold text-blue-700" x-text="option.key || '-'"></span>
                               <div class="min-w-0 flex-1">
-                                <div class="text-sm leading-5 text-slate-700" x-text="option.text || ''"></div>
+                                <div class="quiz-rich admin-markdown text-sm leading-5 text-slate-700" x-html="option.text_html || ''"></div>
                                 <div x-show="optionTraits(option).length" class="mt-2 flex flex-wrap gap-1.5">
                                   <template x-for="trait in optionTraits(option)" :key="`${option.key || ''}-${trait.name}`">
                                     <span :style="traitBadgeStyle(trait.name)" class="rounded-full border px-2 py-0.5 text-[11px] font-medium">
@@ -1631,7 +1714,7 @@
                       <template x-if="question.rubric">
                         <details class="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/80">
                           <summary class="cursor-pointer px-3.5 py-2.5 text-[13px] font-medium text-slate-700">评分标准</summary>
-                          <pre class="border-t border-slate-200 px-3.5 py-2.5 whitespace-pre-wrap text-[11px] leading-5 text-slate-600" x-text="question.rubric"></pre>
+                          <div class="quiz-rich admin-markdown border-t border-slate-200 px-3.5 py-2.5 text-[11px] leading-5 text-slate-600" x-html="question.rubric_html || ''"></div>
                         </details>
                       </template>
                     </div>
@@ -1647,7 +1730,7 @@
 
             <section
               x-show="adminCompactPanelVisible('attempt-detail', 'evaluation')"
-              class="self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6"
+              class="admin-surface self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6"
             >
               <div>
                 <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">智能评价</h2>
@@ -1749,12 +1832,12 @@
             </section>
           </div>
 
-          <div x-show="route.name === 'logs'" class="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <div x-show="route.name === 'logs'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
             <div
               x-show="shouldShowAdminCompactTabs('logs')"
               x-cloak
               data-admin-compact-tabs="logs"
-              class="admin-compact-tabs xl:hidden"
+              class="hidden admin-compact-tabs md:block xl:hidden"
             >
               <div class="admin-compact-tabs__track" role="tablist" aria-label="系统日志内容切换">
                 <template x-for="tab in adminCompactTabs('logs')" :key="tab.id">
@@ -1773,16 +1856,16 @@
 
             <section
               x-show="adminCompactPanelVisible('logs', 'list')"
-              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <div class="flex items-center justify-between gap-3">
                 <div>
                   <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">系统日志</h2>
                   <p class="mt-1 text-sm text-slate-600">候选人、测验、邀约、判卷和系统告警日志。</p>
                 </div>
-                <button @click="loadLogs" type="button" class="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100">刷新</button>
+                <button @click="loadLogs" type="button" class="whitespace-nowrap rounded-lg border border-blue-100 bg-blue-50 px-2 py-2.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100">刷新</button>
               </div>
-              <div class="mt-5 overflow-hidden rounded-2xl border border-blue-100/80 bg-white/72">
+              <div class="admin-subsurface mt-5 overflow-hidden rounded-2xl border border-blue-100/80 bg-white/72">
                 <template x-for="item in logs.items" :key="item.id">
                   <div class="grid gap-2 border-b border-slate-100 px-4 py-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_220px] sm:items-start sm:gap-4">
                     <div class="min-w-0">
@@ -1799,7 +1882,7 @@
             </section>
             <section
               x-show="adminCompactPanelVisible('logs', 'trend')"
-              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -1822,7 +1905,7 @@
 
               <div class="mt-4 grid gap-3 sm:grid-cols-2">
                 <template x-for="item in logCategoryCards()" :key="item.key">
-                  <div class="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                  <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
                     <div class="flex items-start justify-between gap-3">
                       <div class="min-w-0">
                         <div class="flex items-center gap-2">
@@ -1839,12 +1922,12 @@
             </section>
           </div>
 
-          <div x-show="route.name === 'status'" class="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+          <div x-show="route.name === 'status'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
             <div
               x-show="shouldShowAdminCompactTabs('status')"
               x-cloak
               data-admin-compact-tabs="status"
-              class="admin-compact-tabs xl:hidden"
+              class="hidden admin-compact-tabs md:block xl:hidden"
             >
               <div class="admin-compact-tabs__track" role="tablist" aria-label="系统状态内容切换">
                 <template x-for="tab in adminCompactTabs('status')" :key="tab.id">
@@ -1863,7 +1946,7 @@
 
             <section
               x-show="adminCompactPanelVisible('status', 'summary')"
-              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -1884,7 +1967,7 @@
                 </div>
               </div>
               <div class="mt-5 grid gap-4 sm:grid-cols-2">
-                <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
                   <div class="flex items-start justify-between gap-3">
                     <div class="text-xs uppercase tracking-[0.18em] text-slate-500">LLM</div>
                     <div x-show="!statusModuleConfigured('llm')" class="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">未配置</div>
@@ -1893,7 +1976,7 @@
                   <div class="mt-1 text-sm text-slate-600" x-text="'阈值 ' + (statusSummary.llm?.limit || 0)"></div>
                   <div x-show="!statusModuleConfigured('llm')" class="mt-3 rounded-2xl border border-rose-100 bg-white/75 px-3 py-2 text-xs leading-5 text-rose-700" x-text="statusModuleMissingText('llm')"></div>
                 </div>
-                <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
                   <div class="flex items-start justify-between gap-3">
                     <div class="text-xs uppercase tracking-[0.18em] text-slate-500">短信</div>
                     <div x-show="!statusModuleConfigured('sms')" class="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">未配置</div>
@@ -1904,45 +1987,55 @@
                 </div>
               </div>
 
-              <div class="mt-5 overflow-hidden rounded-[1.125rem] border border-slate-200 bg-white">
-                <div class="grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  <div>日期</div>
-                  <div class="text-right">测验新增</div>
-                  <div class="text-right">邀约新增</div>
-                  <div class="text-right">候选人新增</div>
-                  <div class="text-right">LLM tokens</div>
-                  <div class="text-right">短信调用</div>
-                </div>
-                <div class="max-h-[520px] overflow-auto">
-                  <template x-for="item in statusDailyRows()" :key="item.day">
-                    <div class="grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-700 last:border-b-0 hover:bg-blue-50/35">
-                      <div class="font-mono text-xs text-slate-500" x-text="item.day"></div>
-                      <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.quizzes_new)"></div>
-                      <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.invites_new)"></div>
-                      <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.candidates_new)"></div>
-                      <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.llm_tokens)"></div>
-                      <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.sms_calls)"></div>
+              <div class="mt-4 flex items-center gap-2 text-[11px] font-medium text-slate-500 md:hidden">
+                <span class="material-symbols-rounded text-sm text-slate-400">swap_horiz</span>
+                <span>左右滑动查看完整数据</span>
+              </div>
+
+              <div class="admin-subsurface admin-data-table mt-5 overflow-hidden rounded-[1.125rem] border border-slate-200 bg-white">
+                <div class="admin-data-table__scroller">
+                  <div class="admin-data-table__content">
+                    <div class="admin-data-table__grid grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      <div>日期</div>
+                      <div class="text-right">测验新增</div>
+                      <div class="text-right">邀约新增</div>
+                      <div class="text-right">候选人新增</div>
+                      <div class="text-right">LLM tokens</div>
+                      <div class="text-right">短信调用</div>
                     </div>
-                  </template>
-                  <div class="sticky bottom-0 grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-t border-slate-200 bg-blue-50/95 px-4 py-3 text-sm text-slate-700 backdrop-blur-sm">
-                    <div class="font-semibold text-slate-900">区间合计</div>
-                    <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().quizzes_new)"></div>
-                    <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().invites_new)"></div>
-                    <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().candidates_new)"></div>
-                    <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().llm_tokens)"></div>
-                    <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().sms_calls)"></div>
+                    <div class="admin-data-table__body max-h-[520px]">
+                      <template x-for="item in statusDailyRows()" :key="item.day">
+                        <div class="admin-data-table__grid grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-700 last:border-b-0 hover:bg-blue-50/35">
+                          <div class="font-mono text-xs text-slate-500" x-text="item.day"></div>
+                          <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.quizzes_new)"></div>
+                          <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.invites_new)"></div>
+                          <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.candidates_new)"></div>
+                          <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.llm_tokens)"></div>
+                          <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(item.sms_calls)"></div>
+                        </div>
+                      </template>
+                      <div class="admin-data-table__grid sticky bottom-0 grid grid-cols-[1.2fr_repeat(5,minmax(88px,1fr))] gap-3 border-t border-slate-200 bg-blue-50/95 px-4 py-3 text-sm text-slate-700 backdrop-blur-sm">
+                        <div class="font-semibold text-slate-900">区间合计</div>
+                        <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().quizzes_new)"></div>
+                        <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().invites_new)"></div>
+                        <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().candidates_new)"></div>
+                        <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().llm_tokens)"></div>
+                        <div class="text-right tabular-nums text-slate-900" x-text="formatNumber(statusDailyTotals().sms_calls)"></div>
                   </div>
                 </div>
+
               </div>
+            </div>
+          </div>
             </section>
             <section
               x-show="adminCompactPanelVisible('status', 'config')"
-              class="rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">阈值配置</h2>
               <div class="mt-4 space-y-4">
                 <div class="grid gap-3 lg:grid-cols-2">
-                  <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
                     <div class="flex items-start justify-between gap-3">
                       <div class="min-w-0">
                         <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">当前接入 LLM</div>
@@ -1952,7 +2045,7 @@
                       <div x-show="!statusModuleConfigured('llm')" class="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">未配置</div>
                     </div>
                   </div>
-                  <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
                     <div class="flex items-start justify-between gap-3">
                       <div class="min-w-0">
                         <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">短信认证摘要</div>
@@ -1965,13 +2058,138 @@
                 </div>
                 <label class="block">
                   <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">LLM token 日阈值</span>
-                  <input x-model="statusConfig.llm_tokens_limit" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
+                  <input x-model="statusConfig.llm_tokens_limit" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
                 </label>
                 <label class="block">
                   <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">短信调用日阈值</span>
-                  <input x-model="statusConfig.sms_calls_limit" class="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
+                  <input x-model="statusConfig.sms_calls_limit" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
                 </label>
-                <button @click="saveStatusConfig" type="button" class="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">保存阈值</button>
+                <button @click="saveStatusConfig" type="button" class="rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">保存阈值</button>
+              </div>
+            </section>
+          </div>
+
+          <div x-show="route.name === 'mcp'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+            <div
+              x-show="shouldShowAdminCompactTabs('mcp')"
+              x-cloak
+              data-admin-compact-tabs="mcp"
+              class="hidden admin-compact-tabs md:block xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="MCP 内容切换">
+                <template x-for="tab in adminCompactTabs('mcp')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('mcp', tab.id)"
+                    :class="adminCompactTab('mcp') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('mcp') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('mcp', 'overview')"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">MCP 接入摘要</h2>
+                  <p class="mt-1 text-sm text-slate-600">为智能体开放测验同步、候选人建档、邀约与结果查询等完整链路。</p>
+                </div>
+                <div
+                  class="rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em]"
+                  :class="mcpInfo().enabled ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-600'"
+                  x-text="mcpInfo().enabled ? 'Enabled' : 'Disabled'"
+                ></div>
+              </div>
+
+              <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/78">
+                <div class="grid gap-0 divide-y divide-slate-200 sm:grid-cols-[180px_minmax(0,1fr)] sm:divide-y-0 sm:divide-x">
+                  <div class="bg-white/72 px-4 py-4">
+                    <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">传输方式</div>
+                    <div class="mt-2 text-lg font-semibold text-slate-900" x-text="mcpInfo().transport || 'streamable-http'"></div>
+                  </div>
+                  <div class="px-4 py-4 text-sm leading-6 text-slate-600">当前规划固定为远程 HTTP MCP，不复用后台登录态。</div>
+                </div>
+                <div class="grid gap-0 border-t border-slate-200 divide-y divide-slate-200 sm:grid-cols-[180px_minmax(0,1fr)] sm:divide-y-0 sm:divide-x">
+                  <div class="bg-white/72 px-4 py-4">
+                    <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">鉴权</div>
+                    <div class="mt-2 text-lg font-semibold text-slate-900" x-text="mcpInfo().auth_scheme || 'bearer'"></div>
+                  </div>
+                  <div class="px-4 py-4 text-sm leading-6 text-slate-600">客户端需显式附带 Bearer Token，和后台浏览器会话隔离。</div>
+                </div>
+                <div class="border-t border-slate-200 px-4 py-4">
+                  <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">MCP 地址</div>
+                  <div class="mt-3 break-all text-sm font-medium leading-6 text-slate-800" x-text="mcpUrl() || '未启用'"></div>
+                  <div class="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      @click="copyMcpUrl"
+                      class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+                    >
+                      <span class="material-symbols-rounded text-base">content_copy</span>
+                      复制 MCP 地址
+                    </button>
+                    <button
+                      type="button"
+                      @click="openMcpDocs"
+                      class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <span class="material-symbols-rounded text-base">open_in_new</span>
+                      打开 MCP 文档
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white/78">
+                <div class="border-b border-slate-200 px-4 py-4">
+                  <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">典型流程</div>
+                </div>
+                <ol class="divide-y divide-slate-200">
+                  <template x-for="step in mcpFlowSteps" :key="step">
+                    <li class="px-4 py-4 text-sm leading-6 text-slate-700" x-text="step"></li>
+                  </template>
+                </ol>
+              </div>
+            </section>
+
+            <section
+              x-show="adminCompactPanelVisible('mcp', 'capabilities')"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
+              <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">能力范围与安全规则</h2>
+              <div class="mt-4 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/60">
+                <template x-for="group in mcpCapabilityGroups" :key="group.key">
+                  <div class="border-b border-blue-100/80 px-4 py-4 last:border-b-0">
+                    <div class="flex items-center gap-3">
+                      <div class="grid h-10 w-10 place-items-center rounded-xl bg-white text-blue-600 shadow-[0_10px_20px_rgba(37,99,235,0.10)]">
+                        <span class="material-symbols-rounded text-[20px]" x-text="group.icon"></span>
+                      </div>
+                      <div class="text-sm font-semibold text-slate-900" x-text="group.label"></div>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <template x-for="toolName in group.tools" :key="toolName">
+                        <div class="rounded-full border border-white/80 bg-white/90 px-3 py-1.5 text-xs font-medium text-slate-700" x-text="toolName"></div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <div class="mt-5 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/80">
+                <div class="border-b border-amber-200 px-4 py-4">
+                  <div class="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">安全规则</div>
+                </div>
+                <ul class="divide-y divide-amber-200/80">
+                  <template x-for="rule in mcpSecurityRules" :key="rule">
+                    <li class="px-4 py-3 text-sm leading-6 text-slate-700" x-text="rule"></li>
+                  </template>
+                </ul>
               </div>
             </section>
           </div>

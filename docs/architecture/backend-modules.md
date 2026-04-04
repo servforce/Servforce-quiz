@@ -11,6 +11,7 @@
 - FastAPI 装配
 - SessionMiddleware
 - API 路由注册
+- MCP 挂载与会话管理
 - SPA 入口路由
 - 静态资源与测验资源路由
 - `/legacy/*` 兼容跳转
@@ -25,10 +26,15 @@
 
 - `runtime_service.py`：runtime config 与进程心跳
 - `job_service.py`：job 投递、领取与处理
+- `admin_agent_service.py`：MCP 侧复用的管理员业务编排
 - `exam_helpers.py` / `runtime_jobs.py`：测验资源、答题状态机与归档
 - `resume_service.py` / `grading_service.py`：简历解析与判卷
 - `exam_repo_sync_service.py`：测验仓库同步
 - `runtime_bootstrap.py`：运行时启动准备
+
+### `backend/md_quiz/mcp/`
+
+- `server.py`：MCP Server 定义、Bearer 鉴权、中间层工具注册
 
 ### `backend/md_quiz/storage/`
 

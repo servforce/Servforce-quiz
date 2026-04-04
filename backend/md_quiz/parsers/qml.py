@@ -319,11 +319,8 @@ def parse_qml_markdown(markdown_text: str) -> tuple[dict[str, Any], dict[str, An
                 correct = bool(opt_m.group("correct"))
                 traits: dict[str, int] = {}
                 opt_points: int | None = None
-                if "{" in body_text and body_text.rstrip().endswith("}"):
-                    left = body_text.rfind("{")
-                    attr_text = body_text[left:]
-                    body_text = body_text[:left].rstrip()
-                    opt_attrs = _parse_option_attrs(attr_text)
+                body_text, opt_attrs = _split_option_body_and_attrs(body_text)
+                if opt_attrs:
                     traits = opt_attrs.get("traits") or {}
                     if "points" in opt_attrs:
                         opt_points = opt_attrs["points"]
@@ -471,3 +468,27 @@ def _parse_option_attrs(attrs: str) -> dict[str, Any]:
                 out[k] = v_raw
     out["traits"] = traits
     return out
+
+
+def _has_option_attrs(attrs: dict[str, Any]) -> bool:
+    if not isinstance(attrs, dict) or not attrs:
+        return False
+    if attrs.get("traits"):
+        return True
+    return any(key != "traits" for key in attrs)
+
+
+def _split_option_body_and_attrs(body_text: str) -> tuple[str, dict[str, Any]]:
+    body = str(body_text or "").strip()
+    if "{" not in body or not body.endswith("}"):
+        return body, {}
+
+    left = body.rfind("{")
+    if left <= 0 or not body[left - 1].isspace():
+        return body, {}
+
+    attr_text = body[left:]
+    attrs = _parse_option_attrs(attr_text)
+    if not _has_option_attrs(attrs):
+        return body, {}
+    return body[:left].rstrip(), attrs

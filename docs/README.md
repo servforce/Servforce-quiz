@@ -20,7 +20,8 @@
 
 - [配置项说明](reference/configuration.md)
 - [REST API 约定](reference/api.md)
-- [QML 测验格式](../qml.md)
+- [MCP 能力说明](reference/mcp.md)
+- [QML 测验格式](../skills/qml-authoring/references/qml-spec.md)
 
 ## 项目内 Skills
 
@@ -34,6 +35,7 @@
 ## UI
 
 - [UI 主题覆盖](ui/theme.md)
+- [Utility 落地规则](ui/utility-authoring.md)
 
 ## 建议阅读顺序
 
@@ -45,6 +47,7 @@
 6. [数据模型与存储](architecture/data-model.md)
 7. [REST API 约定](reference/api.md)
 8. [UI 主题覆盖](ui/theme.md)
+9. [Utility 落地规则](ui/utility-authoring.md)
 
 ## 说明
 

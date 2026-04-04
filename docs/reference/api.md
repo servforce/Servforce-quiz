@@ -12,7 +12,20 @@
 
 ### `GET /api/system/bootstrap`
 
-返回品牌信息、后台入口、运行时配置。
+返回品牌信息、后台入口、运行时配置，以及 MCP 接入摘要。
+
+其中 `mcp` 字段包括：
+
+- `enabled`
+- `path`
+- `transport`
+- `auth_scheme`
+- `docs_path`
+
+说明：
+
+- 管理端和候选人端仍以 REST 为主协议面
+- 智能体自动化链路可通过 `/mcp` 调用同一批后台业务能力
 
 ## Admin
 
@@ -43,6 +56,12 @@
 ### `GET /api/admin/quizzes/{quiz_key}`
 
 返回测验详情、版本历史、公开邀约状态与测验快照。
+
+题目快照中的展示字段约定：
+
+- `stem_md` / `rubric` / `options[].text`：原始文本
+- `stem_html` / `rubric_html` / `options[].text_html`：供前端直接展示的 HTML
+- `rubric_html` 仅在管理端详情与答题回放接口返回，公开答题接口不暴露评分标准
 
 ### `POST /api/admin/quizzes/binding`
 
@@ -147,6 +166,12 @@
 
 返回 assignment 与归档详情；`/api/admin/results/{token}` 为同义接口。
 
+`review.answers[*]` 中会同时返回：
+
+- `stem_html`
+- `rubric_html`
+- `options[].text_html`
+
 ### `GET /api/admin/assignments/{token}/qr.png`
 
 返回邀约二维码 PNG。
@@ -205,6 +230,17 @@
 ### `GET /api/public/bootstrap`
 
 返回候选人端入口配置与功能开关。
+
+### `GET /api/public/attempt/{token}`
+
+返回候选人当前答题状态与公开测验快照。
+
+其中 `quiz.spec.questions[*]` 的展示字段包括：
+
+- `stem_html`
+- `options[].text_html`
+
+公开接口不返回 `rubric` / `rubric_html`。
 
 ### `POST /api/public/invites/{public_token}/ensure`
 

@@ -21,6 +21,14 @@ def _env_bool(name: str, default: bool) -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+def _env_csv(name: str) -> tuple[str, ...]:
+    raw = str(os.getenv(name, "") or "").strip()
+    if not raw:
+        return ()
+    values = [item.strip() for item in raw.split(",")]
+    return tuple(item for item in values if item)
+
+
 def build_logger(level: str) -> logging.Logger:
     logger = logging.getLogger("markdown_quiz")
     if not logger.handlers:
@@ -86,6 +94,9 @@ class EnvironmentSettings:
     openai_base_url: str
     openai_model: str
     exam_repo_sync_proxy: str
+    mcp_enabled: bool
+    mcp_auth_token: str
+    mcp_cors_allow_origins: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -121,6 +132,9 @@ def load_environment_settings() -> EnvironmentSettings:
         ).rstrip("/"),
         openai_model=os.getenv("OPENAI_MODEL", ""),
         exam_repo_sync_proxy=os.getenv("EXAM_REPO_SYNC_PROXY", "").strip(),
+        mcp_enabled=_env_bool("MCP_ENABLED", False),
+        mcp_auth_token=os.getenv("MCP_AUTH_TOKEN", "").strip(),
+        mcp_cors_allow_origins=_env_csv("MCP_CORS_ALLOW_ORIGINS"),
     )
 
 

@@ -7,6 +7,10 @@ const runtimeTargets = [
     source: path.join(projectRoot, "node_modules", "alpinejs", "dist", "cdn.min.js"),
     target: path.join(projectRoot, "assets", "js", "alpine.min.js"),
   },
+  {
+    source: path.join(projectRoot, "node_modules", "mathjax", "es5", "tex-svg.js"),
+    target: path.join(projectRoot, "assets", "js", "vendor", "mathjax", "tex-svg.js"),
+  },
 ];
 
 for (const { source, target } of runtimeTargets) {

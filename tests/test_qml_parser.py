@@ -219,3 +219,42 @@ def test_parse_qml_requires_answer_time() -> None:
 
     with pytest.raises(QmlParseError, match="缺少 answer_time"):
         parse_qml_markdown(markdown)
+
+
+def test_parse_qml_option_text_keeps_dict_literal_after_fenced_code_block() -> None:
+    exam, public_exam = parse_qml_markdown(
+        """
+## Q31 [single] (1) {answer_time=45s}
+在Python3中，下列程序的执行结果为（）
+
+```
+dict1 = {'one': 1, 'two': 2, 'three': 3}
+dict2 = {'one': 4, 'tmp': 5}
+dict1.update(dict2)
+print(dict1)
+```
+
+* A) {'one': 1, 'two': 2, 'three': 3, 'tmp': 5}
+* B) {'one': 4, 'two': 2, 'three': 3}
+* C) {'one': 1, 'two': 2, 'three': 3}
+* D*) {'one': 4, 'two': 2, 'three': 3, 'tmp': 5}
+""".strip()
+    )
+
+    question = exam["questions"][0]
+    public_question = public_exam["questions"][0]
+
+    assert "dict1.update(dict2)" in question["stem_md"]
+    assert [option["text"] for option in question["options"]] == [
+        "{'one': 1, 'two': 2, 'three': 3, 'tmp': 5}",
+        "{'one': 4, 'two': 2, 'three': 3}",
+        "{'one': 1, 'two': 2, 'three': 3}",
+        "{'one': 4, 'two': 2, 'three': 3, 'tmp': 5}",
+    ]
+    assert [option["correct"] for option in question["options"]] == [False, False, False, True]
+    assert [option["text"] for option in public_question["options"]] == [
+        "{'one': 1, 'two': 2, 'three': 3, 'tmp': 5}",
+        "{'one': 4, 'two': 2, 'three': 3}",
+        "{'one': 1, 'two': 2, 'three': 3}",
+        "{'one': 4, 'two': 2, 'three': 3, 'tmp': 5}",
+    ]

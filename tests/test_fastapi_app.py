@@ -15,6 +15,7 @@ from backend.md_quiz.storage.db import (
     create_candidate,
     create_quiz_paper,
     create_quiz_version,
+    delete_exam_domain_data_by_quiz_key,
     get_candidate,
     get_assignment_record,
     get_quiz_archive_by_token,
@@ -149,6 +150,58 @@ def _seed_exam_with_metadata(quiz_key: str) -> int:
         last_sync_at=datetime.now(timezone.utc),
     )
     return version_id
+
+
+def test_delete_exam_domain_data_by_quiz_key_removes_exam_related_rows(monkeypatch, tmp_path):
+    _build_client(monkeypatch, tmp_path)
+    quiz_key = "cleanup-demo"
+    version_id = _seed_exam_with_metadata(quiz_key)
+    replace_quiz_version_assets(version_id, {"assets/q1.png": (b"png", "image/png")})
+    replace_quiz_assets(quiz_key, {"assets/welcome.png": (b"png", "image/png")})
+    candidate_id = create_candidate(name="清理候选人", phone="13900000001")
+    create_assignment_record(
+        "cleanup-token",
+        {
+            "token": "cleanup-token",
+            "quiz_key": quiz_key,
+            "quiz_version_id": version_id,
+            "candidate_id": candidate_id,
+            "status": "invited",
+        },
+    )
+    create_quiz_paper(
+        candidate_id=candidate_id,
+        phone="13900000001",
+        quiz_key=quiz_key,
+        quiz_version_id=version_id,
+        token="cleanup-token",
+        source_kind="direct",
+        invite_start_date="2026-04-01",
+        invite_end_date="2026-04-02",
+        status="invited",
+    )
+    save_quiz_archive(
+        archive_name="cleanup-demo-cleanup-token",
+        token="cleanup-token",
+        candidate_id=candidate_id,
+        quiz_key=quiz_key,
+        quiz_version_id=version_id,
+        phone="13900000001",
+        archive={"exam": {"quiz_key": quiz_key, "quiz_version_id": version_id}, "questions": []},
+    )
+
+    counts = delete_exam_domain_data_by_quiz_key(quiz_key)
+
+    assert counts["quiz_definition"] == 1
+    assert counts["quiz_version"] == 1
+    assert counts["quiz_version_asset"] == 1
+    assert counts["quiz_asset"] == 1
+    assert counts["assignment_record"] == 1
+    assert counts["quiz_paper"] == 1
+    assert counts["quiz_archive"] == 1
+    assert get_assignment_record("cleanup-token") is None
+    assert get_quiz_paper_by_token("cleanup-token") is None
+    assert get_quiz_archive_by_token("cleanup-token") is None
 
 
 def _seed_exam_with_answer_time(quiz_key: str) -> int:
@@ -878,6 +931,8 @@ def test_admin_quiz_endpoints_expose_metadata_and_match_tags_query(monkeypatch, 
     detail_question = detail_payload["selected_quiz_version"]["spec"]["questions"][0]
     assert detail_question["stem_html"].startswith("<p>")
     assert "题目一" in detail_question["stem_html"]
+    assert detail_question["options"][0]["text_html"].startswith("<p>")
+    assert "选项A" in detail_question["options"][0]["text_html"]
 
     version_response = client.get(f"/api/admin/quiz-versions/{version_id}")
     assert version_response.status_code == 200
@@ -891,6 +946,7 @@ def test_admin_quiz_endpoints_expose_metadata_and_match_tags_query(monkeypatch, 
     assert selected_version["trait"] == {"dimensions": ["I", "E"]}
     assert selected_version["spec"]["questions"][0]["stem_html"].startswith("<p>")
     assert "题目一" in selected_version["spec"]["questions"][0]["stem_html"]
+    assert selected_version["spec"]["questions"][0]["options"][0]["text_html"].startswith("<p>")
 
 
 def test_admin_quiz_estimated_duration_prefers_answer_time_total(monkeypatch, tmp_path):
@@ -1005,6 +1061,117 @@ def test_public_attempt_bootstrap_exposes_quiz_metadata(monkeypatch, tmp_path):
     assert payload["quiz"]["question_counts"] == {"single": 1, "multiple": 0, "short": 0}
     assert payload["quiz"]["estimated_duration_minutes"] == 2
     assert payload["quiz"]["trait"] == {"dimensions": ["I", "E"]}
+    assert payload["quiz"]["spec"]["questions"][0]["options"][0]["text_html"].startswith("<p>")
+    assert "选项A" in payload["quiz"]["spec"]["questions"][0]["options"][0]["text_html"]
+
+
+def test_public_attempt_bootstrap_normalizes_option_markdown_and_keeps_tex(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    quiz_key = "public-rich-text-demo"
+    spec = {
+        "id": quiz_key,
+        "title": "富文本题目",
+        "description": "用于验证公开端富文本字段。",
+        "tags": ["markdown"],
+        "schema_version": 2,
+        "format": "qml-v2",
+        "question_count": 1,
+        "question_counts": {"single": 1, "multiple": 0, "short": 0},
+        "estimated_duration_minutes": 1,
+        "trait": {},
+        "questions": [
+            {
+                "qid": "Q1",
+                "type": "single",
+                "max_points": 5,
+                "stem_md": r"设有向图 $E=\{\langle v0,v1 \rangle\}$",
+                "answer_time_seconds": 60,
+                "options": [{"key": "A", "text": r"select student\_id from learn", "correct": True}],
+            }
+        ],
+    }
+    public_spec = {
+        "id": quiz_key,
+        "title": "富文本题目",
+        "description": "用于验证公开端富文本字段。",
+        "tags": ["markdown"],
+        "schema_version": 2,
+        "format": "qml-v2",
+        "question_count": 1,
+        "question_counts": {"single": 1, "multiple": 0, "short": 0},
+        "estimated_duration_minutes": 1,
+        "trait": {},
+        "questions": [
+            {
+                "qid": "Q1",
+                "type": "single",
+                "max_points": 5,
+                "stem_md": r"设有向图 $E=\{\langle v0,v1 \rangle\}$",
+                "answer_time_seconds": 60,
+                "options": [{"key": "A", "text": r"select student\_id from learn"}],
+            }
+        ],
+    }
+    version_id = create_quiz_version(
+        quiz_key=quiz_key,
+        version_no=1,
+        title="富文本题目",
+        source_path=f"quizzes/{quiz_key}/quiz.md",
+        git_repo_url="https://example.com/repo.git",
+        git_commit="deadbeef",
+        content_hash=f"hash-{quiz_key}",
+        source_md="---\nid: test\n---\n",
+        spec=spec,
+        public_spec=public_spec,
+    )
+    save_quiz_definition(
+        quiz_key=quiz_key,
+        title="富文本题目",
+        source_md="---\nid: test\n---\n",
+        spec=spec,
+        public_spec=public_spec,
+        status="active",
+        source_path=f"quizzes/{quiz_key}/quiz.md",
+        git_repo_url="https://example.com/repo.git",
+        current_version_id=version_id,
+        current_version_no=1,
+        last_synced_commit="deadbeef",
+        last_sync_error="",
+        last_sync_at=datetime.now(timezone.utc),
+    )
+    candidate_id = create_candidate("富文本候选人", "13900000041")
+    token = "pubrich001"
+    now = datetime.now(timezone.utc).isoformat()
+    create_assignment_record(
+        token,
+        {
+            "token": token,
+            "quiz_key": quiz_key,
+            "quiz_version_id": version_id,
+            "candidate_id": candidate_id,
+            "created_at": now,
+            "status": "verified",
+            "status_updated_at": now,
+            "invite_window": {"start_date": None, "end_date": None},
+            "time_limit_seconds": 60,
+            "min_submit_seconds": 0,
+            "verify_max_attempts": 3,
+            "pass_threshold": 60,
+            "verify": {"attempts": 0, "locked": False},
+            "sms_verify": {"verified": True, "phone": "13900000041"},
+            "pending_profile": {"name": "富文本候选人", "phone": "13900000041"},
+            "timing": {"start_at": None, "end_at": None},
+            "answers": {},
+            "grading": None,
+        },
+    )
+
+    response = client.get(f"/api/public/attempt/{token}")
+
+    assert response.status_code == 200
+    question = response.json()["quiz"]["spec"]["questions"][0]
+    assert "student_id" in question["options"][0]["text_html"]
+    assert r"$E=\{\langle v0,v1 \rangle\}$" in question["stem_html"]
 
 
 def test_public_done_payload_exposes_final_analysis_and_traits(monkeypatch, tmp_path):
@@ -1440,6 +1607,7 @@ def test_admin_attempt_detail_exposes_review_answers_and_evaluation(monkeypatch,
     assert short["score_max"] == 10
     assert short["reason"] == "覆盖了目标确认和执行步骤，但缺少风险控制。"
     assert short["rubric"] == "提到分析现状和制定计划。"
+    assert "<p>提到分析现状和制定计划。</p>" in short["rubric_html"]
     assert "<p>请说明你会如何拆解问题。</p>" in short["stem_html"]
 
     traits = review["answers"][3]
@@ -2400,3 +2568,30 @@ def test_exam_sync_ignores_payload_repo_url_and_uses_bound_repo(monkeypatch, tmp
     items = jobs_response.json()["items"]
     assert len(items) == 1
     assert items[0]["payload"]["repo_url"] == "https://github.com/example/bound.git"
+
+
+def test_system_bootstrap_exposes_mcp_metadata(monkeypatch, tmp_path):
+    monkeypatch.setenv("MCP_ENABLED", "1")
+    monkeypatch.setenv("MCP_AUTH_TOKEN", "test-mcp-token")
+    client = _build_client(monkeypatch, tmp_path)
+
+    response = client.get("/api/system/bootstrap")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mcp"] == {
+        "enabled": True,
+        "path": "/mcp",
+        "transport": "streamable-http",
+        "auth_scheme": "bearer",
+        "docs_path": "/docs/reference/mcp.md",
+    }
+
+
+def test_admin_mcp_route_returns_admin_spa(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+
+    response = client.get("/admin/mcp")
+
+    assert response.status_code == 200
+    assert "MD Quiz Admin" in response.text

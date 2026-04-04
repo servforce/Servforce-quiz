@@ -8,6 +8,12 @@
 - `Worker`：执行异步任务
 - `Scheduler`：投递周期任务
 
+### 对外能力面
+
+- REST：`/api/admin/*`、`/api/public/*`、`/api/system/*`
+- 远程 MCP：`/mcp`
+- 后台 MCP 说明页：`/admin/mcp`
+
 ### 兼容面
 
 - `/legacy/*` 只保留为到当前真实路径的兼容跳转
@@ -17,6 +23,7 @@
 ```text
 backend/md_quiz/
   api/
+  mcp/
   models/
   parsers/
   services/

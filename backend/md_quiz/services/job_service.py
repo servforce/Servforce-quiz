@@ -14,6 +14,9 @@ class JobService:
     def list_jobs(self) -> list[JobRecord]:
         return self.store.list_jobs()
 
+    def get_job(self, job_id: str) -> JobRecord | None:
+        return self.store.get_job(job_id)
+
     def enqueue(self, kind: str, *, payload: dict | None = None, source: str = "manual") -> JobRecord:
         return self.store.enqueue(kind, payload=payload, source=source)
 

@@ -1,6 +1,7 @@
 # UI 主题覆盖
 
 本文件是项目内 UI 配色与视觉语义的事实来源，供 [static-ui skill](../../skills/static-ui/SKILL.md) 优先读取。
+布局和 utility 写法约束见 [Utility 落地规则](utility-authoring.md)；本文件不负责定义页面骨架实现方式。
 
 - 适用范围：`templates/`、`static/`、管理后台、候选人端页面。
 - 目标风格：深色优先、现代克制、偏管理后台；主色调统一为“蓝色 + 绿色”。
