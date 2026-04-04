@@ -1,0 +1,9 @@
+@layer components {
+  .public-rich > :first-child {
+    margin-top: 0;
+  }
+
+  .public-rich > :last-child {
+    margin-bottom: 0;
+  }
+}

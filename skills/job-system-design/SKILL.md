@@ -44,4 +44,5 @@ description: Use this skill when designing, reviewing, or refactoring a job syst
 ## 参考资料
 
 - 通用原则： [references/principles.md](references/principles.md)
-- 项目内落地： [../../docs/architecture/job-system.md](../../docs/architecture/job-system.md)
+- 项目内落地： [../../docs/architecture/runtime-topology.md](../../docs/architecture/runtime-topology.md)
+- 相关数据结构： [../../docs/architecture/data-model.md](../../docs/architecture/data-model.md)

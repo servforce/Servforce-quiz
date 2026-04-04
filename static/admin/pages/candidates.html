@@ -1,0 +1,139 @@
+<div x-show="route.name === 'candidates'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div
+              x-show="shouldShowAdminCompactTabs('candidates')"
+              x-cloak
+              data-admin-compact-tabs="candidates"
+              class="hidden admin-compact-tabs md:block xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="候选人页面内容切换">
+                <template x-for="tab in adminCompactTabs('candidates')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('candidates', tab.id)"
+                    :class="adminCompactTab('candidates') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('candidates') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('candidates', 'list')"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">候选人</h2>
+                  <p class="mt-1 text-sm text-slate-600">支持搜索、创建、详情查看与简历入库。</p>
+                </div>
+                <div x-data="{ composing: false }" class="min-w-0 w-full lg:w-[20rem]">
+                  <input
+                    x-model="filters.candidates.q"
+                    @change="loadCandidates"
+                    @compositionstart="composing = true"
+                    @compositionend="composing = false"
+                    @keydown.enter.prevent="if (!composing) $event.target.blur()"
+                    class="min-w-0 w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300"
+                    placeholder="搜索姓名/手机号"
+                  />
+                </div>
+              </div>
+              <div class="mt-5 grid gap-3">
+                <template x-for="item in candidates.items" :key="item.id">
+                  <button type="button" @click="go('/admin/candidates/' + item.id)" class="admin-subsurface rounded-lg border border-blue-100 bg-white p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/40">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div class="text-lg font-semibold text-slate-900" x-text="item.name"></div>
+                        <div class="mt-1 font-mono text-xs text-slate-500" x-text="item.phone"></div>
+                      </div>
+                      <div class="flex gap-2 text-xs text-slate-600">
+                        <span x-show="item.has_resume" class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700">有简历</span>
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1 font-mono tabular-nums" x-text="formatDateTime(item.created_at)"></span>
+                      </div>
+                    </div>
+                  </button>
+                </template>
+              </div>
+            </section>
+
+            <section
+              x-show="adminCompactPanelVisible('candidates', 'create')"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
+              <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建候选人</h2>
+              <div class="mt-4 space-y-4">
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">姓名</span>
+                  <input x-model="candidateForm.name" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="张三" />
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">手机号</span>
+                  <input x-model="candidateForm.phone" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="13800138000" />
+                </label>
+                <button @click="createCandidate" type="button" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
+                  <span class="material-symbols-rounded text-base">person_add</span>
+                  创建候选人
+                </button>
+              </div>
+
+              <div class="mt-8 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div class="text-sm font-semibold text-slate-900">从简历直接入库</div>
+                    <p class="mt-1 text-sm leading-6 text-slate-600">选择简历后，系统会自动解析手机号并创建或更新候选人。</p>
+                  </div>
+                  <button
+                    @click="openCandidateResumeUploadPicker"
+                    type="button"
+                    :disabled="candidateResumeUploadState.busy"
+                    class="inline-flex w-auto shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <span
+                      class="material-symbols-rounded text-base"
+                      :class="candidateResumeUploadState.busy ? 'animate-spin' : ''"
+                      x-text="candidateResumeUploadState.busy ? 'progress_activity' : 'upload_file'"
+                    ></span>
+                    <span x-text="candidateResumeUploadState.busy ? '解析中...' : '选择简历'"></span>
+                  </button>
+                </div>
+                <input
+                  x-ref="candidateResumeUpload"
+                  @change="handleCandidateResumeUploadSelected($event)"
+                  type="file"
+                  accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
+                  class="sr-only"
+                />
+                <div class="mt-4 rounded-2xl border px-4 py-3" :style="resumeStatePanelStyle(candidateResumeUploadState.phase)">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">当前状态</div>
+                    <span
+                      class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                      :style="resumeStateBadgeStyle(candidateResumeUploadState.phase)"
+                      x-text="resumeStateLabel(candidateResumeUploadState.phase)"
+                    ></span>
+                  </div>
+                  <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                    <div class="min-w-0">
+                      <div class="text-sm font-medium text-slate-700" x-text="candidateResumeUploadState.message"></div>
+                      <div class="mt-2 break-all text-xs leading-5 text-slate-500">
+                        <span class="font-semibold text-slate-600">本次文件：</span>
+                        <span x-text="candidateResumeUploadState.fileName || '未选择文件'"></span>
+                      </div>
+                      <div x-show="candidateResumeUploadState.created !== null" class="mt-2 text-xs leading-5 text-slate-500">
+                        <span class="font-semibold text-slate-600">处理结果：</span>
+                        <span x-text="candidateResumeUploadState.created ? '已创建候选人' : '已更新候选人'"></span>
+                        <span x-show="candidateResumeUploadState.candidateName" x-text="' · ' + candidateResumeUploadState.candidateName"></span>
+                      </div>
+                      <p x-show="candidateResumeUploadState.error" class="mt-2 text-xs leading-5 text-rose-600" x-text="candidateResumeUploadState.error"></p>
+                    </div>
+                    <div class="rounded-full border border-white/80 bg-white/85 px-3 py-1.5 text-xs font-medium text-slate-500">
+                      支持 PDF / DOCX / 图片
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>

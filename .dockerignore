@@ -1,0 +1,16 @@
+.git
+.github
+.venv
+.vscode
+.pytest_cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.env
+tmp/
+tests/
+img/
+storage/
+static/node_modules/

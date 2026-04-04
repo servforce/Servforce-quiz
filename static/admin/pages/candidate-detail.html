@@ -1,0 +1,346 @@
+<div x-show="route.name === 'candidate-detail'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+            <div
+              x-show="shouldShowAdminCompactTabs('candidate-detail')"
+              x-cloak
+              data-admin-compact-tabs="candidate-detail"
+              class="hidden admin-compact-tabs md:block xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="候选人详情内容切换">
+                <template x-for="tab in adminCompactTabs('candidate-detail')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('candidate-detail', tab.id)"
+                    :class="adminCompactTab('candidate-detail') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('candidate-detail') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('candidate-detail', 'profile')"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h2 class="text-2xl font-semibold tracking-[-0.03em] text-slate-900" x-text="candidateDetail.candidate?.name"></h2>
+                    <span class="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700" x-text="'#' + (candidateDetail.candidate?.id || '')"></span>
+                  </div>
+                  <div class="mt-2 font-mono text-sm text-slate-500" x-text="candidateDetail.candidate?.phone"></div>
+                </div>
+                <button @click="deleteCandidate" type="button" class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-100">
+                  删除候选人
+                </button>
+              </div>
+
+              <div class="mt-5 grid gap-4 lg:grid-cols-2">
+                <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">教育</div>
+                  <div class="mt-3 divide-y divide-blue-100/80 text-sm text-slate-700">
+                    <template x-for="edu in candidateDetail.profile?.educations || []" :key="edu.school + edu.start">
+                      <div class="py-3 first:pt-0 last:pb-0">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                          <div class="font-semibold text-slate-900" x-text="edu.school || '-'"></div>
+                          <div class="font-mono text-[11px] text-slate-500" x-text="[edu.start, edu.end].filter(Boolean).join(' - ')"></div>
+                        </div>
+                        <div class="mt-1 text-xs text-slate-500">
+                          <span x-text="edu.degree || '-'"></span>
+                          <span x-text="edu.major ? ' · ' + edu.major : ''"></span>
+                          <span x-text="edu.school_tag_label ? ' · ' + edu.school_tag_label : ''"></span>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="text-xs uppercase tracking-[0.18em] text-slate-500">答题记录</div>
+                  <div class="mt-3 divide-y divide-blue-100/80 text-sm text-slate-700">
+                    <template x-for="attempt in candidateDetail.profile?.attempt_results || []" :key="attempt.archive_name || attempt.token || attempt.no">
+                      <button type="button" @click="go('/admin/attempt/' + attempt.token)" class="flex w-full items-center justify-between py-3 text-left transition hover:bg-blue-50/50 first:pt-0 last:pb-0">
+                        <div>
+                          <div class="font-semibold text-slate-900" x-text="attempt.quiz_name"></div>
+                          <div class="mt-1 text-xs text-slate-500" x-text="attempt.end_at"></div>
+                        </div>
+                        <div class="text-sm font-semibold text-blue-700" x-text="attempt.score_display || '-'"></div>
+                      </button>
+                    </template>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-5">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div class="text-xs uppercase tracking-[0.18em] text-slate-500">简历解析结果</div>
+                    <p class="mt-1 text-sm leading-6 text-slate-600">使用结构化视图展示解析结果，默认隐藏原始 JSON。</p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span
+                      class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                      :style="candidateResumeStatusBadgeStyle()"
+                      x-text="candidateResumeStatusMeta().label"
+                    ></span>
+                    <span
+                      x-show="candidateResumeMethodLabel()"
+                      class="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700"
+                      x-text="candidateResumeMethodLabel()"
+                    ></span>
+                    <template x-for="item in candidateResumeConfidenceItems()" :key="item.label">
+                      <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                        <span x-text="item.label"></span>
+                        <span class="ml-1 font-semibold text-slate-800" x-text="item.value"></span>
+                      </span>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="mt-3 rounded-2xl border border-slate-200 bg-slate-50/90">
+                  <dl class="grid divide-slate-200 sm:grid-cols-2 xl:grid-cols-4 xl:divide-x">
+                    <div class="px-4 py-3">
+                      <dt class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">最近解析</dt>
+                      <dd class="mt-1 text-sm text-slate-700" x-text="formatDateTime(candidateDetail.candidate?.resume_parsed_at) || '暂无记录'"></dd>
+                    </div>
+                    <div class="border-t border-slate-200 px-4 py-3 sm:border-t-0 sm:border-l xl:border-l-0">
+                      <dt class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">当前简历</dt>
+                      <dd class="mt-1 break-all text-sm text-slate-700" x-text="candidateDetail.candidate?.resume_filename || '暂无简历'"></dd>
+                    </div>
+                    <div class="border-t border-slate-200 px-4 py-3 xl:border-l">
+                      <dt class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">候选人</dt>
+                      <dd class="mt-1 text-sm text-slate-700" x-text="candidateDetail.candidate?.name || '-'"></dd>
+                    </div>
+                    <div class="border-t border-slate-200 px-4 py-3 sm:border-l xl:border-l">
+                      <dt class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">手机号</dt>
+                      <dd class="mt-1 font-mono text-sm text-slate-700" x-text="candidateDetail.candidate?.phone || '-'"></dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div x-show="candidateResumeError()" class="mt-3 rounded-2xl border border-rose-200 bg-rose-50/90 px-4 py-3">
+                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700">错误信息</div>
+                  <p class="mt-1 text-sm leading-6 text-rose-700" x-text="candidateResumeError()"></p>
+                </div>
+
+                <div x-show="candidateResumeHasStructuredContent()" class="mt-4 space-y-3">
+                  <section x-show="candidateResumeSummary()" class="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">摘要</div>
+                    <p class="mt-2 text-sm leading-6 text-slate-700" x-text="candidateResumeSummary()"></p>
+                  </section>
+
+                  <section x-show="candidateResumeBasicFacts().length" class="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">基础信息</div>
+                    <dl class="mt-2 divide-y divide-slate-200">
+                      <template x-for="item in candidateResumeBasicFacts()" :key="item.label">
+                        <div class="grid gap-1 py-2 sm:grid-cols-[7rem_1fr] sm:items-start sm:gap-3">
+                          <dt class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500" x-text="item.label"></dt>
+                          <dd class="text-sm text-slate-800" :class="item.mono ? 'font-mono' : ''" x-text="item.value"></dd>
+                        </div>
+                      </template>
+                    </dl>
+                  </section>
+
+                  <section x-show="candidateResumeEducations().length" class="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">教育经历</div>
+                    <div class="mt-2 divide-y divide-slate-200">
+                      <template x-for="edu in candidateResumeEducations()" :key="edu.school + edu.start + edu.end">
+                        <article class="py-3 first:pt-0 last:pb-0">
+                          <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="text-sm font-semibold text-slate-900" x-text="edu.school || '-'"></div>
+                            <div class="font-mono text-[11px] text-slate-500" x-text="[edu.start, edu.end].filter(Boolean).join(' - ')"></div>
+                          </div>
+                          <div class="mt-1 text-xs text-slate-500">
+                            <span x-text="edu.degree || '-'"></span>
+                            <span x-text="edu.major ? ' · ' + edu.major : ''"></span>
+                            <span x-text="edu.school_tag_label ? ' · ' + edu.school_tag_label : ''"></span>
+                          </div>
+                        </article>
+                      </template>
+                    </div>
+                  </section>
+
+                  <section x-show="candidateResumeTags('skills').length" class="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">技能</div>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                      <template x-for="item in candidateResumeTags('skills')" :key="item">
+                        <span class="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700" x-text="item"></span>
+                      </template>
+                    </div>
+                  </section>
+
+                  <section x-show="candidateResumeEnglishItems().length" class="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">英语能力</div>
+                    <dl class="mt-2 divide-y divide-slate-200">
+                      <template x-for="item in candidateResumeEnglishItems()" :key="item.label">
+                        <div class="grid gap-1 py-2 sm:grid-cols-[7rem_1fr] sm:items-start sm:gap-3">
+                          <dt class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500" x-text="item.label"></dt>
+                          <dd class="font-mono text-sm text-slate-800" x-text="item.value"></dd>
+                        </div>
+                      </template>
+                    </dl>
+                  </section>
+
+                  <section x-show="candidateResumeWorkExperiences().length" class="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">工作经历</div>
+                    <div class="mt-2 divide-y divide-slate-200">
+                      <template x-for="item in candidateResumeWorkExperiences()" :key="item.title + item.period">
+                        <article class="py-3 first:pt-0 last:pb-0">
+                          <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="text-sm font-semibold text-slate-900" x-text="item.title || '工作经历'"></div>
+                            <div x-show="item.period" class="font-mono text-[11px] text-slate-500" x-text="item.period"></div>
+                          </div>
+                          <ul x-show="item.bullets?.length" class="mt-2 list-disc space-y-1 pl-4 text-sm leading-6 text-slate-700">
+                            <template x-for="bullet in item.bullets" :key="bullet">
+                              <li x-text="bullet"></li>
+                            </template>
+                          </ul>
+                        </article>
+                      </template>
+                    </div>
+                  </section>
+
+                  <section x-show="candidateResumeProjects().length" class="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">项目经历</div>
+                    <div class="mt-2 divide-y divide-slate-200">
+                      <template x-for="item in candidateResumeProjects()" :key="item.title + item.period">
+                        <article class="py-3 first:pt-0 last:pb-0">
+                          <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="text-sm font-semibold text-slate-900" x-text="item.title || '项目经历'"></div>
+                            <div x-show="item.period" class="font-mono text-[11px] text-slate-500" x-text="item.period"></div>
+                          </div>
+                          <ul x-show="item.bullets?.length" class="mt-2 list-disc space-y-1 pl-4 text-sm leading-6 text-slate-700">
+                            <template x-for="bullet in item.bullets" :key="bullet">
+                              <li x-text="bullet"></li>
+                            </template>
+                          </ul>
+                        </article>
+                      </template>
+                    </div>
+                  </section>
+
+                  <section x-show="candidateResumeCollectionGroups().length" class="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">奖项 / 证书 / 发表</div>
+                    <div class="mt-2 divide-y divide-slate-200">
+                      <template x-for="group in candidateResumeCollectionGroups()" :key="group.key">
+                        <div class="py-3 first:pt-0 last:pb-0">
+                          <div class="text-xs font-semibold text-slate-700" x-text="group.label"></div>
+                          <ul class="mt-2 space-y-1 text-sm leading-6 text-slate-700">
+                            <template x-for="item in group.items" :key="item">
+                              <li x-text="item"></li>
+                            </template>
+                          </ul>
+                        </div>
+                      </template>
+                    </div>
+                  </section>
+
+                  <section x-show="candidateResumeAdminSummaries().length" class="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">管理员评价摘要</div>
+                    <div class="mt-2 divide-y divide-slate-200">
+                      <template x-for="item in candidateResumeAdminSummaries()" :key="item.label + item.meta + item.text">
+                        <article class="py-3 first:pt-0 last:pb-0">
+                          <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div class="text-sm font-semibold text-slate-900" x-text="item.label"></div>
+                            <div x-show="item.meta" class="text-[11px] text-slate-500" x-text="item.meta"></div>
+                          </div>
+                          <p class="mt-2 text-sm leading-6 text-slate-700" x-text="item.text"></p>
+                        </article>
+                      </template>
+                    </div>
+                  </section>
+                </div>
+
+                <div x-show="!candidateResumeHasStructuredContent() && !candidateResumeError()" class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-4 text-sm text-slate-500">
+                  本次解析未生成可展示的结构化内容。
+                </div>
+
+                <details class="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                  <summary class="cursor-pointer text-sm font-semibold text-slate-700">查看原始解析结果</summary>
+                  <pre class="mt-3 max-h-[360px] overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-200 bg-slate-950 p-4 text-xs leading-6 text-slate-100" x-text="pretty(candidateDetail.resume_parsed || {})"></pre>
+                </details>
+              </div>
+            </section>
+
+            <section x-show="adminCompactPanelVisible('candidate-detail', 'actions')" class="space-y-4">
+              <div class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+                <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">管理员评价</h2>
+                <textarea x-model="candidateEvaluation" class="mt-4 h-44 w-full rounded-lg border border-blue-100 bg-white px-4 py-4 text-sm leading-7 outline-none focus:border-blue-300" placeholder="记录你的评估结论"></textarea>
+                <button @click="saveCandidateEvaluation" type="button" class="mt-4 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">保存评价</button>
+              </div>
+
+              <div class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl">
+                <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">简历文件</h2>
+                <div class="mt-4 flex flex-col gap-3">
+                  <button @click="downloadCandidateResume" type="button" class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100">下载当前简历</button>
+                  <div class="rounded-2xl border px-4 py-4" :style="resumeStatePanelStyle(candidateResumeReparseState.phase)">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">当前状态</div>
+                      <span
+                        class="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+                        :style="resumeStateBadgeStyle(candidateResumeReparseState.phase)"
+                        x-text="resumeStateLabel(candidateResumeReparseState.phase)"
+                      ></span>
+                    </div>
+                    <dl class="mt-3 divide-y divide-slate-200 rounded-2xl border border-white/80 bg-white/60">
+                      <div class="grid gap-1 px-4 py-3 sm:grid-cols-[7rem_1fr] sm:items-start sm:gap-3">
+                        <dt class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">当前简历</dt>
+                        <dd class="min-w-0 break-all text-sm text-slate-700" x-text="candidateDetail.candidate?.resume_filename || '暂无简历'"></dd>
+                      </div>
+                      <div class="grid gap-1 px-4 py-3 sm:grid-cols-[7rem_1fr] sm:items-start sm:gap-3">
+                        <dt class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">最近解析</dt>
+                        <dd class="text-sm text-slate-700" x-text="formatDateTime(candidateDetail.candidate?.resume_parsed_at) || '暂无记录'"></dd>
+                      </div>
+                    </dl>
+                    <div class="mt-3 text-sm leading-6 text-slate-700" x-text="candidateResumeReparseState.message"></div>
+                    <div x-show="candidateResumeReparseState.fileName" class="mt-2 break-all text-xs leading-5 text-slate-500">
+                      <span class="font-semibold text-slate-600">已选择：</span>
+                      <span x-text="candidateResumeReparseState.fileName"></span>
+                    </div>
+                    <p x-show="candidateResumeReparseState.error" class="mt-2 text-xs leading-5 text-rose-600" x-text="candidateResumeReparseState.error"></p>
+                    <div x-show="candidateResumeReparseState.phase === 'confirm'" class="mt-4 border-l-4 border-amber-300 bg-amber-50/80 px-4 py-3">
+                      <div class="text-sm font-semibold text-amber-900">确认替换这份简历？</div>
+                      <p class="mt-1 text-sm leading-6 text-amber-800">确认后会覆盖当前简历并重算解析结果，当前简历文件会被新文件替换。</p>
+                      <div class="mt-3 flex flex-wrap gap-2">
+                        <button
+                          @click="cancelCandidateResumeReparse"
+                          type="button"
+                          class="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                        >
+                          取消
+                        </button>
+                        <button
+                          @click="confirmCandidateResumeReparse"
+                          type="button"
+                          class="rounded-lg border border-emerald-200 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                        >
+                          确认替换
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <input
+                    x-ref="candidateResumeReparse"
+                    @change="handleCandidateResumeReparseSelected($event)"
+                    type="file"
+                    accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff"
+                    class="sr-only"
+                  />
+                  <button
+                    @click="openCandidateResumeReparsePicker"
+                    type="button"
+                    :disabled="candidateResumeReparseState.busy"
+                    class="inline-flex w-auto shrink-0 items-center justify-center gap-2 self-start whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <span
+                      class="material-symbols-rounded text-base"
+                      :class="candidateResumeReparseState.busy ? 'animate-spin' : ''"
+                      x-text="candidateResumeReparseState.busy ? 'progress_activity' : 'upload_file'"
+                    ></span>
+                    <span x-text="candidateResumeReparseState.busy ? '重新解析中...' : '选择新简历'"></span>
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>

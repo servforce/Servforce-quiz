@@ -94,6 +94,25 @@ def test_llm_client_uses_openai_env_vars(monkeypatch):
     assert client._captured["request"]["input"][0]["content"][0]["type"] == "input_text"
 
 
+def test_llm_json_uses_llm_timeout_json_env(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("OPENAI_MODEL", "demo-model")
+    monkeypatch.setenv("LLM_TIMEOUT_JSON", "123")
+
+    llm = _reload_llm_modules()
+    client = _FakeOpenAI(api_key="test-key", base_url="https://example.test/v1", max_retries=2)
+    monkeypatch.setattr(llm, "_get_openai_client", lambda: client)
+
+    text = llm.call_llm_json("grade this answer")
+
+    assert text == "ok"
+    timeout = client._captured["options"]["timeout"]
+    assert timeout.connect == 20.0
+    assert timeout.read == 123.0
+    assert timeout.write == 123.0
+
+
 def test_llm_client_missing_openai_api_key_points_to_new_name(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://example.test/v1")

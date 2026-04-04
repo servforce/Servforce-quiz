@@ -212,9 +212,32 @@
 
 列出任务。
 
+返回的任务项当前至少包括：
+
+- `id`
+- `kind`
+- `status`
+- `payload`
+- `source`
+- `dedupe_key`
+- `attempts`
+- `error`
+- `result`
+- `worker_name`
+- `created_at`
+- `updated_at`
+- `started_at`
+- `lease_expires_at`
+- `finished_at`
+
 ### `POST /api/admin/jobs`
 
 投递任务。
+
+说明：
+
+- 这是通用后台/运维入口
+- `grade_attempt` 通常不会由前端手工调用，而是由公开提交流程自动幂等投递
 
 请求：
 

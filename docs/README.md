@@ -15,6 +15,7 @@
 - [后端模块分工](architecture/backend-modules.md)
 - [数据模型与存储](architecture/data-model.md)
 - [核心请求流程](architecture/request-flows.md)
+- [前端 SPA 结构](architecture/frontend-spa.md)
 
 ## 配置与参考
 
@@ -28,8 +29,9 @@
 - [MD-Quiz Skill](../skills/md-quiz/SKILL.md)
 - [Quiz Repo Spec Skill](../skills/quiz-repo-spec/SKILL.md)
 - [QML Authoring Skill](../skills/qml-authoring/SKILL.md)
-- [Quiz Skills 维护清单](../skills/quiz-workflow/references/maintenance-checklist.md)
+- [Quiz Repo Sync 排障](../skills/quiz-repo-spec/references/sync-troubleshooting.md)
 - [Quiz 仓库规范正文](../skills/quiz-repo-spec/references/repo-contract.md)
+- [QML Parser 契约事实](../skills/qml-authoring/references/parser-truth.md)
 - [QML 详细规范](../skills/qml-authoring/references/qml-spec.md)
 
 ## UI
@@ -51,5 +53,5 @@
 
 ## 说明
 
-- `docs/architecture/` 记录当前稳定边界与后续整理方向。
+- `docs/architecture/` 只记录当前代码能够证明的稳定边界与实现事实。
 - 当前正式前端入口为 `static/admin/` 与 `static/public/` 两套 Alpine SPA。

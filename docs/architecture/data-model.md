@@ -2,19 +2,22 @@
 
 ## 业务概念
 
-后续正式迁移时，以下业务概念保持不变：
+当前代码中的核心业务概念包括：
 
 - `candidate`
+- `candidate_resume`
 - `quiz_definition`
+- `quiz_version`
 - `assignment`
-- `attempt`
-- `archive/result`
+- `quiz_paper`
+- `quiz_archive`
 - `system_metric`
 - `operation_log`
 - `runtime_config`
 - `job`
+- `process heartbeat`
 
-## 当前新架构已落地的存储
+## 当前运行时配置与状态存储
 
 ### `runtime_config`
 
@@ -27,16 +30,26 @@
 
 ### `job`
 
-当前字段包括：
+当前任务记录保存在 `runtime_job` 表。核心字段包括：
 
 - `id`
 - `kind`
 - `status`
 - `payload`
 - `source`
+- `dedupe_key`
 - `attempts`
+- `error`
+- `result`
 - `worker_name`
-- `created_at / updated_at / started_at / finished_at`
+- `created_at / updated_at / started_at / lease_expires_at / finished_at`
+
+当前任务模型约束：
+
+- `status` 目前只有 `pending / running / done / failed`
+- `grade_attempt` 使用 `dedupe_key=grade_attempt:<token>`
+- 同一 `dedupe_key` 在 `pending / running` 状态下只能有一条活跃记录
+- `running` 且 lease 过期的任务可以被 Worker 回收重跑
 
 ### `process heartbeat`
 
@@ -50,17 +63,19 @@
 
 ## 当前数据库表
 
-运行时状态现在统一保存在 PostgreSQL 中：
+运行时状态统一保存在 PostgreSQL 中：
 
 - `runtime_kv`
   - 保存 `runtime_config`
-  - 保存测验仓库同步状态、运行时迁移标记等键值数据
+  - 保存测验仓库绑定、同步状态、运行时迁移标记等键值数据
 - `runtime_daily_metric`
   - 保存系统状态页按日聚合指标与告警快照
 - `runtime_job`
   - 保存后台任务队列、执行状态与结果
 - `process_heartbeat`
   - 保存 API / Worker / Scheduler 心跳
+
+业务主数据同样已经落在 PostgreSQL，对应表结构以 `backend/md_quiz/storage/db.py:init_db()` 为准。
 
 ## 迁移说明
 

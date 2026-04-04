@@ -1,8 +1,6 @@
 # MD Quiz
 
-`md-quiz` 是一套 `code-first`、`agent-ready`、面向真实业务运行的`agent-native`评估系统。`md-quiz`不把测评理解成“做一张表、发一个链接、收一份答案”，而是把整个过程当成一套可以被定义、执行、观测、审计和持续演进的运行时：题库有版本，流程有边界，结果能回看，系统还能继续学习和扩展。
-
-题目并不躲在后台表单里，而是和代码一样存在于仓库中；判卷并不只是静态规则，而是可以接入 LLM 的结构化推理；后台并不是唯一入口，MCP 把核心能力开放给智能体；项目知识也不只写在脑子里，而是沉淀进 `skills/`，变成可复用的维护能力。`md-quiz` 的价值不在于“会不会发题”，而在于它把内容、流程、智能和自动化收束成了一套有边界、有记忆、能协作的评估底座。
+`md-quiz` 是一套 `code-first`、`agent-ready`、持续演进的`agent-native`在线评估运行时。它把题库管理、候选人流程、答题执行、结果留档和后台运维放在同一套系统里，支持 Git 仓库维护题库、公开邀约、手机号短信验证、LLM 自动评分，以及后台和 MCP 两种接入方式。
 
 ![界面截图](img/readme-overview.png)
 
@@ -16,12 +14,13 @@
 ## 核心能力
 
 - 题库放在 Git 仓库里维护，`md-quiz-repo.yaml`、`quiz.md` 和 `assets/` 一起定义测验内容，适合评审、回滚和长期迭代
+- `quizzes/<quiz_id>/quiz.md` 使用 QML 编写；QML 是面向测验场景的 Markdown 扩展 DSL，用来描述题型、评分、计时和结构化判卷规则，详细格式见 [QML 测验格式](skills/qml-authoring/references/qml-spec.md)
 - 管理端支持仓库绑定、题库同步、版本浏览、候选人管理、邀约创建和结果回看
 - 候选人端支持定向邀约与公开邀约，内置手机号短信验证码校验，可按当前状态自动进入验证、简历、答题或完成阶段
 - 答题流程支持单题计时、整卷累计时长、超时自动跳题、自动交卷和跨会话重进控制
 - 结果支持客观题、主观题和 `traits` 量表；可接入 LLM 做判卷、结构化评分和简历解析
 - 系统同时暴露 REST API 和 `/mcp`，便于后台操作和自动化接入
-- 项目知识沉淀在 `docs/` 与 `skills/`，便于团队维护，也适合 agent 协作
+- 项目知识沉淀在 `docs/` 与 `skills/`；其中 `md-quiz` skill 可作为统一入口，用来出问卷、维护 `quiz.md` 和维护问卷仓库
 
 ## 典型流程
 
@@ -39,14 +38,21 @@
 - `Worker`：执行异步任务，例如测验仓库同步、判卷等后台工作
 - `Scheduler`：投递周期任务，例如指标同步
 
+默认 `docker compose` 部署为两个容器：
+
+- `db`：PostgreSQL
+- `app`：单个应用容器，内部同时托管 `API`、`Worker`、`Scheduler` 三个进程
+
 ### 对外入口
 
 - 管理端：`/admin`
-- 候选人端：`/p/*`、`/t/*`、`/resume/*`、`/quiz/*`、`/done/*`、`/a/*`
+- 候选人端：`/p/*`、`/t/*`、`/resume/*`、`/quiz/*`、`/exam/*`、`/done/*`、`/a/*`
 - REST API：`/api/admin/*`、`/api/public/*`、`/api/system/*`
 - MCP：`/mcp`
 
 更细的架构说明见 [docs/architecture/overview.md](docs/architecture/overview.md)。
+
+前端当前仍是 `static/admin/` 和 `static/public/` 两套 Alpine SPA；CSS 构建命令保持 `npm run build:css` 与 `npm run build:admin-css` 不变，内部源码目录已拆为 `pages` / `views` / `modules` / `shared`。
 
 ## 快速开始
 
@@ -56,7 +62,13 @@
 - Node.js 与 npm
 - PostgreSQL 16
 
-仓库自带本地数据库编排：
+仓库自带两容器编排：
+
+```bash
+docker compose up -d
+```
+
+如果你只需要本地数据库，应用继续在宿主机上通过 `devctl` 运行：
 
 ```bash
 docker compose up -d db
@@ -68,10 +80,13 @@ docker compose up -d db
 cp .env.example .env
 ```
 
-本地开发可优先使用仓库默认数据库：
+同一份 `.env` 同时给宿主机直跑和 `docker compose` 使用；其中 Compose 内的 `app` 容器会自动把 `DATABASE_URL` 覆盖成 `db:5432`。
+`db` 容器会直接读取 `.env` 里的 `POSTGRES_USER`、`POSTGRES_PASSWORD`、`POSTGRES_DB`；默认库名是 `md_quiz`。
+
+宿主机本地开发可优先使用仓库默认数据库：
 
 ```text
-postgresql+psycopg2://admin:pasword@127.0.0.1:5433/markdown_quiz
+postgresql+psycopg2://admin:pasword@127.0.0.1:5433/md_quiz
 ```
 
 如果你本地已经用旧配置初始化过 `pgdata`，仅修改 `docker-compose.yml` 不会自动重建数据库账号；需要删除旧 volume 后再重新执行 `docker compose up -d db`。
@@ -80,13 +95,6 @@ postgresql+psycopg2://admin:pasword@127.0.0.1:5433/markdown_quiz
 
 ```bash
 ./scripts/dev/install-deps.sh
-```
-
-也可以按需分别安装：
-
-```bash
-./scripts/dev/install-deps.sh python
-./scripts/dev/install-deps.sh node
 ```
 
 ### 3. 启动服务
@@ -135,12 +143,16 @@ postgresql+psycopg2://admin:pasword@127.0.0.1:5433/markdown_quiz
 - `OPENAI_MODEL`
 - `OPENAI_BASE_URL`
 
-用于自动判卷、简历解析等依赖 OpenAI-compatible 接口的能力。
+用于自动判卷、简历解析等依赖 OpenAI-compatible `Responses API` 的能力。
+
+当前实现边界：
+
+- 当前代码位于 `backend/md_quiz/services/llm_client.py`，实际调用的是 `client.responses.create(...)`。
+- 这意味着接入目标必须提供 OpenAI-compatible 的 `Responses API`。
 
 推荐服务商：
 
 - 火山引擎方舟：当前 `.env.example` 默认就是按方舟接入编写，适合作为国内部署的优先选项。官方文档提供了 `OpenAI` SDK + `Responses API` 的直接调用方式，`base_url` 可配置为 `https://ark.cn-beijing.volces.com/api/v3`。
-- OpenAI 官方：如果你希望直接对齐标准 `Responses API`，这是最直接的接入路径。本项目底层使用的是 OpenAI Python SDK，并通过 `responses.create(...)` 发起请求。
 
 接入路径：
 
@@ -152,27 +164,15 @@ postgresql+psycopg2://admin:pasword@127.0.0.1:5433/markdown_quiz
 OPENAI_API_KEY=<ARK_API_KEY>
 OPENAI_MODEL=<你的模型 ID>
 OPENAI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
-
-# OpenAI 官方
-OPENAI_API_KEY=<OPENAI_API_KEY>
-OPENAI_MODEL=<你的模型 ID>
-OPENAI_BASE_URL=https://api.openai.com/v1
 ```
 
 3. 重启服务后，通过简历解析、自动判卷或后台系统状态页验证接入是否生效。
-4. 如果要接入其它“OpenAI-compatible” 平台，先确认它支持 `Responses API`，而不是只兼容 `chat/completions`。
-
-当前实现边界：
-
-- 当前代码位于 `backend/md_quiz/services/llm_client.py`，实际调用的是 `client.responses.create(...)`。
-- 这意味着“只兼容 Chat Completions、不兼容 Responses”的平台不能直接接入。
-- 例如阿里云百炼官方文档明确提供 OpenAI 兼容接入，但当前公开示例主要围绕 `chat/completions`。如果要接入百炼，需要先确认目标模型与地域支持 `Responses API`；若不支持，则需要改造 LLM 客户端。这一点是根据官方文档和当前代码形态做出的判断。
+4. 如果要接入其它平台，先确认目标平台和目标模型支持 OpenAI-compatible 的 `Responses API`；若只兼容 `chat/completions`，当前实现不可直接使用。
 
 官方资料：
 
 - OpenAI Responses API：https://platform.openai.com/docs/api-reference/responses
 - 火山引擎方舟 OpenAI SDK / Responses API：https://www.volcengine.com/docs/82379/1338552
-- 阿里云百炼 OpenAI 兼容说明：https://help.aliyun.com/zh/model-studio/what-is-model-studio
 
 ### MCP 配置
 
@@ -194,11 +194,12 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 推荐服务商：
 
 - 阿里云号码认证服务（短信认证服务）：这是当前项目唯一可以直接免改代码接入的短信认证方案。现有实现已经固定对接阿里云 DYPNS / PNVS OpenAPI，并调用 `SendSmsVerifyCode` 与 `CheckSmsVerifyCode` 完成验证码发送与校验。
+- 阿里云 PNVS / DYPNS 认证简便，流量包购买方便。常见替代方案的国内短信接入流程更重。以腾讯云、华为云当前官方文档为例，通常都要求先做实名资质报备，并提交企业主体、营业执照、法人/经办人或授权委托等材料；这类流程更偏企业主体，前置审核更多，落地成本也更高。
 
 接入路径：
 
 1. 在阿里云开通号码认证服务中的“短信认证服务”。
-2. 进入控制台配置短信签名与模板。阿里云官方文档推荐优先使用平台赠送的签名和模板，以减少审核和报备成本，并提升发送成功率。
+2. 进入控制台选择短信签名与模板。优先使用平台赠送的签名和模板，这也是阿里云官方推荐的路径：不需要自己再走额外的资质、签名和模板审核，发送成功率也更稳定。
 3. 在 `.env` 中至少配置以下变量：
 
 ```text
@@ -211,15 +212,13 @@ ALIYUN_PNVS_TEMPLATE_CODE=<短信模板 ID>
 4. 如有需要，再补充 `ALIYUN_PNVS_REGION_ID`、`ALIYUN_PNVS_TEMPLATE_PARAM`、`ALIYUN_PNVS_VALID_TIME`、`ALIYUN_PNVS_CASE_AUTH_POLICY` 等高级参数。
 5. 重启服务后，通过候选人验证流程或公开邀约验证流程触发短信发送与验证码校验。
 
-当前实现边界：
-
-- 当前短信接入代码位于 `backend/md_quiz/services/aliyun_dypns.py`。
-- 如果要换成腾讯云、华为云或自建短信网关，现有代码不能只改环境变量直接切换，需要新增服务适配层。
-
 官方资料：
 
 - 阿里云短信认证服务说明：https://help.aliyun.com/zh/pnvs/user-guide/sms-authentication-service/
 - 阿里云号码认证服务版本说明（含 `SendSmsVerifyCode` / `CheckSmsVerifyCode`）：https://help.aliyun.com/zh/pnvs/developer-reference/api-dypnsapi-2017-05-25-changeset
+- 阿里云短信认证服务新手指引（个人/企业、免申请资质说明）：https://help.aliyun.com/zh/pnvs/getting-started/sms-authentication-service-novice-guide
+- 腾讯云短信实名资质管理：https://cloud.tencent.com/document/product/382/108275
+- 华为云申请国内短信资质：https://support.huaweicloud.com/usermanual-msgsms/sms_03_1008.html
 
 完整变量说明见 [docs/reference/configuration.md](docs/reference/configuration.md)。
 
@@ -252,3 +251,9 @@ ALIYUN_PNVS_TEMPLATE_CODE=<短信模板 ID>
 - [REST API 约定](docs/reference/api.md)
 - [MCP 能力说明](docs/reference/mcp.md)
 - [UI 主题覆盖](docs/ui/theme.md)
+
+## License
+
+本项目采用 [Apache License 2.0](LICENSE) 开源协议发布。
+
+你可以在保留许可证与版权声明的前提下使用、修改和分发本项目；完整条款见根目录 [LICENSE](LICENSE)。

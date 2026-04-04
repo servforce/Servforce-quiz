@@ -1,0 +1,17 @@
+<section x-show="viewCard === 'done'" class="mx-auto flex min-h-[calc(100vh-8rem)] max-w-4xl flex-col justify-center py-4 sm:py-8">
+              <div class="mx-auto max-w-3xl space-y-5">
+                <div class="text-xs uppercase tracking-[0.28em] text-cyan-200/80">作答完成</div>
+                <h1 class="text-4xl font-medium tracking-[-0.04em] text-white sm:text-5xl">辛苦了，答题已结束</h1>
+                <p class="text-base leading-8 text-slate-200/88" x-text="doneMessage()"></p>
+                <div
+                  x-show="state.quiz?.spec?.end_image"
+                  class="overflow-hidden rounded-lg border border-white/10 bg-white/6"
+                >
+                  <img
+                    :src="state.quiz?.spec?.end_image || ''"
+                    alt="测验结束图"
+                    class="block h-56 w-full object-cover object-center sm:h-72"
+                  />
+                </div>
+              </div>
+            </section>

@@ -1,0 +1,14 @@
+@layer components {
+  .admin-shell {
+    align-items: flex-start;
+  }
+
+  .admin-shell__main {
+    min-width: 0;
+  }
+
+  .admin-surface {
+    position: relative;
+    min-width: 0;
+  }
+}

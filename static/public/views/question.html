@@ -1,0 +1,90 @@
+<section
+              x-show="viewCard === 'question'"
+              class="mx-auto max-w-4xl space-y-6 py-2 sm:py-4"
+              @touchstart="onQuestionTouchStart($event)"
+              @touchend="onQuestionTouchEnd($event)"
+            >
+              <div class="rounded-xl border border-white/10 bg-slate-950/58 px-5 py-5 sm:px-6 sm:py-6">
+                <div class="mb-4">
+                  <div class="quiz-rich public-rich min-w-0 text-base leading-8 text-slate-100/92 [&_p]:m-0 [&_p]:leading-8" x-html="currentQuestion()?.stem_html || ''"></div>
+                </div>
+
+                <div class="mt-6 space-y-3" x-show="currentQuestion()?.type === 'single'">
+                  <template x-for="option in currentQuestion()?.options || []" :key="option.key">
+                    <button
+                      type="button"
+                      @click="selectSingleOption(option.key)"
+                      class="flex w-full items-center gap-3 rounded-lg border px-4 py-4 text-left text-sm transition"
+                      :class="isSingleSelected(option.key) ? 'border-emerald-300/50 bg-emerald-400/10 text-white' : 'border-white/10 bg-white/5 text-slate-200 hover:border-white/20 hover:bg-white/8'"
+                    >
+                      <span
+                        class="inline-flex h-8 min-w-8 items-center justify-center rounded-full border px-1.5 text-[13px] leading-none font-semibold tracking-[0.08em]"
+                        :class="optionBadgeClasses(option.key, isSingleSelected(option.key))"
+                      >
+                        <span class="block leading-none" x-text="option.key"></span>
+                      </span>
+                      <div class="quiz-rich public-rich min-w-0 flex-1 text-sm leading-7 text-slate-200/92" x-html="option.text_html || ''"></div>
+                    </button>
+                  </template>
+                </div>
+
+                <div class="mt-6 space-y-3" x-show="currentQuestion()?.type === 'multiple'">
+                  <template x-for="option in currentQuestion()?.options || []" :key="option.key">
+                    <button
+                      type="button"
+                      @click="toggleMultipleOption(option.key)"
+                      class="flex w-full items-center gap-3 rounded-lg border px-4 py-4 text-left text-sm transition"
+                      :class="isMultipleSelected(option.key) ? 'border-emerald-300/50 bg-emerald-400/10 text-white' : 'border-white/10 bg-white/5 text-slate-200 hover:border-white/20 hover:bg-white/8'"
+                    >
+                      <span
+                        class="inline-flex h-8 min-w-8 items-center justify-center rounded-full border px-1.5 text-[13px] leading-none font-semibold tracking-[0.08em]"
+                        :class="optionBadgeClasses(option.key, isMultipleSelected(option.key))"
+                      >
+                        <span class="block leading-none" x-text="option.key"></span>
+                      </span>
+                      <div class="quiz-rich public-rich min-w-0 flex-1 text-sm leading-7 text-slate-200/92" x-html="option.text_html || ''"></div>
+                    </button>
+                  </template>
+                </div>
+
+                <div x-show="currentQuestion()?.type === 'short'" class="mt-4 overflow-hidden rounded-lg border border-white/10 bg-white/6">
+                  <textarea
+                    x-model="textDraft"
+                    @input="onTextInput"
+                    class="block h-64 w-full rounded-none border-0 bg-transparent px-4 py-4 text-sm leading-7 text-white outline-none placeholder:text-slate-500"
+                    placeholder="输入你的答案"
+                  ></textarea>
+                </div>
+              </div>
+
+              <div class="mt-6 flex flex-wrap items-center justify-between gap-4">
+                <div class="text-sm text-slate-300">
+                  <div x-show="currentQuestion()?.type === 'single'">选择选项后会自动进入下一题。</div>
+                  <div x-show="currentQuestion()?.type === 'multiple'">选择完成后点击“下一题”，或上滑卡片进入下一题。</div>
+                  <div x-show="currentQuestion()?.type === 'short'">简答完成后点击“完成本题”，或上滑卡片进入下一题。</div>
+                  <div class="mt-2 text-xs uppercase tracking-[0.22em] text-slate-500" x-text="autosaveText()"></div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <button
+                    x-show="currentQuestion()?.type !== 'single' && !isLastQuestion()"
+                    type="button"
+                    @click="goNext"
+                    :disabled="!canAdvanceCurrent() || actionBusy"
+                    class="rounded-md px-5 py-3 text-sm font-semibold transition"
+                    :class="canAdvanceCurrent() && !actionBusy ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300' : 'cursor-not-allowed border border-white/10 bg-white/6 text-slate-400'"
+                    x-text="currentQuestion()?.type === 'short' ? '完成本题' : '下一题'"
+                  >
+                  </button>
+                  <button
+                    x-show="currentQuestion()?.type !== 'single' && isLastQuestion()"
+                    type="button"
+                    @click="submitLastQuestion"
+                    :disabled="!canAdvanceCurrent() || actionBusy"
+                    class="rounded-md px-5 py-3 text-sm font-semibold transition"
+                    :class="canAdvanceCurrent() && !actionBusy ? 'bg-emerald-400 text-slate-950 hover:bg-emerald-300' : 'cursor-not-allowed border border-white/10 bg-white/6 text-slate-400'"
+                    x-text="currentQuestion()?.type === 'short' ? '完成并提交' : '提交测验'"
+                  >
+                  </button>
+                </div>
+              </div>
+            </section>

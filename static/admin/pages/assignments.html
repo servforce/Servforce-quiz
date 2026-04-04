@@ -1,0 +1,265 @@
+<div x-show="route.name === 'assignments'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+            <div
+              x-show="shouldShowAdminCompactTabs('assignments')"
+              x-cloak
+              data-admin-compact-tabs="assignments"
+              class="hidden admin-compact-tabs md:block xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="邀约与答题内容切换">
+                <template x-for="tab in adminCompactTabs('assignments')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('assignments', tab.id)"
+                    :class="adminCompactTab('assignments') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('assignments') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('assignments', 'list')"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
+              <div class="flex flex-col gap-4">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">邀约与答题状态</h2>
+                    <p class="mt-1 text-sm text-slate-600">查看当前答题实例、状态和得分。</p>
+                  </div>
+                  <div class="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                    未处理 <span class="tabular-nums" x-text="unhandledAssignmentCount()"></span>
+                  </div>
+                </div>
+                <div class="grid gap-3 lg:grid-cols-3">
+                  <label class="block">
+                    <span class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">搜索姓名</span>
+                    <input x-model="filters.assignments.q" @input="scheduleAssignmentsReload" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="姓名 / 手机号 / token" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">开始时间</span>
+                    <input x-model="filters.assignments.start_from" @change="loadAssignments" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">结束时间</span>
+                    <input x-model="filters.assignments.end_to" @change="loadAssignments" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" />
+                  </label>
+                </div>
+              </div>
+              <div class="mt-5 grid gap-3">
+                <template x-for="item in assignments.items" :key="item.attempt_id">
+                  <div
+                    @click="go('/admin/attempt/' + item.token)"
+                    @keydown.enter.prevent="go('/admin/attempt/' + item.token)"
+                    tabindex="0"
+                    role="button"
+                    class="assignment-card assignment-surface"
+                    :class="assignmentCardClass(item)"
+                  >
+                    <div class="min-w-0">
+                      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                        <div class="min-w-0 flex-1">
+                          <div class="text-lg font-semibold text-slate-900" x-text="item.candidate_name"></div>
+                          <div class="mt-1 font-mono text-xs text-slate-500" x-text="item.token"></div>
+                        </div>
+                        <div class="flex max-w-full flex-wrap items-center justify-end gap-2 sm:ml-auto sm:flex-nowrap">
+                          <div class="flex flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
+                            <span :class="assignmentSourceBadgeClass()" x-text="item.source_label"></span>
+                            <span :class="assignmentStatusBadgeClass(item)" x-text="item.status_label"></span>
+                            <span
+                              x-show="assignmentIgnoresTiming(item)"
+                              class="assignment-badge border-amber-200 bg-amber-50 text-amber-700"
+                            >已忽略计时</span>
+                            <span
+                              x-show="canToggleAssignmentHandling(item)"
+                              :class="assignmentHandlingBadgeClass(item)"
+                              x-text="assignmentHandlingLabel(item)"
+                            ></span>
+                          </div>
+                          <div class="assignment-action-group" role="group" aria-label="邀约操作">
+                            <button
+                              @click.stop="go('/admin/attempt/' + item.token)"
+                              type="button"
+                              :class="assignmentActionButtonClass('detail', item)"
+                            >查看详情</button>
+                            <button
+                              x-show="canToggleAssignmentHandling(item)"
+                              @click.stop="toggleAssignmentHandling(item)"
+                              type="button"
+                              :class="assignmentActionButtonClass('handling', item)"
+                              x-text="assignmentHandlingActionLabel(item)"
+                            ></button>
+                            <button
+                              x-show="canDeleteAssignment(item)"
+                              @click.stop="deleteAssignment(item)"
+                              type="button"
+                              :class="assignmentActionButtonClass('danger', item)"
+                            >删除邀约</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1" x-text="item.quiz_key"></span>
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1">得分 <strong x-text="item.score_display || '-'"></strong></span>
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1">开始 <strong x-text="formatDate(item.invite_start_date) || '-'"></strong></span>
+                        <span class="rounded-full bg-slate-100 px-2.5 py-1">结束 <strong x-text="formatDate(item.invite_end_date) || '-'"></strong></span>
+                      </div>
+                      <div x-show="assignmentHandledMeta(item)" class="mt-2 text-[11px] text-slate-500" x-text="'处理人：' + assignmentHandledMeta(item)"></div>
+                      <div class="mt-4 flex items-center gap-3 border-t border-slate-100 pt-3">
+                        <div class="min-w-0 flex-1">
+                          <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">邀约 URL</div>
+                          <div class="mt-1 flex flex-wrap items-center gap-2">
+                            <button @click.stop="copyAssignmentUrl(item)" type="button" class="block min-w-0 max-w-full font-mono text-left text-xs text-slate-700 underline decoration-dotted underline-offset-2 transition hover:text-blue-700">
+                              <span class="break-all" x-text="item.url || '-'"></span>
+                            </button>
+                            <button @click.stop="copyAssignmentUrl(item)" type="button" class="shrink-0 rounded-xl border border-blue-100 bg-white px-2.5 py-1 text-[11px] font-medium text-blue-700 transition hover:bg-blue-50">复制</button>
+                          </div>
+                        </div>
+                        <button @click.stop="copyAssignmentQr(item)" type="button" class="-mb-2 -mr-2 shrink-0 self-end overflow-hidden rounded-lg transition hover:opacity-85" title="点击复制二维码">
+                          <img :src="item.qr_url" alt="邀约二维码" class="h-16 w-16 rounded-xl object-cover" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+                <div x-show="!(assignments.items || []).length" class="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-10 text-center text-sm text-slate-500">
+                  当前筛选条件下没有邀约记录
+                </div>
+              </div>
+            </section>
+
+            <section
+              x-show="adminCompactPanelVisible('assignments', 'create')"
+              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+            >
+              <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建邀约</h2>
+              <div class="mt-4 space-y-4">
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">测验</span>
+                  <div class="relative" @click.outside="closeAssignmentSelect('quiz')">
+                    <div class="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-4 py-3 transition focus-within:border-blue-300">
+                      <input
+                        :value="assignmentSelectDisplayValue('quiz')"
+                        @focus="openAssignmentSelect('quiz')"
+                        @input="handleAssignmentSelectInput('quiz', $event)"
+                        type="text"
+                        class="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                        placeholder="请选择测验"
+                      />
+                      <button
+                        x-show="selectedAssignmentQuiz()"
+                        @click.stop="clearAssignmentQuiz()"
+                        type="button"
+                        class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                      >
+                        <span class="material-symbols-rounded text-base">close</span>
+                      </button>
+                      <button
+                        @click.stop="toggleAssignmentSelect('quiz')"
+                        type="button"
+                        class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100"
+                      >
+                        <span class="material-symbols-rounded text-base">expand_more</span>
+                      </button>
+                    </div>
+                    <div x-show="assignmentSelect.quiz.open" x-cloak class="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_24px_48px_rgba(15,23,42,0.14)]">
+                      <div class="max-h-72 overflow-auto">
+                        <template x-for="item in filteredAssignmentQuizzes()" :key="item.quiz_key">
+                          <button @click="selectAssignmentQuiz(item)" type="button" class="block w-full border-b border-slate-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-blue-50/50">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <span class="inline-flex max-w-full items-center rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                                <span class="truncate" x-text="item.title || item.quiz_key"></span>
+                              </span>
+                              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500" x-text="'预计 ' + (item.estimated_duration_minutes || 0) + ' 分钟'"></span>
+                            </div>
+                            <div class="mt-2 font-mono text-[11px] text-slate-500" x-text="item.quiz_key"></div>
+                          </button>
+                        </template>
+                        <div x-show="!filteredAssignmentQuizzes().length" class="px-4 py-6 text-center text-sm text-slate-500">未找到匹配测验</div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+                <label class="block">
+                  <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">候选人</span>
+                  <div class="relative" @click.outside="closeAssignmentSelect('candidate')">
+                    <div class="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-4 py-3 transition focus-within:border-blue-300">
+                      <input
+                        :value="assignmentSelectDisplayValue('candidate')"
+                        @focus="openAssignmentSelect('candidate')"
+                        @input="handleAssignmentSelectInput('candidate', $event)"
+                        type="text"
+                        class="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                        placeholder="请选择候选人"
+                      />
+                      <button
+                        x-show="selectedAssignmentCandidate()"
+                        @click.stop="clearAssignmentCandidate()"
+                        type="button"
+                        class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                      >
+                        <span class="material-symbols-rounded text-base">close</span>
+                      </button>
+                      <button
+                        @click.stop="toggleAssignmentSelect('candidate')"
+                        type="button"
+                        class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100"
+                      >
+                        <span class="material-symbols-rounded text-base">expand_more</span>
+                      </button>
+                    </div>
+                    <div x-show="assignmentSelect.candidate.open" x-cloak class="absolute left-0 right-0 z-20 mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_24px_48px_rgba(15,23,42,0.14)]">
+                      <div class="max-h-72 overflow-auto">
+                        <template x-for="item in filteredAssignmentCandidates()" :key="item.id">
+                          <button @click="selectAssignmentCandidate(item)" type="button" class="block w-full border-b border-slate-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-emerald-50/40">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <span class="inline-flex max-w-full items-center rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                                <span class="truncate" x-text="item.name"></span>
+                              </span>
+                            </div>
+                            <div class="mt-2 font-mono text-[11px] text-slate-500" x-text="item.phone"></div>
+                          </button>
+                        </template>
+                        <div x-show="!filteredAssignmentCandidates().length" class="px-4 py-6 text-center text-sm text-slate-500">未找到匹配候选人</div>
+                      </div>
+                    </div>
+                  </div>
+                </label>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="block">
+                    <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">开始日期</span>
+                    <input x-model="assignmentForm.invite_start_date" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
+                  </label>
+                  <label class="block">
+                    <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">结束日期</span>
+                    <input x-model="assignmentForm.invite_end_date" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" />
+                  </label>
+                </div>
+                <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 px-4 py-3 text-sm text-slate-700">
+                  <div class="font-semibold text-slate-900">答题总时长自动按题目累计</div>
+                  <p class="mt-1 text-xs leading-5 text-slate-500">创建邀约时不再手填整卷时限，系统会按每道题的 <span class="font-mono">answer_time</span> 自动累计总答题时长并在答题端生效。</p>
+                </div>
+                <label class="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-slate-700">
+                  <input x-model="assignmentForm.ignore_timing" type="checkbox" class="mt-1 h-4 w-4 rounded border-amber-200 text-amber-700 focus:ring-blue-500" />
+                  <span>
+                    <span class="block font-semibold text-slate-900">忽略计时</span>
+                    <span class="mt-1 block text-xs leading-5 text-slate-500">开启后，本次邀约不限作答时长，但仍保持顺序答题和不可回退的规则。</span>
+                  </span>
+                </label>
+                <label class="flex items-start gap-3 rounded-2xl border border-blue-100 bg-blue-50/50 px-4 py-3 text-sm text-slate-700">
+                  <input x-model="assignmentForm.require_phone_verification" type="checkbox" class="mt-1 h-4 w-4 rounded border-blue-200 text-blue-600 focus:ring-blue-500" />
+                  <span>
+                    <span class="block font-semibold text-slate-900">要求短信手机号认证</span>
+                    <span class="mt-1 block text-xs leading-5 text-slate-500">开启后，候选人需先填写姓名、手机号并完成短信验证码校验，才能开始答题。</span>
+                  </span>
+                </label>
+                <button @click="createAssignment" type="button" class="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
+                  <span class="material-symbols-rounded text-base">assignment_add</span>
+                  创建邀请链接
+                </button>
+              </div>
+            </section>
+          </div>

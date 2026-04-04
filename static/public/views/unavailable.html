@@ -1,0 +1,17 @@
+<section x-show="viewCard === 'unavailable'" class="mx-auto max-w-4xl space-y-6 py-4 sm:py-8">
+              <div class="max-w-2xl">
+                <div class="text-xs uppercase tracking-[0.28em] text-slate-300">链接状态</div>
+                <h1 class="mt-4 text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl" x-text="state.unavailable?.title || '链接不可用'"></h1>
+                <p class="mt-4 text-base leading-8 text-slate-200/88" x-text="state.unavailable?.message || ''"></p>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="rounded-lg border border-white/10 bg-white/6 px-5 py-4">
+                  <div class="text-xs uppercase tracking-[0.22em] text-slate-400">开始日期</div>
+                  <div class="mt-3 text-lg font-medium text-white" x-text="state.invite_window?.start_date || '-'"></div>
+                </div>
+                <div class="rounded-lg border border-white/10 bg-white/6 px-5 py-4">
+                  <div class="text-xs uppercase tracking-[0.22em] text-slate-400">结束日期</div>
+                  <div class="mt-3 text-lg font-medium text-white" x-text="state.invite_window?.end_date || '-'"></div>
+                </div>
+              </div>
+            </section>

@@ -3430,6 +3430,57 @@
     display: none !important;
   }
 }
+:root {
+  --radius-2xl: 0.875rem;
+  --radius-3xl: 1rem;
+}
+@layer components {
+  .quiz-rich {
+    min-width: 0;
+  }
+  .quiz-rich p,
+  .quiz-rich li {
+    display: block;
+    white-space: normal;
+  }
+  .quiz-rich mjx-container[jax="SVG"] {
+    display: inline-block;
+    width: auto;
+    max-width: 100%;
+    vertical-align: -0.12em;
+  }
+  .quiz-rich mjx-container[jax="SVG"] > svg {
+    display: block;
+    max-width: 100%;
+  }
+  .quiz-rich mjx-container[display="true"] {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.1rem 0;
+  }
+  .quiz-rich mjx-container[display="true"] > svg {
+    margin: 0 auto;
+  }
+}
+@layer base {
+  [x-cloak] {
+    display: none !important;
+  }
+}
+@layer components {
+  .admin-shell {
+    align-items: flex-start;
+  }
+  .admin-shell__main {
+    min-width: 0;
+  }
+  .admin-surface {
+    position: relative;
+    min-width: 0;
+  }
+}
 @layer components {
   .quiz-rich {
     min-width: 0;
@@ -4325,6 +4376,8 @@
     animation: none;
   }
 }
+@layer components;
+@layer components;
 @property --tw-rotate-x {
   syntax: "*";
   inherits: false;

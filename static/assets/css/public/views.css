@@ -1,0 +1,110 @@
+@layer components {
+  .quiz-rich {
+    min-width: 0;
+  }
+
+  .quiz-rich p,
+  .quiz-rich li {
+    display: block;
+    white-space: normal;
+  }
+
+  .quiz-rich mjx-container[jax="SVG"] {
+    display: inline-block;
+    width: auto;
+    max-width: 100%;
+    vertical-align: -0.12em;
+  }
+
+  .quiz-rich mjx-container[jax="SVG"] > svg {
+    display: block;
+    max-width: 100%;
+  }
+
+  .quiz-rich mjx-container[display="true"] {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.1rem 0;
+  }
+
+  .quiz-rich mjx-container[display="true"] > svg {
+    margin: 0 auto;
+  }
+
+  .public-rich > :first-child {
+    margin-top: 0;
+  }
+
+  .public-rich > :last-child {
+    margin-bottom: 0;
+  }
+
+  .public-rich p,
+  .public-rich ul,
+  .public-rich ol,
+  .public-rich blockquote,
+  .public-rich pre {
+    margin: 0.5rem 0;
+  }
+
+  .public-rich ul,
+  .public-rich ol {
+    padding-left: 1.25rem;
+  }
+
+  .public-rich ul {
+    list-style: disc;
+  }
+
+  .public-rich ol {
+    list-style: decimal;
+  }
+
+  .public-rich li + li {
+    margin-top: 0.25rem;
+  }
+
+  .public-rich a {
+    color: #67e8f9;
+    text-decoration: underline;
+    text-decoration-color: rgba(103, 232, 249, 0.4);
+    text-underline-offset: 0.18em;
+  }
+
+  .public-rich code {
+    border-radius: 0.55rem;
+    background: rgba(15, 23, 42, 0.3);
+    padding: 0.12rem 0.4rem;
+    font-size: 0.92em;
+  }
+
+  .public-rich pre {
+    overflow-x: auto;
+    border-radius: 0.875rem;
+    background: rgba(2, 6, 23, 0.9);
+    padding: 1rem;
+    color: #e2e8f0;
+  }
+
+  .public-rich pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+  }
+
+  .public-rich blockquote {
+    border-left: 4px solid rgba(45, 212, 191, 0.28);
+    padding-left: 1rem;
+    color: rgba(226, 232, 240, 0.82);
+  }
+
+  .public-rich img {
+    margin: 0.75rem 0;
+    max-width: 100%;
+    border-radius: 0.875rem;
+    border: 1px solid rgba(125, 211, 252, 0.18);
+    background: rgba(255, 255, 255, 0.92);
+  }
+}

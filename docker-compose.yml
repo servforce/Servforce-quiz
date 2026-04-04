@@ -1,15 +1,46 @@
+x-app-service: &app-service
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      NODE_IMAGE: ${NODE_IMAGE:-node:20-bookworm-slim}
+      PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim-bookworm}
+  image: ${MD_QUIZ_IMAGE:-md-quiz:local}
+  restart: unless-stopped
+  init: true
+  depends_on:
+    db:
+      condition: service_healthy
+  env_file:
+    - .env
+  environment:
+    # 容器内需要改走 compose 网络，不能沿用宿主机 .env 里的 127.0.0.1:5433。
+    DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-pasword}@db:5432/${POSTGRES_DB:-md_quiz}
+
 services:
   db:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_PASSWORD: pasword
-      POSTGRES_USER: admin
-      POSTGRES_DB: markdown_quiz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pasword}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:-md_quiz}
     ports:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-md_quiz}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  app:
+    <<: *app-service
+    command: ["python", "-m", "backend.md_quiz.multi_process"]
+    ports:
+      - "8000:8000"
 
 volumes:
   pgdata:

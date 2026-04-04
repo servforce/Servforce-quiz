@@ -1,0 +1,181 @@
+<section x-show="viewCard === 'start'" class="mx-auto max-w-5xl py-4 sm:py-8">
+              <div class="space-y-6 sm:space-y-8">
+                <div :class="isVerifyStep() ? 'mx-auto max-w-2xl space-y-3 text-center sm:space-y-4' : 'max-w-3xl space-y-3 sm:space-y-4'">
+                  <div class="text-xs uppercase tracking-[0.28em] text-cyan-200/80" x-text="startLeadEyebrow()"></div>
+                  <h1 class="text-[2.7rem] leading-[0.96] font-medium tracking-[-0.06em] text-white sm:mt-4 sm:text-6xl" x-text="quizTitle()"></h1>
+                  <p class="text-sm leading-6 text-slate-300 sm:leading-7" x-text="startLeadText()"></p>
+                </div>
+
+                <template x-if="isVerifyStep()">
+                  <div class="grid gap-4 lg:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)] lg:items-start lg:gap-5">
+                    <div class="space-y-4">
+                      <div
+                        x-show="state.quiz?.spec?.welcome_image"
+                        class="overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(8,15,26,0.92))] shadow-[0_18px_60px_rgba(2,6,23,0.18)]"
+                      >
+                        <img
+                          :src="state.quiz?.spec?.welcome_image || ''"
+                          alt="测验欢迎图"
+                          class="block h-44 w-full object-cover object-center sm:h-52"
+                        />
+                      </div>
+
+                      <div class="grid gap-4 xl:grid-cols-[220px_minmax(0,1fr)]">
+                        <div class="rounded-2xl border border-white/10 bg-white/6">
+                          <div class="grid grid-cols-2 divide-x divide-white/10 xl:grid-cols-1 xl:divide-x-0 xl:divide-y xl:divide-white/10">
+                            <div class="px-4 py-4 sm:px-5">
+                              <div class="text-[11px] uppercase tracking-[0.22em] text-slate-400">总题数</div>
+                              <div class="mt-2 text-[1.75rem] leading-none font-medium text-white sm:text-[2rem]" x-text="quizQuestionCount()"></div>
+                            </div>
+                            <div class="px-4 py-4 sm:px-5">
+                              <div class="text-[11px] uppercase tracking-[0.22em] text-slate-400" x-text="quizDurationLabel()"></div>
+                              <div class="mt-2 text-[1.75rem] leading-none font-medium text-white sm:text-[2rem]" x-text="quizDurationText()"></div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-4 sm:px-5 sm:py-5">
+                          <div class="flex items-center justify-between gap-3">
+                            <div class="text-xs uppercase tracking-[0.22em] text-slate-400">作答提示</div>
+                            <div class="inline-flex items-center gap-1 rounded-full border border-emerald-300/20 bg-emerald-400/8 px-2.5 py-1 text-[11px] text-emerald-100/90">
+                              <span class="h-1.5 w-1.5 rounded-full bg-emerald-300/80"></span>
+                              当前步骤：短信验证
+                            </div>
+                          </div>
+                          <div class="mt-3 text-sm leading-6 text-slate-200/88">
+                            <p class="sm:hidden">
+                              完成短信验证后继续流程，系统会自动衔接到下一步，验证成功后会保留当前进度，无需重复填写邀请码信息。<span x-show="timingIgnored()">本次邀约已忽略计时，但仍需按顺序完成全部题目。</span>
+                            </p>
+                            <div class="hidden space-y-3 sm:block">
+                              <p>完成短信验证后继续流程，系统会自动衔接到下一步。</p>
+                              <p>验证成功后会保留当前进度，无需重复填写邀请码信息。</p>
+                              <p x-show="timingIgnored()">本次邀约已忽略计时，但仍需按顺序完成全部题目。</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div class="overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.9),rgba(15,23,42,0.76))] px-5 py-5 shadow-[0_18px_60px_rgba(2,6,23,0.28)] sm:px-6 sm:py-6">
+                        <div class="flex flex-wrap items-center gap-3">
+                          <div class="text-lg font-semibold text-white" x-text="verifyTitle()"></div>
+                          <div
+                            x-show="state.verify?.mode === 'direct_phone'"
+                            class="inline-flex items-center rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-slate-300"
+                          >
+                            发送至
+                            <span class="ml-1 font-mono text-white" x-text="state.verify?.masked_phone || '-'"></span>
+                          </div>
+                        </div>
+
+                        <p class="mt-3 text-sm leading-6 text-slate-300" x-text="verifyHintText()"></p>
+
+                        <div x-show="state.verify?.mode !== 'direct_phone'" class="mt-5 grid gap-4 sm:grid-cols-2">
+                          <label class="block">
+                            <span class="mb-2 block text-xs uppercase tracking-[0.22em] text-slate-400">姓名</span>
+                            <input x-model="forms.verify.name" class="w-full rounded-md border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-emerald-300/40" placeholder="输入姓名" />
+                          </label>
+                          <label class="block">
+                            <span class="mb-2 block text-xs uppercase tracking-[0.22em] text-slate-400">手机号</span>
+                            <input x-model="forms.verify.phone" class="w-full rounded-md border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-emerald-300/40" placeholder="输入手机号" />
+                          </label>
+                        </div>
+
+                        <div class="mt-6">
+                          <span class="block text-xs uppercase tracking-[0.22em] text-slate-400">验证码</span>
+                          <div class="mt-3 grid grid-cols-4 gap-3 sm:gap-4">
+                            <template x-for="(_, index) in forms.verify.sms_code_digits" :key="`verify-otp-${index}`">
+                              <input
+                                type="text"
+                                inputmode="numeric"
+                                autocomplete="one-time-code"
+                                maxlength="1"
+                                :value="forms.verify.sms_code_digits[index]"
+                                :disabled="otpInputDisabled()"
+                                :data-otp-input="index"
+                                @input="handleOtpInput(index, $event)"
+                                @keydown="handleOtpKeydown(index, $event)"
+                                @paste="handleOtpPaste(index, $event)"
+                                class="h-16 w-full rounded-xl border border-white/10 bg-slate-950/60 px-0 text-center text-[1.75rem] font-semibold tracking-[0.14em] text-white outline-none placeholder:text-slate-500 focus:border-emerald-300/40 disabled:cursor-not-allowed disabled:opacity-60"
+                              />
+                            </template>
+                          </div>
+                        </div>
+
+                        <div class="mt-5 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div class="flex items-start gap-2 text-xs leading-6 text-slate-400">
+                            <span class="mt-2 h-1.5 w-1.5 rounded-full bg-emerald-300/80"></span>
+                            <span x-text="verifyAutoHintText()"></span>
+                          </div>
+                          <button
+                            type="button"
+                            @click="sendSms"
+                            :disabled="smsSendButtonDisabled()"
+                            class="inline-flex h-11 shrink-0 items-center justify-center self-start whitespace-nowrap rounded-lg border px-4 text-sm font-semibold transition sm:self-auto"
+                            :class="smsSendButtonClasses()"
+                            x-text="smsSendButtonText()"
+                          ></button>
+                        </div>
+
+                        <div
+                          x-show="smsFeedback.message"
+                          class="mt-4 rounded-md border px-4 py-3 text-sm"
+                          :class="smsFeedbackClasses()"
+                          x-text="smsFeedback.message"
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <template x-if="!isVerifyStep()">
+                  <div class="space-y-5 sm:space-y-8">
+                    <div
+                      x-show="state.quiz?.spec?.welcome_image"
+                      class="overflow-hidden rounded-lg border border-white/10 bg-white/6"
+                    >
+                      <img
+                        :src="state.quiz?.spec?.welcome_image || ''"
+                        alt="测验欢迎图"
+                        class="block h-56 w-full object-cover object-center sm:h-72"
+                      />
+                    </div>
+
+                    <div class="rounded-lg border border-white/10 bg-white/6">
+                      <div class="grid grid-cols-2 divide-x divide-white/10">
+                        <div class="px-4 py-4 sm:px-5 sm:py-5">
+                          <div class="text-xs uppercase tracking-[0.22em] text-slate-400">总题数</div>
+                          <div class="mt-2 text-[2rem] leading-none font-medium text-white sm:mt-3 sm:text-3xl" x-text="quizQuestionCount()"></div>
+                        </div>
+                        <div class="px-4 py-4 sm:px-5 sm:py-5">
+                          <div class="text-xs uppercase tracking-[0.22em] text-slate-400" x-text="quizDurationLabel()"></div>
+                          <div class="mt-2 text-[2rem] leading-none font-medium text-white sm:mt-3 sm:text-3xl" x-text="quizDurationText()"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-3 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_460px]">
+                      <div class="rounded-lg border border-white/10 bg-slate-950/55 px-4 py-4 sm:px-5 sm:py-5">
+                        <div class="text-xs uppercase tracking-[0.22em] text-slate-400">作答提示</div>
+                        <div class="mt-3 space-y-2 text-sm leading-6 text-slate-200/88 sm:mt-4 sm:space-y-3 sm:leading-7">
+                          <p>开始后将按顺序进入题目，系统会自动记录当前进度。</p>
+                          <p>请尽量保持连续作答，避免中途离开页面。</p>
+                          <p x-show="timingIgnored()">本次邀约已忽略计时，但仍需按顺序完成题目。</p>
+                        </div>
+                      </div>
+
+                      <div class="rounded-lg border border-white/10 bg-white/6 px-4 py-4 sm:px-5 sm:py-5">
+                        <div class="space-y-3 sm:space-y-4">
+                          <div>
+                            <div class="text-sm font-semibold text-white">准备开始</div>
+                            <p class="mt-1 text-sm leading-6 text-slate-300 sm:mt-2 sm:leading-7">确认后立即进入第 1 题。</p>
+                          </div>
+                          <button type="button" @click="enterQuiz" class="w-full rounded-md bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300">确认开始答题</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </section>

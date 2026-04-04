@@ -30,7 +30,7 @@ def _env_csv(name: str) -> tuple[str, ...]:
 
 
 def build_logger(level: str) -> logging.Logger:
-    logger = logging.getLogger("markdown_quiz")
+    logger = logging.getLogger("md_quiz")
     if not logger.handlers:
         logging.basicConfig(
             level=level,
@@ -42,7 +42,7 @@ def build_logger(level: str) -> logging.Logger:
 
 
 def _normalize_database_url(raw: str, *, logger: logging.Logger) -> str:
-    default_url = "postgresql://admin:pasword@127.0.0.1:5433/markdown_quiz"
+    default_url = "postgresql://admin:pasword@127.0.0.1:5433/md_quiz"
     value = (raw or "").strip()
     if not value:
         return default_url

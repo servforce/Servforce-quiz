@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-_DEFAULT_DATABASE_URL = "postgresql://admin:pasword@127.0.0.1:5433/markdown_quiz"
+_DEFAULT_DATABASE_URL = "postgresql://admin:pasword@127.0.0.1:5433/md_quiz"
 _TEST_DATABASE_SUFFIX = "_pytest"
 _TRUNCATE_SQL = """
 TRUNCATE TABLE
@@ -56,7 +56,7 @@ def _load_base_database_url() -> str:
 
 def _build_pytest_database_url(base_url: str) -> str:
     parsed = urlsplit(base_url)
-    db_name = parsed.path.lstrip("/") or "markdown_quiz"
+    db_name = parsed.path.lstrip("/") or "md_quiz"
     if not db_name.endswith(_TEST_DATABASE_SUFFIX):
         db_name = f"{db_name}{_TEST_DATABASE_SUFFIX}"
     return urlunsplit(parsed._replace(path=f"/{db_name}"))

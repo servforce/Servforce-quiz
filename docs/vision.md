@@ -19,14 +19,15 @@
 - 归档回看
 - 运行监控
 
-## 当前重构目标
+## 当前系统基线
 
-项目正在从旧的 `Flask + Jinja` 单体实现，升级到新的：
+当前代码已经收敛到以下稳定基线：
 
-- `FastAPI` 后端
-- `API / Worker / Scheduler` 三进程
-- 更清晰的运行时配置与任务边界
-- 旧后台代码结构的逐步收敛
+- `FastAPI` 作为统一 HTTP 入口
+- `API / Worker / Scheduler` 三进程执行面
+- 双 Alpine SPA：`static/admin/` 与 `static/public/`
+- 运行时配置、任务队列和进程心跳统一入库
+- 题库同步、判卷、简历解析等重任务脱离请求线程
 
 ## 不变约束
 
@@ -36,10 +37,12 @@
 - 前端基础品牌配色保留当前蓝绿体系
 - 核心业务概念不丢：
   - `candidate`
+  - `candidate_resume`
   - `quiz_definition`
+  - `quiz_version`
   - `assignment`
-  - `attempt`
-  - `archive/result`
+  - `quiz_paper`
+  - `quiz_archive`
   - `system_metric`
   - `operation_log`
   - `runtime_config`

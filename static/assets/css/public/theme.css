@@ -1,0 +1,63 @@
+@import "tailwindcss";
+@source "../../public/**/*.html";
+@source "../../public/**/*.js";
+
+:root {
+  --public-bg: #f6fbff;
+  --public-ink: #0f223f;
+  --public-panel: rgba(255, 255, 255, 0.92);
+  --public-border: rgba(14, 116, 144, 0.14);
+  --public-brand: #0f766e;
+  --public-brand-strong: #115e59;
+  --public-accent: #2563eb;
+  --public-danger: #e11d48;
+  --public-shadow: 0 28px 72px rgba(15, 23, 42, 0.08);
+  --radius-2xl: 0.875rem;
+  --radius-3xl: 1rem;
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    min-height: 100%;
+    background:
+      radial-gradient(1100px 640px at 0% 0%, rgba(15, 118, 110, 0.14), transparent 58%),
+      radial-gradient(1100px 680px at 100% 0%, rgba(37, 99, 235, 0.12), transparent 56%),
+      linear-gradient(180deg, #f7fcff 0%, #eef8ff 54%, #f3fbf9 100%);
+    background-attachment: fixed, fixed, fixed;
+  }
+
+  body {
+    min-height: 100vh;
+    margin: 0;
+    color: var(--public-ink);
+    font-family:
+      "SF Pro Display",
+      "Segoe UI Variable",
+      "PingFang SC",
+      "Hiragino Sans GB",
+      "Microsoft YaHei UI",
+      system-ui,
+      sans-serif;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  [x-cloak] {
+    display: none !important;
+  }
+}

@@ -1,0 +1,254 @@
+<div x-show="route.name === 'attempt-detail'" class="admin-mobile-pane-grid grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
+            <div
+              x-show="shouldShowAdminCompactTabs('attempt-detail')"
+              x-cloak
+              data-admin-compact-tabs="attempt-detail"
+              class="hidden admin-compact-tabs md:block xl:hidden"
+            >
+              <div class="admin-compact-tabs__track" role="tablist" aria-label="答题详情内容切换">
+                <template x-for="tab in adminCompactTabs('attempt-detail')" :key="tab.id">
+                  <button
+                    type="button"
+                    role="tab"
+                    @click="setAdminCompactTab('attempt-detail', tab.id)"
+                    :class="adminCompactTab('attempt-detail') === tab.id ? 'admin-compact-tab--active' : 'admin-compact-tab--inactive'"
+                    :aria-selected="String(adminCompactTab('attempt-detail') === tab.id)"
+                    class="admin-compact-tab"
+                    x-text="tab.label"
+                  ></button>
+                </template>
+              </div>
+            </div>
+
+            <section
+              x-show="adminCompactPanelVisible('attempt-detail', 'review')"
+              class="assignment-surface admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              :class="assignmentDetailSectionClass(attemptDetail.quiz_paper)"
+            >
+              <div class="flex flex-col gap-3">
+                <div>
+                  <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">答题回放</h2>
+                  <p class="mt-1 text-sm text-slate-600">直接查看题干、作答内容、正确答案和评分理由，不再展示原始 JSON。</p>
+                </div>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                  <div class="min-w-0 flex-1">
+                    <div class="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                      <span :class="assignmentSourceBadgeClass()" x-text="attemptDetail.quiz_paper?.source_label || '答题记录'"></span>
+                      <span :class="assignmentStatusBadgeClass(attemptDetail.quiz_paper)" x-text="attemptDetail.quiz_paper?.status_label || '状态未知'"></span>
+                      <span
+                        x-show="assignmentIgnoresTiming(attemptDetail.quiz_paper)"
+                        class="assignment-badge border-amber-200 bg-amber-50 text-amber-700"
+                      >已忽略计时</span>
+                      <span
+                        x-show="canToggleAssignmentHandling(attemptDetail.quiz_paper)"
+                        :class="assignmentHandlingBadgeClass(attemptDetail.quiz_paper)"
+                        x-text="assignmentHandlingLabel(attemptDetail.quiz_paper)"
+                      ></span>
+                    </div>
+                    <div x-show="assignmentHandledMeta(attemptDetail.quiz_paper)" class="mt-3 text-[11px] text-slate-500" x-text="'处理人：' + assignmentHandledMeta(attemptDetail.quiz_paper)"></div>
+                  </div>
+                  <div class="assignment-action-group sm:ml-auto" role="group" aria-label="答题实例操作">
+                    <button
+                      x-show="canToggleAssignmentHandling(attemptDetail.quiz_paper)"
+                      @click="toggleAssignmentHandling(attemptDetail.quiz_paper)"
+                      type="button"
+                      :class="assignmentActionButtonClass('handling', attemptDetail.quiz_paper)"
+                      x-text="assignmentHandlingActionLabel(attemptDetail.quiz_paper)"
+                    ></button>
+                    <button
+                      x-show="canDeleteAssignment(attemptDetail.quiz_paper)"
+                      @click="deleteAssignment(attemptDetail.quiz_paper)"
+                      type="button"
+                      :class="assignmentActionButtonClass('danger', attemptDetail.quiz_paper)"
+                    >删除邀约</button>
+                  </div>
+                </div>
+              </div>
+
+              <div x-show="attemptReviewAnswers().length" class="mt-5 grid gap-3">
+                <template x-for="(question, index) in attemptReviewAnswers()" :key="question.qid || index">
+                  <article class="overflow-hidden rounded-3xl border border-blue-100/90 bg-white shadow-[0_12px_30px_rgba(37,99,235,0.08)]">
+                    <div class="border-b border-slate-200/80 bg-linear-to-r from-blue-50/90 via-white to-emerald-50/70 px-4 py-3">
+                      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="flex min-w-0 flex-wrap items-center gap-2">
+                          <span class="text-[17px] font-black tracking-[-0.03em] text-slate-900" x-text="question.label || question.qid || ('Q' + (index + 1))"></span>
+                          <span class="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700" x-text="questionTypeLabel(question.type)"></span>
+                          <span x-show="question.has_score" class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700" x-text="question.score_display"></span>
+                          <span :class="attemptReviewQuestionStatusClass(question)" x-text="attemptReviewQuestionStatusLabel(question)"></span>
+                        </div>
+                        <div class="text-[11px] font-medium text-slate-400 sm:pl-4" x-show="Number(question.max_points || 0) > 0" x-text="'满分 ' + Number(question.max_points || 0) + ' 分'"></div>
+                      </div>
+                    </div>
+
+                    <div class="px-4 py-3">
+                      <div class="quiz-rich admin-markdown text-sm leading-6 text-slate-800" x-html="question.stem_html || ''"></div>
+
+                      <template x-if="attemptReviewHasOptions(question)">
+                        <div class="mt-3 overflow-hidden rounded-xl border border-blue-100 bg-slate-50/80 divide-y divide-blue-100">
+                          <template x-for="option in (question.options || [])" :key="`${question.qid || index}-${option.key || option.text || ''}`">
+                            <div :class="attemptReviewOptionRowClass(question, option)">
+                              <span class="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-white px-1.5 text-[11px] font-semibold text-blue-700" x-text="option.key || '-'"></span>
+                              <div class="min-w-0 flex-1">
+                                <div class="quiz-rich admin-markdown text-sm leading-5 text-slate-700" x-html="option.text_html || ''"></div>
+                                <div x-show="optionTraits(option).length" class="mt-2 flex flex-wrap gap-1.5">
+                                  <template x-for="trait in optionTraits(option)" :key="`${option.key || ''}-${trait.name}`">
+                                    <span :style="traitBadgeStyle(trait.name)" class="rounded-full border px-2 py-0.5 text-[11px] font-medium">
+                                      <span x-text="trait.name"></span>
+                                      <span class="ml-1 font-semibold" x-text="trait.scoreText"></span>
+                                    </span>
+                                  </template>
+                                </div>
+                              </div>
+                              <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-1.5 pl-2">
+                                <span x-show="attemptReviewOptionIsCorrect(question, option)" class="shrink-0 rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-emerald-700">正确答案</span>
+                                <span
+                                  x-show="attemptReviewOptionIsSelected(question, option)"
+                                  :class="attemptReviewOptionSelectionBadgeClass(question, option)"
+                                >候选人选择</span>
+                              </div>
+                            </div>
+                          </template>
+                        </div>
+                      </template>
+
+                      <template x-if="attemptReviewIsShortQuestion(question)">
+                        <div class="mt-3 grid gap-3">
+                          <div class="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/85">
+                            <div class="border-b border-slate-200 px-3.5 py-2 text-[12px] font-semibold text-slate-500">候选人作答</div>
+                            <div class="whitespace-pre-wrap px-3.5 py-3 text-sm leading-6 text-slate-700" x-text="attemptReviewShortAnswerText(question)"></div>
+                          </div>
+                          <div x-show="question.reason" class="overflow-hidden rounded-xl border border-blue-100 bg-blue-50/55">
+                            <div class="border-b border-blue-100 px-3.5 py-2 text-[12px] font-semibold text-blue-700">评分理由</div>
+                            <div class="whitespace-pre-wrap px-3.5 py-3 text-sm leading-6 text-slate-700" x-text="question.reason"></div>
+                          </div>
+                        </div>
+                      </template>
+
+                      <div
+                        x-show="!attemptReviewIsShortQuestion(question) && question.reason"
+                        class="mt-3 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/55"
+                      >
+                        <div class="border-b border-blue-100 px-3.5 py-2 text-[12px] font-semibold text-blue-700">评分理由</div>
+                        <div class="whitespace-pre-wrap px-3.5 py-3 text-sm leading-6 text-slate-700" x-text="question.reason"></div>
+                      </div>
+
+                      <template x-if="question.rubric">
+                        <details class="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50/80">
+                          <summary class="cursor-pointer px-3.5 py-2.5 text-[13px] font-medium text-slate-700">评分标准</summary>
+                          <div class="quiz-rich admin-markdown border-t border-slate-200 px-3.5 py-2.5 text-[11px] leading-5 text-slate-600" x-html="question.rubric_html || ''"></div>
+                        </details>
+                      </template>
+                    </div>
+                  </article>
+                </template>
+              </div>
+
+              <div x-show="!attemptReviewAnswers().length" class="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50/75 px-6 py-10 text-center">
+                <div class="text-sm font-semibold text-slate-700">当前暂无可回放的答题内容</div>
+                <p class="mt-2 text-sm leading-6 text-slate-500" x-text="assignmentStatusValue(attemptDetail.quiz_paper) === 'grading' ? '系统正在整理判卷结果，完成后会自动展示完整题目回放。' : '请检查该答题是否已生成归档，或确认当前测验版本仍能读取题目快照。'"></p>
+              </div>
+            </section>
+
+            <section
+              x-show="adminCompactPanelVisible('attempt-detail', 'evaluation')"
+              class="admin-surface self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6"
+            >
+              <div>
+                <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">智能评价</h2>
+                <p class="mt-1 text-sm text-slate-600">汇总总分、主倾向、综合分析和候选人简评。</p>
+              </div>
+
+              <div class="mt-5 grid gap-3">
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <div x-show="attemptEvaluationShowScore()" class="rounded-[1.1rem] border border-blue-100 bg-blue-50/55 px-4 py-3">
+                    <div class="text-[12px] font-semibold uppercase tracking-[0.18em] text-blue-700">总分</div>
+                    <div class="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-900" x-text="attemptReviewEvaluation().score_display || '-'"></div>
+                  </div>
+                  <div class="rounded-[1.1rem] border border-slate-200 bg-slate-50/80 px-4 py-3">
+                    <div class="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-500">结果模式</div>
+                    <div class="mt-2 text-lg font-bold tracking-[-0.03em] text-slate-900" x-text="attemptEvaluationResultModeLabel()"></div>
+                  </div>
+                </div>
+
+                <div x-show="attemptEvaluationPrimaryDimensions().length" class="border-t border-slate-200/80 pt-4">
+                  <div class="text-[12px] font-semibold uppercase tracking-[0.18em] text-sky-700">主倾向</div>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <template x-for="dimension in attemptEvaluationPrimaryDimensions()" :key="dimension">
+                      <span :style="traitBadgeStyle(dimension)" class="rounded-full border px-3 py-1 text-xs font-semibold" x-text="dimension"></span>
+                    </template>
+                  </div>
+                </div>
+
+                <div x-show="attemptEvaluationTraitPairs().length" class="border-t border-slate-200/80 pt-4">
+                  <div class="text-sm font-semibold text-slate-900">维度对照</div>
+                  <div class="mt-3 divide-y divide-slate-200/80">
+                    <template x-for="pair in attemptEvaluationTraitPairs()" :key="`${pair.left || ''}-${pair.right || ''}`">
+                      <div class="py-3 first:pt-0 last:pb-0">
+                        <div class="flex items-start justify-between gap-3">
+                          <div>
+                            <div class="text-sm font-semibold text-slate-800" x-text="`${pair.left || '-'} / ${pair.right || '-'}`"></div>
+                            <div class="mt-1 text-xs leading-5 text-slate-500" x-text="pair.description || '按对立维度对照输出主倾向。'"></div>
+                          </div>
+                          <span :style="traitBadgeStyle(pair.winner || '')" class="rounded-full border px-2.5 py-1 text-[11px] font-semibold" x-text="pair.winner || '-'"></span>
+                        </div>
+                        <div class="mt-2 text-xs text-slate-500" x-text="`分差 ${pair.diff || 0} · ${pair.left_score || 0} / ${pair.right_score || 0}`"></div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <div x-show="!attemptEvaluationTraitPairs().length && attemptEvaluationDimensionList().length" class="border-t border-slate-200/80 pt-4">
+                  <div class="text-sm font-semibold text-slate-900">维度累计</div>
+                  <div class="mt-3 divide-y divide-slate-200/80">
+                    <template x-for="item in attemptEvaluationDimensionList()" :key="item.dimension || ''">
+                      <div class="py-3 first:pt-0 last:pb-0">
+                        <div class="flex items-center justify-between gap-3">
+                          <span class="text-sm font-semibold text-slate-800" x-text="item.dimension || '-'"></span>
+                          <span class="text-sm font-bold text-slate-900" x-text="item.score || 0"></span>
+                        </div>
+                        <div class="mt-1 text-xs leading-5 text-slate-500" x-text="item.meaning || '当前维度暂无额外说明。'"></div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <div x-show="attemptReviewEvaluation().final_analysis" class="border-t border-slate-200/80 pt-4">
+                  <div class="text-sm font-semibold text-emerald-800">综合分析</div>
+                  <div class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700" x-text="attemptReviewEvaluation().final_analysis"></div>
+                </div>
+
+                <div x-show="attemptReviewEvaluation().candidate_remark" class="border-t border-slate-200/80 pt-4">
+                  <div class="text-sm font-semibold text-blue-800">候选人简评</div>
+                  <div class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700" x-text="attemptReviewEvaluation().candidate_remark"></div>
+                </div>
+
+                <div
+                  x-show="assignmentStatusValue(attemptDetail.quiz_paper) === 'grading' && !attemptEvaluationHasContent()"
+                  class="grading-placeholder rounded-[1.1rem] border border-dashed border-amber-200 bg-amber-50/70 px-4 py-5"
+                >
+                  <div class="grading-placeholder__hero">
+                    <div class="grading-placeholder__spinner" aria-hidden="true">
+                      <span class="material-symbols-rounded text-[20px]">grading</span>
+                    </div>
+                    <div>
+                      <div class="text-sm font-semibold text-amber-800">正在判卷</div>
+                      <p class="mt-2 text-sm leading-6 text-amber-700/90">系统正在汇总题目得分和大模型分析，完成后这里会自动显示总分、主倾向和综合评价。</p>
+                    </div>
+                  </div>
+                  <div class="grading-placeholder__bars" aria-hidden="true">
+                    <span class="grading-placeholder__bar grading-placeholder__bar--primary"></span>
+                    <span class="grading-placeholder__bar grading-placeholder__bar--secondary"></span>
+                    <span class="grading-placeholder__bar grading-placeholder__bar--tertiary"></span>
+                  </div>
+                </div>
+
+                <div
+                  x-show="assignmentStatusValue(attemptDetail.quiz_paper) !== 'grading' && !attemptEvaluationHasContent()"
+                  class="rounded-[1.1rem] border border-dashed border-slate-200 bg-slate-50/80 px-4 py-5"
+                >
+                  <div class="text-sm font-semibold text-slate-700">当前暂无评价摘要</div>
+                  <p class="mt-2 text-sm leading-6 text-slate-500">该记录尚未生成可展示的综合分析；如果刚完成判卷，刷新后会自动补齐。</p>
+                </div>
+              </div>
+            </section>
+          </div>
