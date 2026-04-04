@@ -23,6 +23,7 @@ class JobRecord(BaseModel):
     source: str = "manual"
     status: JobStatus = "pending"
     payload: dict[str, Any] = Field(default_factory=dict)
+    dedupe_key: str | None = None
     attempts: int = 0
     error: str | None = None
     result: dict[str, Any] | None = None
@@ -30,6 +31,7 @@ class JobRecord(BaseModel):
     created_at: str
     updated_at: str
     started_at: str | None = None
+    lease_expires_at: str | None = None
     finished_at: str | None = None
 
 

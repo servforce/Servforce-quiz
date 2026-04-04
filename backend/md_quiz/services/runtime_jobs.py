@@ -46,10 +46,6 @@ def _finalize_if_time_up(token: str, assignment: dict, *, now: datetime | None =
     if not _is_time_up(assignment, now=now):
         return False
     _finalize_public_submission(token, assignment, now=now)
-    try:
-        _start_background_grading(token)
-    except Exception:
-        pass
     return True
 
 
@@ -69,7 +65,7 @@ def _duration_seconds(assignment: dict) -> int | None:
 
 def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) -> None:
     """
-    Finalize a candidate submission by marking it submitted and scheduling background grading.
+    Finalize a candidate submission by marking it submitted and enqueueing background grading.
 
     Caller is responsible for locking (assignment_locked) if needed.
     """
@@ -141,6 +137,11 @@ def _finalize_public_submission(token: str, assignment: dict, *, now: datetime) 
     except Exception:
         pass
 
+    try:
+        ensure_grade_attempt_job(token, source="public_submission", assignment=assignment)
+    except Exception:
+        logger.exception("Enqueue grade attempt failed (token=%s)", token)
+
 
 def _parse_iso_dt(value: str | None) -> datetime | None:
     if not value:
@@ -151,51 +152,140 @@ def _parse_iso_dt(value: str | None) -> datetime | None:
         return None
 
 
-_GRADING_THREADS_GUARD = threading.Lock()
-_GRADING_RUNNING: set[str] = set()
+def ensure_grade_attempt_job(token: str, *, source: str = "runtime_jobs", assignment: dict[str, Any] | None = None):
+    t = str(token or "").strip()
+    if not t:
+        return None
+
+    current = assignment
+    if current is None:
+        with assignment_locked(t):
+            current = load_assignment(t)
+
+    grading = current.get("grading") or {}
+    grading_status = str((grading.get("status") if isinstance(grading, dict) else "") or "").strip()
+    if grading_status == "done" and _find_archive_by_token(t, assignment=current):
+        return None
+    if not grading and str(current.get("status") or "").strip() not in {"grading", "graded"}:
+        return None
+
+    from backend.md_quiz.services.job_service import JobService
+    from backend.md_quiz.storage import JobStore
+
+    return JobService(JobStore()).ensure_grade_attempt(t, source=source)
 
 
 def _start_background_grading(token: str) -> None:
+    # 兼容旧调用点：不再起线程，只做幂等投递。
+    ensure_grade_attempt_job(token)
+
+
+def _sync_grade_side_effects(
+    token: str,
+    assignment: dict[str, Any],
+    *,
+    spec: dict[str, Any] | None,
+    grading: dict[str, Any],
+    grading_llm_total_tokens: int = 0,
+    emit_grade_log: bool,
+) -> None:
+    try:
+        timing = assignment.get("timing") or {}
+        started_at = _parse_iso_dt(timing.get("start_at"))
+        submitted_at = _parse_iso_dt(timing.get("end_at"))
+        update_quiz_paper_result(
+            token,
+            status="finished",
+            score=int((grading or {}).get("total") or 0),
+            entered_at=started_at,
+            finished_at=submitted_at,
+        )
+    except Exception:
+        logger.exception("Update quiz_paper graded result failed (token=%s)", token)
+
+    if emit_grade_log:
+        try:
+            cid2 = int((assignment or {}).get("candidate_id") or 0)
+        except Exception:
+            cid2 = 0
+        try:
+            ek2 = str((assignment or {}).get("quiz_key") or "").strip()
+        except Exception:
+            ek2 = ""
+        try:
+            score2 = int((grading or {}).get("total") or 0)
+        except Exception:
+            score2 = 0
+        try:
+            log_event(
+                "exam.grade",
+                actor="system",
+                candidate_id=(cid2 if cid2 > 0 else None),
+                quiz_key=(ek2 or None),
+                token=(str(token or "").strip() or None),
+                llm_total_tokens=(int(grading_llm_total_tokens or 0) or None),
+                meta={"score": score2, "public_invite": bool((assignment or {}).get("public_invite"))},
+            )
+        except Exception:
+            pass
+
+    _archive_candidate_attempt(assignment, spec=spec)
+
+
+def process_grade_attempt_job(token: str) -> dict[str, Any]:
     t = str(token or "").strip()
     if not t:
-        return
-    with _GRADING_THREADS_GUARD:
-        if t in _GRADING_RUNNING:
-            return
-        _GRADING_RUNNING.add(t)
+        raise ValueError("缺少 token")
 
-    def _runner() -> None:
-        try:
-            _grade_assignment_background(t)
-        finally:
-            with _GRADING_THREADS_GUARD:
-                _GRADING_RUNNING.discard(t)
+    archive_only = False
+    finalized_assignment: dict[str, Any] | None = None
+    snapshot: dict[str, Any] | None = None
 
-    th = threading.Thread(target=_runner, name=f"grading:{t}", daemon=True)
-    th.start()
-
-
-def _grade_assignment_background(token: str) -> None:
-    """
-    Background grading job: call LLM-based grading and persist results.
-    Safe to call multiple times; it will no-op if already graded.
-    """
-    # Mark as running and capture a stable snapshot.
-    with assignment_locked(token):
-        assignment = load_assignment(token)
+    with assignment_locked(t):
+        assignment = load_assignment(t)
         grading0 = assignment.get("grading") or {}
-        if isinstance(grading0, dict) and str(grading0.get("status") or "").strip() == "done":
-            return
-        if isinstance(grading0, dict) and str(grading0.get("status") or "").strip() == "running":
-            return
-        now = datetime.now(timezone.utc)
-        assignment["grading"] = {"status": "running", "started_at": now.isoformat()}
-        assignment["status"] = "grading"
-        assignment["status_updated_at"] = now.isoformat()
-        assignment["grading_started_at"] = assignment.get("grading_started_at") or now.isoformat()
-        assignment["grading_error"] = None
-        save_assignment(token, assignment)
-        snapshot = dict(assignment)
+        grading_status = str((grading0.get("status") if isinstance(grading0, dict) else "") or "").strip()
+
+        if grading_status == "done":
+            if _find_archive_by_token(t, assignment=assignment):
+                return {"message": "判卷任务跳过，结果已存在", "status": "noop", "token": t}
+            archive_only = True
+            finalized_assignment = dict(assignment)
+        else:
+            if not grading0 and str(assignment.get("status") or "").strip() not in {"grading", "graded"}:
+                raise RuntimeError("assignment 未进入判卷状态")
+
+            now = datetime.now(timezone.utc)
+            queued_at = (
+                str((grading0.get("queued_at") if isinstance(grading0, dict) else "") or "").strip()
+                or str(assignment.get("grading_started_at") or "").strip()
+                or now.isoformat()
+            )
+            assignment["grading"] = {
+                "status": "running",
+                "queued_at": queued_at,
+                "started_at": now.isoformat(),
+            }
+            assignment["status"] = "grading"
+            assignment["status_updated_at"] = now.isoformat()
+            assignment["grading_started_at"] = assignment.get("grading_started_at") or now.isoformat()
+            assignment["grading_error"] = None
+            save_assignment(t, assignment)
+            snapshot = dict(assignment)
+
+    if archive_only:
+        grading = finalized_assignment.get("grading") or {}
+        if not isinstance(grading, dict) or not grading:
+            raise RuntimeError("assignment 缺少判卷结果，无法补齐归档")
+        _sync_grade_side_effects(
+            t,
+            finalized_assignment,
+            spec=None,
+            grading=grading,
+            grading_llm_total_tokens=0,
+            emit_grade_log=False,
+        )
+        return {"message": "判卷任务已补齐归档", "status": "archived", "token": t}
 
     grading_llm_total_tokens = 0
     try:
@@ -210,79 +300,75 @@ def _grade_assignment_background(token: str) -> None:
             remark = generate_candidate_remark(spec, snapshot, grading) if grading else ""
             try:
                 ctx = get_audit_context()
-                m = ctx.get("meta")
-                if isinstance(m, dict):
-                    grading_llm_total_tokens = int(m.get("llm_total_tokens_sum") or 0)
+                meta = ctx.get("meta")
+                if isinstance(meta, dict):
+                    grading_llm_total_tokens = int(meta.get("llm_total_tokens_sum") or 0)
             except Exception:
                 grading_llm_total_tokens = 0
-    except Exception as e:
-        logger.exception("Background grading failed (token=%s)", token)
-        with assignment_locked(token):
-            assignment = load_assignment(token)
-            assignment["grading"] = {"status": "failed"}
-            assignment["grading_error"] = f"{type(e).__name__}: {e}"
+    except Exception as exc:
+        logger.exception("Grade attempt failed (token=%s)", t)
+        with assignment_locked(t):
+            assignment = load_assignment(t)
+            current = assignment.get("grading") or {}
+            failed_at = datetime.now(timezone.utc).isoformat()
+            failed = {"status": "failed", "failed_at": failed_at}
+            if isinstance(current, dict):
+                queued_at = str(current.get("queued_at") or "").strip()
+                started_at = str(current.get("started_at") or "").strip()
+                if queued_at:
+                    failed["queued_at"] = queued_at
+                if started_at:
+                    failed["started_at"] = started_at
+            assignment["grading"] = failed
+            assignment["grading_error"] = f"{type(exc).__name__}: {exc}"
             assignment["status"] = "grading"
-            assignment["status_updated_at"] = datetime.now(timezone.utc).isoformat()
-            save_assignment(token, assignment)
-        return
+            assignment["status_updated_at"] = failed_at
+            save_assignment(t, assignment)
+        raise
 
-    # Persist grading.
-    with assignment_locked(token):
-        assignment = load_assignment(token)
-        grading0 = assignment.get("grading") or {}
-        if isinstance(grading0, dict) and str(grading0.get("status") or "").strip() == "done":
-            return
-        now2 = datetime.now(timezone.utc)
+    with assignment_locked(t):
+        assignment = load_assignment(t)
+        current = assignment.get("grading") or {}
+        current_status = str((current.get("status") if isinstance(current, dict) else "") or "").strip()
+        if current_status == "done" and _find_archive_by_token(t, assignment=assignment):
+            return {"message": "判卷任务跳过，结果已存在", "status": "noop", "token": t}
+
+        finished_at = datetime.now(timezone.utc).isoformat()
+        if isinstance(grading, dict):
+            queued_at = str((current.get("queued_at") if isinstance(current, dict) else "") or "").strip()
+            started_at = str((current.get("started_at") if isinstance(current, dict) else "") or "").strip()
+            if queued_at:
+                grading.setdefault("queued_at", queued_at)
+            if started_at:
+                grading.setdefault("started_at", started_at)
+            grading["finished_at"] = finished_at
+            grading["status"] = "done"
+
         assignment["grading"] = grading
         assignment["candidate_remark"] = remark
-        assignment["graded_at"] = now2.isoformat()
+        assignment["graded_at"] = finished_at
         assignment["status"] = "graded"
-        assignment["status_updated_at"] = now2.isoformat()
-        save_assignment(token, assignment)
+        assignment["status_updated_at"] = finished_at
+        assignment["grading_error"] = None
+        save_assignment(t, assignment)
+        finalized_assignment = dict(assignment)
 
-    # Sync candidate DB row + archive.
-    try:
-        duration_seconds = _duration_seconds(assignment)
-        timing = assignment.get("timing") or {}
-        started_at = _parse_iso_dt(timing.get("start_at"))
-        submitted_at = _parse_iso_dt(timing.get("end_at"))
-        update_quiz_paper_result(
-            token,
-            status="finished",
-            score=int((grading or {}).get("total") or 0),
-            entered_at=started_at,
-            finished_at=submitted_at,
-        )
-    except Exception:
-        logger.exception("Update quiz_paper graded result failed (token=%s)", token)
-    try:
-        cid2 = int((assignment or {}).get("candidate_id") or 0)
-    except Exception:
-        cid2 = 0
-    try:
-        ek2 = str((assignment or {}).get("quiz_key") or "").strip()
-    except Exception:
-        ek2 = ""
-    try:
-        score2 = int((grading or {}).get("total") or 0)
-    except Exception:
-        score2 = 0
-    try:
-        log_event(
-            "exam.grade",
-            actor="system",
-            candidate_id=(cid2 if cid2 > 0 else None),
-            quiz_key=(ek2 or None),
-            token=(str(token or "").strip() or None),
-            llm_total_tokens=(int(grading_llm_total_tokens or 0) or None),
-            meta={"score": score2, "public_invite": bool((assignment or {}).get("public_invite"))},
-        )
-    except Exception:
-        pass
-    try:
-        _archive_candidate_attempt(assignment, spec=spec)
-    except Exception:
-        logger.exception("Archive candidate attempt failed (token=%s)", token)
+    _sync_grade_side_effects(
+        t,
+        finalized_assignment,
+        spec=spec,
+        grading=(finalized_assignment.get("grading") or grading),
+        grading_llm_total_tokens=grading_llm_total_tokens,
+        emit_grade_log=True,
+    )
+
+    return {
+        "message": "判卷任务已完成",
+        "status": "done",
+        "token": t,
+        "candidate_id": int(finalized_assignment.get("candidate_id") or 0),
+        "quiz_key": str(finalized_assignment.get("quiz_key") or "").strip(),
+    }
 
 
 def _auto_collect_loop(*, interval_seconds: int = 15) -> None:
@@ -300,7 +386,7 @@ def _auto_collect_loop(*, interval_seconds: int = 15) -> None:
                         if isinstance(g, dict) and str(g.get("status") or "").strip() in {"pending", "running"}:
                             # Ensure grading proceeds even after process restarts.
                             try:
-                                _start_background_grading(token)
+                                ensure_grade_attempt_job(token, source="auto_collect", assignment=assignment)
                             except Exception:
                                 pass
                             continue

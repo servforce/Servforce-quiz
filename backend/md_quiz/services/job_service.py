@@ -17,8 +17,26 @@ class JobService:
     def get_job(self, job_id: str) -> JobRecord | None:
         return self.store.get_job(job_id)
 
-    def enqueue(self, kind: str, *, payload: dict | None = None, source: str = "manual") -> JobRecord:
-        return self.store.enqueue(kind, payload=payload, source=source)
+    def enqueue(
+        self,
+        kind: str,
+        *,
+        payload: dict | None = None,
+        source: str = "manual",
+        dedupe_key: str | None = None,
+    ) -> JobRecord:
+        return self.store.enqueue(kind, payload=payload, source=source, dedupe_key=dedupe_key)
+
+    def ensure_grade_attempt(self, token: str, *, source: str = "runtime_jobs") -> JobRecord:
+        normalized = str(token or "").strip()
+        if not normalized:
+            raise ValueError("缺少 token")
+        return self.store.enqueue_unique(
+            "grade_attempt",
+            payload={"token": normalized},
+            source=source,
+            dedupe_key=f"grade_attempt:{normalized}",
+        )
 
     def claim_next(self, worker_name: str) -> JobRecord | None:
         return self.store.claim_next(worker_name)
@@ -110,9 +128,14 @@ class JobService:
                         "candidate_id": candidate_id,
                     }
                 case "grade_attempt":
-                    result = {"message": "判卷任务已完成", "status": "placeholder"}
+                    from backend.md_quiz.services import runtime_jobs
+
+                    token = str((job.payload or {}).get("token") or "").strip()
+                    if not token:
+                        return self.store.fail(job.id, "缺少 token")
+                    result = runtime_jobs.process_grade_attempt_job(token)
                 case "archive_attempt":
-                    result = {"message": "归档任务已完成", "status": "placeholder"}
+                    return self.store.fail(job.id, "archive_attempt 已并入 grade_attempt")
                 case "sync_metrics":
                     result = {"message": "指标同步完成", "status": "ok"}
                 case _:

@@ -2048,6 +2048,98 @@ def test_public_quiz_linear_flow_rejects_backtracking_and_submits_on_last_questi
     assert assignment["grading"]["status"] in {"pending", "running", "done"}
 
 
+def test_public_submit_enqueues_single_grade_attempt_job(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    version_id = _seed_exam_with_metadata("public-grade-job-demo")
+    candidate_id = create_candidate("公开判卷候选人", "13900000031")
+    token = "gradejob01"
+    now = datetime.now(timezone.utc).isoformat()
+    create_assignment_record(
+        token,
+        {
+            "token": token,
+            "quiz_key": "public-grade-job-demo",
+            "quiz_version_id": version_id,
+            "candidate_id": candidate_id,
+            "created_at": now,
+            "status": "verified",
+            "status_updated_at": now,
+            "invite_window": {"start_date": None, "end_date": None},
+            "time_limit_seconds": 120,
+            "min_submit_seconds": 0,
+            "verify_max_attempts": 3,
+            "verify": {"attempts": 0, "locked": False},
+            "sms_verify": {"verified": True, "phone": "13900000031"},
+            "question_flow": {
+                "current_index": 0,
+                "current_started_at": None,
+                "reentry_count": 0,
+                "active_session_id": "",
+                "last_session_seen_at": "",
+            },
+            "timing": {"start_at": None, "end_at": None},
+            "answers": {},
+            "grading_started_at": None,
+            "graded_at": None,
+            "grading_error": None,
+            "grading": None,
+        },
+    )
+
+    enter_response = client.post(
+        f"/api/public/attempt/{token}/enter",
+        headers={"X-Public-Session-Id": "sess-grade-job-1"},
+    )
+    assert enter_response.status_code == 200
+
+    submit_response = client.post(
+        f"/api/public/answers/{token}",
+        json={"question_id": "Q1", "answer": "A", "submit": True, "session_id": "sess-grade-job-1"},
+    )
+    assert submit_response.status_code == 200
+    assert submit_response.json()["step"] == "done"
+
+    assignment = get_assignment_record(token)
+    assert assignment is not None
+    assert assignment["status"] == "grading"
+    assert assignment["grading"]["status"] == "pending"
+
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+SELECT COUNT(*)
+FROM runtime_job
+WHERE kind = 'grade_attempt'
+  AND payload->>'token' = %s
+""",
+                (token,),
+            )
+            row = cur.fetchone()
+    assert int((row[0] if row else 0) or 0) == 1
+
+    revisit = client.get(
+        f"/api/public/attempt/{token}",
+        headers={"X-Public-Session-Id": "sess-grade-job-2"},
+    )
+    assert revisit.status_code == 200
+    assert revisit.json()["step"] == "done"
+
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+SELECT COUNT(*)
+FROM runtime_job
+WHERE kind = 'grade_attempt'
+  AND payload->>'token' = %s
+""",
+                (token,),
+            )
+            row = cur.fetchone()
+    assert int((row[0] if row else 0) or 0) == 1
+
+
 def test_public_attempt_ignore_timing_zeroes_timer_fields_and_keeps_manual_flow(monkeypatch, tmp_path):
     client = _build_client(monkeypatch, tmp_path)
     version_id = _seed_exam_with_answer_time("ignore-timing-flow-demo")

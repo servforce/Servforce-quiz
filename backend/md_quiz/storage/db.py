@@ -768,6 +768,7 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
     source TEXT NOT NULL DEFAULT 'manual',
     status TEXT NOT NULL DEFAULT 'pending',
     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    dedupe_key TEXT NULL,
     attempts INT NOT NULL DEFAULT 0,
     error TEXT NULL,
     result JSONB NULL,
@@ -775,9 +776,18 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     started_at TIMESTAMPTZ NULL,
+    lease_expires_at TIMESTAMPTZ NULL,
     finished_at TIMESTAMPTZ NULL
   );
+  ALTER TABLE runtime_job ADD COLUMN IF NOT EXISTS dedupe_key TEXT NULL;
+  ALTER TABLE runtime_job ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ NULL;
   CREATE INDEX IF NOT EXISTS idx_runtime_job_status_created_at ON runtime_job(status, created_at);
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_runtime_job_active_dedupe_key
+    ON runtime_job(dedupe_key)
+    WHERE dedupe_key IS NOT NULL AND status IN ('pending', 'running');
+  CREATE INDEX IF NOT EXISTS idx_runtime_job_running_lease
+    ON runtime_job(status, lease_expires_at)
+    WHERE status = 'running';
 
   CREATE TABLE IF NOT EXISTS process_heartbeat (
     name TEXT PRIMARY KEY,
@@ -2101,9 +2111,11 @@ def _runtime_job_row_to_dict(row: dict[str, Any] | None) -> dict[str, Any] | Non
         return None
     out = dict(row)
     out["payload"] = _json_load(out.get("payload")) or {}
+    dedupe_key = str(out.get("dedupe_key") or "").strip()
+    out["dedupe_key"] = dedupe_key or None
     result = _json_load(out.get("result"))
     out["result"] = result if isinstance(result, dict) else None
-    for key in ("created_at", "updated_at", "started_at", "finished_at"):
+    for key in ("created_at", "updated_at", "started_at", "lease_expires_at", "finished_at"):
         out[key] = _iso_or_none(out.get(key))
     try:
         out["attempts"] = int(out.get("attempts") or 0)
@@ -2120,6 +2132,7 @@ SELECT
   source,
   status,
   payload,
+  dedupe_key,
   attempts,
   error,
   result,
@@ -2127,6 +2140,7 @@ SELECT
   created_at,
   updated_at,
   started_at,
+  lease_expires_at,
   finished_at
 FROM runtime_job
 ORDER BY created_at DESC, id DESC
@@ -2145,6 +2159,7 @@ SELECT
   source,
   status,
   payload,
+  dedupe_key,
   attempts,
   error,
   result,
@@ -2152,6 +2167,7 @@ SELECT
   created_at,
   updated_at,
   started_at,
+  lease_expires_at,
   finished_at
 FROM runtime_job
 WHERE id = %s
@@ -2164,6 +2180,37 @@ LIMIT 1
     return _runtime_job_row_to_dict(dict(row)) if row else None
 
 
+def get_active_runtime_job_by_dedupe_key(dedupe_key: str) -> dict[str, Any] | None:
+    sql = """
+SELECT
+  id,
+  kind,
+  source,
+  status,
+  payload,
+  dedupe_key,
+  attempts,
+  error,
+  result,
+  worker_name,
+  created_at,
+  updated_at,
+  started_at,
+  lease_expires_at,
+  finished_at
+FROM runtime_job
+WHERE dedupe_key = %s
+  AND status IN ('pending', 'running')
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+"""
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (str(dedupe_key or "").strip(),))
+            row = cur.fetchone()
+    return _runtime_job_row_to_dict(dict(row)) if row else None
+
+
 def create_runtime_job(record: dict[str, Any]) -> dict[str, Any]:
     sql = """
 INSERT INTO runtime_job(
@@ -2172,6 +2219,7 @@ INSERT INTO runtime_job(
   source,
   status,
   payload,
+  dedupe_key,
   attempts,
   error,
   result,
@@ -2179,6 +2227,7 @@ INSERT INTO runtime_job(
   created_at,
   updated_at,
   started_at,
+  lease_expires_at,
   finished_at
 )
 VALUES (
@@ -2191,6 +2240,8 @@ VALUES (
   %s,
   %s,
   %s,
+  %s,
+  %s::timestamptz,
   %s::timestamptz,
   %s::timestamptz,
   %s::timestamptz,
@@ -2202,6 +2253,7 @@ RETURNING
   source,
   status,
   payload,
+  dedupe_key,
   attempts,
   error,
   result,
@@ -2209,6 +2261,7 @@ RETURNING
   created_at,
   updated_at,
   started_at,
+  lease_expires_at,
   finished_at
 """
     payload = dict(record or {})
@@ -2222,6 +2275,7 @@ RETURNING
                     str(payload.get("source") or "manual").strip() or "manual",
                     str(payload.get("status") or "pending").strip() or "pending",
                     _json_param(payload.get("payload") or {}),
+                    str(payload.get("dedupe_key") or "").strip() or None,
                     int(payload.get("attempts") or 0),
                     payload.get("error"),
                     _json_param(payload.get("result")) if isinstance(payload.get("result"), dict) else None,
@@ -2229,6 +2283,7 @@ RETURNING
                     payload.get("created_at"),
                     payload.get("updated_at"),
                     payload.get("started_at"),
+                    payload.get("lease_expires_at"),
                     payload.get("finished_at"),
                 ),
             )
@@ -2243,6 +2298,7 @@ INSERT INTO runtime_job(
   source,
   status,
   payload,
+  dedupe_key,
   attempts,
   error,
   result,
@@ -2250,6 +2306,7 @@ INSERT INTO runtime_job(
   created_at,
   updated_at,
   started_at,
+  lease_expires_at,
   finished_at
 )
 VALUES (
@@ -2262,6 +2319,8 @@ VALUES (
   %s,
   %s,
   %s,
+  %s,
+  %s::timestamptz,
   %s::timestamptz,
   %s::timestamptz,
   %s::timestamptz,
@@ -2273,6 +2332,7 @@ SET
   source = EXCLUDED.source,
   status = EXCLUDED.status,
   payload = EXCLUDED.payload,
+  dedupe_key = EXCLUDED.dedupe_key,
   attempts = EXCLUDED.attempts,
   error = EXCLUDED.error,
   result = EXCLUDED.result,
@@ -2280,6 +2340,7 @@ SET
   created_at = EXCLUDED.created_at,
   updated_at = EXCLUDED.updated_at,
   started_at = EXCLUDED.started_at,
+  lease_expires_at = EXCLUDED.lease_expires_at,
   finished_at = EXCLUDED.finished_at
 RETURNING
   id,
@@ -2287,6 +2348,7 @@ RETURNING
   source,
   status,
   payload,
+  dedupe_key,
   attempts,
   error,
   result,
@@ -2294,6 +2356,7 @@ RETURNING
   created_at,
   updated_at,
   started_at,
+  lease_expires_at,
   finished_at
 """
     payload = dict(record or {})
@@ -2307,6 +2370,7 @@ RETURNING
                     str(payload.get("source") or "manual").strip() or "manual",
                     str(payload.get("status") or "pending").strip() or "pending",
                     _json_param(payload.get("payload") or {}),
+                    str(payload.get("dedupe_key") or "").strip() or None,
                     int(payload.get("attempts") or 0),
                     payload.get("error"),
                     _json_param(payload.get("result")) if isinstance(payload.get("result"), dict) else None,
@@ -2314,6 +2378,7 @@ RETURNING
                     payload.get("created_at"),
                     payload.get("updated_at"),
                     payload.get("started_at"),
+                    payload.get("lease_expires_at"),
                     payload.get("finished_at"),
                 ),
             )
@@ -2326,7 +2391,19 @@ WITH next_job AS (
   SELECT id
   FROM runtime_job
   WHERE status = 'pending'
-  ORDER BY created_at ASC, id ASC
+     OR (
+       status = 'running'
+       AND lease_expires_at IS NOT NULL
+       AND lease_expires_at <= %s::timestamptz
+     )
+  ORDER BY
+    CASE WHEN status = 'pending' THEN 0 ELSE 1 END ASC,
+    CASE
+      WHEN status = 'pending' THEN created_at
+      ELSE lease_expires_at
+    END ASC,
+    created_at ASC,
+    id ASC
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
@@ -2336,7 +2413,15 @@ SET
   worker_name = %s,
   started_at = %s::timestamptz,
   updated_at = %s::timestamptz,
-  attempts = COALESCE(job.attempts, 0) + 1
+  lease_expires_at = CASE
+    WHEN job.kind = 'grade_attempt' THEN %s::timestamptz + INTERVAL '1800 seconds'
+    WHEN job.kind IN ('resume_parse', 'git_sync_exams') THEN %s::timestamptz + INTERVAL '600 seconds'
+    ELSE %s::timestamptz + INTERVAL '300 seconds'
+  END,
+  attempts = COALESCE(job.attempts, 0) + 1,
+  error = NULL,
+  result = NULL,
+  finished_at = NULL
 FROM next_job
 WHERE job.id = next_job.id
 RETURNING
@@ -2345,6 +2430,7 @@ RETURNING
   job.source,
   job.status,
   job.payload,
+  job.dedupe_key,
   job.attempts,
   job.error,
   job.result,
@@ -2352,12 +2438,13 @@ RETURNING
   job.created_at,
   job.updated_at,
   job.started_at,
+  job.lease_expires_at,
   job.finished_at
 """
     ts = str(started_at or "").strip()
     with conn_scope() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, (str(worker_name or "").strip(), ts, ts))
+            cur.execute(sql, (ts, str(worker_name or "").strip(), ts, ts, ts, ts, ts))
             row = cur.fetchone()
     return _runtime_job_row_to_dict(dict(row)) if row else None
 
@@ -2369,6 +2456,7 @@ def update_runtime_job(
     updated_at: str,
     error: str | None = None,
     result: dict[str, Any] | None = None,
+    lease_expires_at: str | None = None,
     finished_at: str | None = None,
 ) -> dict[str, Any] | None:
     sql = """
@@ -2377,6 +2465,7 @@ SET
   status = %s,
   error = %s,
   result = %s,
+  lease_expires_at = %s::timestamptz,
   finished_at = %s::timestamptz,
   updated_at = %s::timestamptz
 WHERE id = %s
@@ -2386,6 +2475,7 @@ RETURNING
   source,
   status,
   payload,
+  dedupe_key,
   attempts,
   error,
   result,
@@ -2393,6 +2483,7 @@ RETURNING
   created_at,
   updated_at,
   started_at,
+  lease_expires_at,
   finished_at
 """
     with conn_scope() as conn:
@@ -2403,6 +2494,7 @@ RETURNING
                     str(status or "").strip(),
                     error,
                     _json_param(result) if isinstance(result, dict) else None,
+                    lease_expires_at,
                     finished_at,
                     str(updated_at or "").strip(),
                     str(job_id or "").strip(),
