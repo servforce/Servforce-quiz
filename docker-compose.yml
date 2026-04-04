@@ -3,8 +3,8 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_PASSWORD: admin
-      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: pasword
+      POSTGRES_USER: admin
       POSTGRES_DB: markdown_quiz
     ports:
       - "5433:5432"

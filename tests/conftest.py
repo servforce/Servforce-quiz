@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-_DEFAULT_DATABASE_URL = "postgresql://postgres:admin@127.0.0.1:5433/markdown_quiz"
+_DEFAULT_DATABASE_URL = "postgresql://admin:pasword@127.0.0.1:5433/markdown_quiz"
 _TEST_DATABASE_SUFFIX = "_pytest"
 _TRUNCATE_SQL = """
 TRUNCATE TABLE
