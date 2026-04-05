@@ -143,14 +143,7 @@ postgresql+psycopg2://admin:pasword@127.0.0.1:5433/md_quiz
 - `OPENAI_MODEL`
 - `OPENAI_BASE_URL`
 
-用于自动判卷、简历解析等依赖 OpenAI-compatible `Responses API` 的能力。
-
-当前实现边界：
-
-- 当前代码位于 `backend/md_quiz/services/llm_client.py`，实际调用的是 `client.responses.create(...)`。
-- 这意味着接入目标必须提供 OpenAI-compatible 的 `Responses API`。
-
-推荐服务商：
+用于自动判卷、简历解析等依赖 OpenAI-compatible `Responses API` 的能力，推荐服务商：
 
 - 火山引擎方舟：当前 `.env.example` 默认就是按方舟接入编写，适合作为国内部署的优先选项。官方文档提供了 `OpenAI` SDK + `Responses API` 的直接调用方式，`base_url` 可配置为 `https://ark.cn-beijing.volces.com/api/v3`。
 
