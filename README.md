@@ -189,13 +189,6 @@ OPENAI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 - `ALIYUN_PNVS_SIGN_NAME`
 - `ALIYUN_PNVS_TEMPLATE_CODE`
 
-用于手机号验证码认证能力。
-
-推荐服务商：
-
-- 阿里云号码认证服务（短信认证服务）：这是当前项目唯一可以直接免改代码接入的短信认证方案。现有实现已经固定对接阿里云 DYPNS / PNVS OpenAPI，并调用 `SendSmsVerifyCode` 与 `CheckSmsVerifyCode` 完成验证码发送与校验。
-- 常见替代方案的国内短信接入流程更重。以腾讯云、华为云当前官方文档为例，通常都要求先做实名资质报备，并提交企业主体、营业执照、法人/经办人或授权委托等材料；这类流程更偏企业主体，前置审核更多，落地成本也更高。
-
 接入路径：
 
 1. 在阿里云开通号码认证服务中的“短信认证服务”。
@@ -217,8 +210,6 @@ ALIYUN_PNVS_TEMPLATE_CODE=<短信模板 ID>
 - 阿里云短信认证服务说明：https://help.aliyun.com/zh/pnvs/user-guide/sms-authentication-service/
 - 阿里云号码认证服务版本说明（含 `SendSmsVerifyCode` / `CheckSmsVerifyCode`）：https://help.aliyun.com/zh/pnvs/developer-reference/api-dypnsapi-2017-05-25-changeset
 - 阿里云短信认证服务新手指引（个人/企业、免申请资质说明）：https://help.aliyun.com/zh/pnvs/getting-started/sms-authentication-service-novice-guide
-- 腾讯云短信实名资质管理：https://cloud.tencent.com/document/product/382/108275
-- 华为云申请国内短信资质：https://support.huaweicloud.com/usermanual-msgsms/sms_03_1008.html
 
 完整变量说明见 [docs/reference/configuration.md](docs/reference/configuration.md)。
 

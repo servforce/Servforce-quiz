@@ -5,17 +5,23 @@ from pathlib import Path
 
 import pytest
 
-from backend.md_quiz.services.exam_repo_sync_service import (
-    ExamRepoSyncError,
+from backend.md_quiz.services import (
+    exam_repo_sync_apply,
+    exam_repo_sync_repo,
+    exam_repo_sync_state,
+)
+from backend.md_quiz.services.exam_repo_sync_apply import (
+    _rewrite_archive_asset_urls,
+    _rewrite_asset_paths_for_version,
+    _sync_exam_candidate,
+)
+from backend.md_quiz.services.exam_repo_sync_repo import (
     _build_exam_candidate,
     _clone_repo,
     _load_assets,
     _load_quiz_repo_manifest,
-    _rewrite_archive_asset_urls,
-    _rewrite_asset_paths_for_version,
-    _sync_exam_candidate,
-    perform_exam_repo_sync,
 )
+from backend.md_quiz.services.exam_repo_sync_service import ExamRepoSyncError, perform_exam_repo_sync
 
 
 def _write_text(path: Path, content: str) -> None:
@@ -86,7 +92,7 @@ def test_clone_repo_surfaces_git_stderr(monkeypatch, tmp_path):
             stderr="fatal: unable to access 'https://example.com/repo.git/': Proxy CONNECT aborted",
         )
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.subprocess.run", _boom)
+    monkeypatch.setattr(exam_repo_sync_repo.subprocess, "run", _boom)
 
     with pytest.raises(ExamRepoSyncError, match="Proxy CONNECT aborted"):
         _clone_repo("https://example.com/repo.git", tmp_path / "repo")
@@ -101,8 +107,8 @@ def test_clone_repo_passes_explicit_git_proxy_config(monkeypatch, tmp_path):
             return subprocess.CompletedProcess(cmd, 0, stdout="deadbeef\n", stderr="")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.EXAM_REPO_SYNC_PROXY", "http://10.0.6.20:8888")
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.subprocess.run", _ok)
+    monkeypatch.setattr(exam_repo_sync_repo, "EXAM_REPO_SYNC_PROXY", "http://10.0.6.20:8888")
+    monkeypatch.setattr(exam_repo_sync_repo.subprocess, "run", _ok)
 
     commit = _clone_repo("https://example.com/repo.git", tmp_path / "repo")
 
@@ -299,10 +305,10 @@ def test_sync_exam_candidate_persists_quiz_metadata(monkeypatch):
         "content_hash": "hash-demo",
     }
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.find_quiz_version_by_hash", lambda *args, **kwargs: None)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_quiz_versions", lambda quiz_key: [])
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.create_quiz_version", lambda **kwargs: 9)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.replace_quiz_version_assets", lambda *args, **kwargs: None)
+    monkeypatch.setattr(exam_repo_sync_apply, "find_quiz_version_by_hash", lambda *args, **kwargs: None)
+    monkeypatch.setattr(exam_repo_sync_apply, "list_quiz_versions", lambda quiz_key: [])
+    monkeypatch.setattr(exam_repo_sync_apply, "create_quiz_version", lambda **kwargs: 9)
+    monkeypatch.setattr(exam_repo_sync_apply, "replace_quiz_version_assets", lambda *args, **kwargs: None)
 
     def _capture_payload(version_id, *, title, source_md, spec, public_spec):
         captured["payload"] = {"spec": spec, "public_spec": public_spec, "title": title, "source_md": source_md}
@@ -311,8 +317,8 @@ def test_sync_exam_candidate_persists_quiz_metadata(monkeypatch):
     def _capture_definition(**kwargs):
         captured["definition"] = {"spec": kwargs["spec"], "public_spec": kwargs["public_spec"], "title": kwargs["title"]}
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.update_quiz_version_payload", _capture_payload)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.save_quiz_definition", _capture_definition)
+    monkeypatch.setattr(exam_repo_sync_apply, "update_quiz_version_payload", _capture_payload)
+    monkeypatch.setattr(exam_repo_sync_apply, "save_quiz_definition", _capture_definition)
 
     result = _sync_exam_candidate(candidate, synced_at="2026-04-01T00:00:00+00:00")
 
@@ -398,10 +404,10 @@ title: Demo
         captured.append(candidate)
         return {"quiz_key": "demo", "version_id": 1, "version_no": 1, "action": "created"}
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._clone_repo", _fake_clone)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._sync_exam_candidate", _fake_sync)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._write_git_sync_state", lambda **kwargs: kwargs)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_quiz_definitions", lambda: [])
+    monkeypatch.setattr(exam_repo_sync_repo, "_clone_repo", _fake_clone)
+    monkeypatch.setattr(exam_repo_sync_apply, "_sync_exam_candidate", _fake_sync)
+    monkeypatch.setattr(exam_repo_sync_state, "_write_git_sync_state", lambda **kwargs: kwargs)
+    monkeypatch.setattr(exam_repo_sync_repo, "list_quiz_definitions", lambda: [])
 
     result = perform_exam_repo_sync("https://example.com/repo.git")
 
@@ -435,20 +441,21 @@ def test_perform_exam_repo_sync_marks_invalid_existing_source_as_sync_error(monk
         "public_invite_token": "",
     }
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._clone_repo", _fake_clone)
+    monkeypatch.setattr(exam_repo_sync_repo, "_clone_repo", _fake_clone)
     monkeypatch.setattr(
-        "backend.md_quiz.services.exam_repo_sync_service._build_exam_candidate",
+        exam_repo_sync_repo,
+        "_build_exam_candidate",
         lambda *args, **kwargs: (_ for _ in ()).throw(ExamRepoSyncError("Front matter 缺少 id")),
     )
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._write_git_sync_state", lambda **kwargs: kwargs)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.list_quiz_definitions", lambda: [existing_exam])
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.get_quiz_definition", lambda quiz_key: dict(existing_exam) if quiz_key == "demo" else None)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.set_exam_public_invite", lambda *args, **kwargs: None)
+    monkeypatch.setattr(exam_repo_sync_state, "_write_git_sync_state", lambda **kwargs: kwargs)
+    monkeypatch.setattr(exam_repo_sync_repo, "list_quiz_definitions", lambda: [existing_exam])
+    monkeypatch.setattr(exam_repo_sync_apply, "get_quiz_definition", lambda quiz_key: dict(existing_exam) if quiz_key == "demo" else None)
+    monkeypatch.setattr(exam_repo_sync_apply, "set_exam_public_invite", lambda *args, **kwargs: None)
 
     def _record_save(**kwargs):
         saved_statuses.append(str(kwargs.get("status") or ""))
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service.save_quiz_definition", _record_save)
+    monkeypatch.setattr(exam_repo_sync_apply, "save_quiz_definition", _record_save)
 
     result = perform_exam_repo_sync("https://example.com/repo.git")
 
@@ -494,15 +501,17 @@ format: qml-v2
             "assets": {},
         }
 
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._clone_repo", _fake_clone)
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._build_exam_candidate", _fake_build)
+    monkeypatch.setattr(exam_repo_sync_repo, "_clone_repo", _fake_clone)
+    monkeypatch.setattr(exam_repo_sync_repo, "_build_exam_candidate", _fake_build)
     monkeypatch.setattr(
-        "backend.md_quiz.services.exam_repo_sync_service._sync_exam_candidate",
+        exam_repo_sync_apply,
+        "_sync_exam_candidate",
         lambda candidate, synced_at: {"quiz_key": "keep", "action": "unchanged"},
     )
-    monkeypatch.setattr("backend.md_quiz.services.exam_repo_sync_service._write_git_sync_state", lambda **kwargs: kwargs)
+    monkeypatch.setattr(exam_repo_sync_state, "_write_git_sync_state", lambda **kwargs: kwargs)
     monkeypatch.setattr(
-        "backend.md_quiz.services.exam_repo_sync_service.list_quiz_definitions",
+        exam_repo_sync_repo,
+        "list_quiz_definitions",
         lambda: [
             {
                 "quiz_key": "keep",
@@ -522,7 +531,8 @@ format: qml-v2
         ],
     )
     monkeypatch.setattr(
-        "backend.md_quiz.services.exam_repo_sync_service.delete_exam_domain_data_by_quiz_key",
+        exam_repo_sync_apply,
+        "delete_exam_domain_data_by_quiz_key",
         lambda quiz_key: deleted_quiz_keys.append(str(quiz_key)) or {"quiz_definition": 1},
     )
 
