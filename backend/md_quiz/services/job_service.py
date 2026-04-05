@@ -55,6 +55,14 @@ class JobService:
                     result = perform_exam_repo_sync(repo_url, job_id=job.id)
                 case "scan_exams":
                     result = {"message": "测验扫描任务已完成", "count": 0}
+                case "admin_candidate_resume_upload":
+                    from backend.md_quiz.services import candidate_resume_admin_service
+
+                    result = candidate_resume_admin_service.process_candidate_resume_upload_job(job.payload or {})
+                case "admin_candidate_resume_reparse":
+                    from backend.md_quiz.services import candidate_resume_admin_service
+
+                    result = candidate_resume_admin_service.process_candidate_resume_reparse_job(job.payload or {})
                 case "resume_parse":
                     from backend.md_quiz.services.audit_context import audit_context, get_audit_context
                     from backend.md_quiz.services.resume_service import (

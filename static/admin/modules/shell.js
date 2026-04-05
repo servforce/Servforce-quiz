@@ -228,6 +228,8 @@ export function createAdminShellModule() {
       this.destroyLogsChart();
       this.stopSyncPolling();
       this.stopAssignmentsPolling();
+      this.stopCandidateResumeUploadPolling();
+      this.stopCandidateResumeReparsePolling();
       this.adminCompactTabsState = {};
       await this.api("/api/admin/session/logout", { method: "POST", quiet: true });
       this.session = { authenticated: false, username: "" };

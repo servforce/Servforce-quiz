@@ -8,7 +8,9 @@ from fastapi.testclient import TestClient
 from backend.md_quiz.api import admin as admin_api
 from backend.md_quiz.api import public as public_api
 from backend.md_quiz.app import create_app
-from backend.md_quiz.services import system_status_helpers
+from backend.md_quiz.services import candidate_resume_admin_service, system_status_helpers
+from backend.md_quiz.services.job_service import JobService
+from backend.md_quiz.storage import JobStore
 from backend.md_quiz.storage.db import (
     conn_scope,
     create_assignment_record,
@@ -1015,6 +1017,51 @@ def test_admin_candidate_resume_upload_marks_existing_candidate_as_updated(monke
     assert payload["candidate"]["phone"] == "13912345678"
     assert payload["candidate"]["resume_filename"] == "resume.pdf"
     assert _count_rows("candidate") == 1
+
+
+def test_admin_candidate_resume_upload_job_enqueues_and_completes(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    _stub_admin_resume_parsing(monkeypatch, parsed_name="异步候选人", parsed_phone="13999990001")
+    _admin_login(client)
+
+    response = client.post(
+        "/api/admin/candidates/resume/upload-job",
+        files={"file": ("resume.pdf", b"%PDF-1.4 demo", "application/pdf")},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["status"] == "pending"
+    assert payload["file_name"] == "resume.pdf"
+    job_id = str(payload["job_id"])
+
+    queued_job = client.get(f"/api/admin/jobs/{job_id}")
+    assert queued_job.status_code == 200
+    assert queued_job.json()["kind"] == candidate_resume_admin_service.ADMIN_CANDIDATE_RESUME_UPLOAD_JOB_KIND
+    assert queued_job.json()["status"] == "pending"
+
+    service = JobService(JobStore())
+    processed = service.process(service.get_job(job_id))
+    assert processed is not None
+    assert processed.status == "done"
+    assert processed.result == {
+        "created": True,
+        "candidate_id": processed.result["candidate_id"],
+        "candidate_name": "异步候选人",
+        "resume_filename": "resume.pdf",
+    }
+
+    result = processed.result or {}
+    candidate = get_candidate(int(result["candidate_id"]))
+    assert candidate is not None
+    assert candidate["name"] == "异步候选人"
+    assert candidate["phone"] == "13999990001"
+    assert _count_rows("candidate") == 1
+
+    completed_job = client.get(f"/api/admin/jobs/{job_id}")
+    assert completed_job.status_code == 200
+    assert completed_job.json()["status"] == "done"
+    assert completed_job.json()["result"]["candidate_name"] == "异步候选人"
 
 
 def test_public_attempt_bootstrap_exposes_quiz_metadata(monkeypatch, tmp_path):

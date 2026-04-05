@@ -167,6 +167,7 @@ export const RESUME_PARSE_META = {
 export const createCandidateResumeUploadState = () => ({
   phase: "idle",
   busy: false,
+  jobId: "",
   fileName: "",
   message: "选择 PDF、DOCX 或图片简历后，系统会自动解析手机号并创建或更新候选人。",
   error: "",
@@ -179,6 +180,7 @@ export const createCandidateResumeReparseState = (
 ) => ({
   phase: "idle",
   busy: false,
+  jobId: "",
   fileName: "",
   message,
   error: "",

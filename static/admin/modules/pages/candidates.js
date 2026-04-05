@@ -251,11 +251,118 @@ export function createAdminCandidatesModule() {
     },
 
     resetCandidateResumeUploadState() {
+      this.stopCandidateResumeUploadPolling();
       this.candidateResumeUploadState = createCandidateResumeUploadState();
     },
 
     resetCandidateResumeReparseState() {
+      this.stopCandidateResumeReparsePolling();
       this.candidateResumeReparseState = createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage());
+    },
+
+    stopCandidateResumeUploadPolling() {
+      if (!this.candidateResumeUploadPollTimer) return;
+      window.clearTimeout(this.candidateResumeUploadPollTimer);
+      this.candidateResumeUploadPollTimer = null;
+    },
+
+    stopCandidateResumeReparsePolling() {
+      if (!this.candidateResumeReparsePollTimer) return;
+      window.clearTimeout(this.candidateResumeReparsePollTimer);
+      this.candidateResumeReparsePollTimer = null;
+    },
+
+    scheduleCandidateResumeUploadPolling() {
+      const jobId = String(this.candidateResumeUploadState?.jobId || "").trim();
+      if (!jobId || this.candidateResumeUploadPollTimer || !this.session.authenticated) return;
+      if (this.route.name !== "candidates") return;
+      this.candidateResumeUploadPollTimer = window.setTimeout(async () => {
+        this.candidateResumeUploadPollTimer = null;
+        await this.pollCandidateResumeUploadJob();
+      }, this.candidateResumeUploadPollIntervalMs);
+    },
+
+    scheduleCandidateResumeReparsePolling() {
+      const jobId = String(this.candidateResumeReparseState?.jobId || "").trim();
+      if (!jobId || this.candidateResumeReparsePollTimer || !this.session.authenticated) return;
+      if (this.route.name !== "candidate-detail") return;
+      this.candidateResumeReparsePollTimer = window.setTimeout(async () => {
+        this.candidateResumeReparsePollTimer = null;
+        await this.pollCandidateResumeReparseJob();
+      }, this.candidateResumeReparsePollIntervalMs);
+    },
+
+    async pollCandidateResumeUploadJob() {
+      const jobId = String(this.candidateResumeUploadState?.jobId || "").trim();
+      if (!jobId || this.route.name !== "candidates") return;
+      const job = await this.api(`/api/admin/jobs/${encodeURIComponent(jobId)}`, { quiet: true });
+      if (!job) return;
+      const status = String(job?.status || "").trim().toLowerCase();
+      if (["pending", "running"].includes(status)) {
+        this.scheduleCandidateResumeUploadPolling();
+        return;
+      }
+      if (status === "done") {
+        const result = job?.result || {};
+        const created = Boolean(result?.created);
+        const candidateId = Number(result?.candidate_id || 0);
+        this.candidateResumeUploadState = {
+          ...createCandidateResumeUploadState(),
+          phase: "success",
+          fileName: String(result?.resume_filename || this.candidateResumeUploadState.fileName || ""),
+          message: created ? "已创建候选人并写入简历。" : "已更新候选人并更新简历。",
+          created,
+          candidateName: String(result?.candidate_name || "").trim(),
+          candidateId,
+        };
+        this.showNotice(created ? "简历已入库并创建候选人" : "简历已入库并更新候选人");
+        await this.loadCandidates({ quiet: true });
+        if (candidateId > 0) {
+          await this.handleRoute(`/admin/candidates/${candidateId}`);
+        }
+        return;
+      }
+      this.candidateResumeUploadState = {
+        ...createCandidateResumeUploadState(),
+        phase: "error",
+        fileName: this.candidateResumeUploadState.fileName,
+        message: "本次简历入库失败，请重新选择文件。",
+        error: String(job?.error || "简历入库失败").trim(),
+      };
+    },
+
+    async pollCandidateResumeReparseJob() {
+      const jobId = String(this.candidateResumeReparseState?.jobId || "").trim();
+      if (!jobId || this.route.name !== "candidate-detail") return;
+      const job = await this.api(`/api/admin/jobs/${encodeURIComponent(jobId)}`, { quiet: true });
+      if (!job) return;
+      const status = String(job?.status || "").trim().toLowerCase();
+      if (["pending", "running"].includes(status)) {
+        this.scheduleCandidateResumeReparsePolling();
+        return;
+      }
+      if (status === "done") {
+        const result = job?.result || {};
+        const candidateId = Number(result?.candidate_id || this.candidateDetail?.candidate?.id || 0);
+        if (candidateId > 0) {
+          await this.loadCandidateDetail(candidateId);
+        }
+        this.candidateResumeReparseState = {
+          ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),
+          phase: "success",
+          fileName: String(result?.resume_filename || this.candidateResumeReparseState.fileName || ""),
+          message: "新简历已覆盖，解析结果已刷新。",
+        };
+        this.showNotice("简历重新解析完成");
+        return;
+      }
+      this.candidateResumeReparseState = {
+        ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),
+        phase: "error",
+        fileName: this.candidateResumeReparseState.fileName,
+        message: "重新解析失败，请重新选择文件。",
+        error: String(job?.error || "简历重新解析失败").trim(),
+      };
     },
 
     openFilePicker(refName) {
@@ -292,17 +399,18 @@ export function createAdminCandidatesModule() {
     async handleCandidateResumeUploadSelected(event) {
       const file = event?.target?.files?.[0];
       if (!file || this.candidateResumeUploadState.busy) return;
+      this.stopCandidateResumeUploadPolling();
       this.candidateResumeUploadState = {
         ...createCandidateResumeUploadState(),
         phase: "running",
         busy: true,
         fileName: file.name,
-        message: "正在上传并解析手机号、姓名和简历详情。",
+        message: "正在上传简历并创建后台解析任务。",
       };
       const form = new FormData();
       form.append("file", file);
       try {
-        const data = await this.api("/api/admin/candidates/resume/upload", {
+        const data = await this.api("/api/admin/candidates/resume/upload-job", {
           method: "POST",
           body: form,
           quiet: true,
@@ -311,21 +419,19 @@ export function createAdminCandidatesModule() {
           this.resetCandidateResumeUploadState();
           return;
         }
-        const created = Boolean(data?.created);
-        const candidateName = String(data?.candidate?.name || "").trim();
         this.candidateResumeUploadState = {
           ...createCandidateResumeUploadState(),
-          phase: "success",
-          fileName: String(data?.candidate?.resume_filename || file.name),
-          message: created ? "已创建候选人并写入简历。" : "已更新候选人并更新简历。",
-          created,
-          candidateName,
-          candidateId: Number(data?.candidate?.id || 0),
+          phase: "running",
+          busy: true,
+          jobId: String(data?.job_id || "").trim(),
+          fileName: String(data?.file_name || file.name),
+          message: "简历已接收，正在后台解析手机号、姓名和简历详情。",
         };
-        this.showNotice(created ? "简历已入库并创建候选人" : "简历已入库并更新候选人");
-        await this.loadCandidates({ quiet: true });
-        if (data?.candidate?.id) {
-          await this.handleRoute(`/admin/candidates/${data.candidate.id}`);
+        this.showNotice("简历已接收，正在后台解析");
+        if (this.candidateResumeUploadState.jobId) {
+          this.scheduleCandidateResumeUploadPolling();
+        } else {
+          throw new Error("后台任务创建失败");
         }
       } catch (error) {
         this.candidateResumeUploadState = {
@@ -341,7 +447,9 @@ export function createAdminCandidatesModule() {
     async loadCandidateDetail(candidateId) {
       this.candidateDetail = await this.api(`/api/admin/candidates/${candidateId}`);
       this.candidateEvaluation = "";
-      this.resetCandidateResumeReparseState();
+      if (!this.candidateResumeReparseState.busy) {
+        this.resetCandidateResumeReparseState();
+      }
     },
 
     async saveCandidateEvaluation() {
@@ -368,6 +476,7 @@ export function createAdminCandidatesModule() {
     handleCandidateResumeReparseSelected(event) {
       const file = event?.target?.files?.[0];
       if (!file || this.candidateResumeReparseState.busy) return;
+      this.stopCandidateResumeReparsePolling();
       this.candidateResumeReparseState = {
         ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),
         phase: "confirm",
@@ -385,18 +494,19 @@ export function createAdminCandidatesModule() {
     async confirmCandidateResumeReparse() {
       const file = this.candidateResumeReparseState.pendingFile;
       if (!file || this.candidateResumeReparseState.busy || !this.candidateDetail.candidate?.id) return;
+      this.stopCandidateResumeReparsePolling();
       this.candidateResumeReparseState = {
         ...this.candidateResumeReparseState,
         phase: "running",
         busy: true,
         error: "",
-        message: "正在上传新简历并重新解析。",
+        message: "正在上传新简历并创建后台解析任务。",
       };
       const form = new FormData();
       form.append("file", file);
       try {
         const data = await this.api(
-          `/api/admin/candidates/${this.candidateDetail.candidate.id}/resume/reparse`,
+          `/api/admin/candidates/${this.candidateDetail.candidate.id}/resume/reparse-job`,
           {
             method: "POST",
             body: form,
@@ -407,14 +517,21 @@ export function createAdminCandidatesModule() {
           this.resetCandidateResumeReparseState();
           return;
         }
-        this.candidateDetail = data;
         this.candidateResumeReparseState = {
           ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),
-          phase: "success",
-          fileName: String(data?.candidate?.resume_filename || file.name),
-          message: "新简历已覆盖，解析结果已刷新。",
+          phase: "running",
+          busy: true,
+          jobId: String(data?.job_id || "").trim(),
+          fileName: String(data?.file_name || file.name),
+          message: "新简历已接收，正在后台重新解析。",
+          pendingFile: null,
         };
-        this.showNotice("简历重新解析完成");
+        this.showNotice("新简历已接收，正在后台重新解析");
+        if (this.candidateResumeReparseState.jobId) {
+          this.scheduleCandidateResumeReparsePolling();
+        } else {
+          throw new Error("后台任务创建失败");
+        }
       } catch (error) {
         this.candidateResumeReparseState = {
           ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),

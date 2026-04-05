@@ -170,6 +170,12 @@ export function createAdminRouterModule() {
       if (!["assignments", "attempt-detail"].includes(this.route.name)) {
         this.stopAssignmentsPolling();
       }
+      if (this.route.name !== "candidates") {
+        this.stopCandidateResumeUploadPolling();
+      }
+      if (this.route.name !== "candidate-detail") {
+        this.stopCandidateResumeReparsePolling();
+      }
 
       switch (this.route.name) {
         case "quizzes":

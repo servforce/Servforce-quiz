@@ -96,6 +96,12 @@ def upload_candidate_resume(request: Request, file: UploadFile = File(...)):
     }
 
 
+@router.post("/candidates/resume/upload-job", status_code=status.HTTP_202_ACCEPTED)
+def enqueue_candidate_resume_upload(request: Request, file: UploadFile = File(...)):
+    shared._require_admin(request)
+    return shared.candidate_resume_admin_service.enqueue_candidate_resume_upload(file)
+
+
 @router.get("/candidates/{candidate_id}")
 def get_candidate_detail(candidate_id: int, request: Request):
     shared._require_admin(request)
@@ -205,3 +211,9 @@ def reparse_candidate_resume(candidate_id: int, request: Request, file: UploadFi
     result = shared.candidate_resume_admin_service.reparse_candidate_resume(candidate_id, file)
     candidate = result.get("candidate") if isinstance(result.get("candidate"), dict) else {}
     return shared._serialize_candidate_detail(candidate_id, candidate)
+
+
+@router.post("/candidates/{candidate_id}/resume/reparse-job", status_code=status.HTTP_202_ACCEPTED)
+def enqueue_candidate_resume_reparse(candidate_id: int, request: Request, file: UploadFile = File(...)):
+    shared._require_admin(request)
+    return shared.candidate_resume_admin_service.enqueue_candidate_resume_reparse(candidate_id, file)

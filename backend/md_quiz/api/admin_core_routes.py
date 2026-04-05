@@ -73,6 +73,15 @@ def list_jobs(request: Request, container=Depends(get_container)):
     return {"items": [item.model_dump() for item in container.job_service.list_jobs()]}
 
 
+@router.get("/jobs/{job_id}")
+def get_job(job_id: str, request: Request, container=Depends(get_container)):
+    shared._require_admin(request)
+    job = container.job_service.get_job(job_id)
+    if job is None:
+        raise shared.HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="任务不存在")
+    return job.model_dump()
+
+
 @router.post("/jobs", status_code=status.HTTP_201_CREATED)
 def enqueue_job(payload: shared.EnqueueJobPayload, request: Request, container=Depends(get_container)):
     shared._require_admin(request)

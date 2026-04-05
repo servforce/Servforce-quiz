@@ -40,3 +40,13 @@ def test_css_build_script_produces_bundles() -> None:
 
     assert (ROOT / "static" / "admin.css").exists()
     assert (ROOT / "static" / "public.css").exists()
+
+
+def test_admin_candidates_page_uses_resume_job_polling() -> None:
+    source = (ROOT / "static" / "admin" / "modules" / "pages" / "candidates.js").read_text(encoding="utf-8")
+
+    assert "/api/admin/candidates/resume/upload-job" in source
+    assert "/resume/reparse-job" in source
+    assert "/api/admin/jobs/" in source
+    assert "scheduleCandidateResumeUploadPolling" in source
+    assert "scheduleCandidateResumeReparsePolling" in source
