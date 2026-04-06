@@ -59,8 +59,9 @@
 ### 前置依赖
 
 - Python 3
-- Node.js 与 npm
 - PostgreSQL 16
+
+在 Debian / Ubuntu 宿主机上执行 `./scripts/dev/install-deps.sh` 时，如果检测到缺少 `node` / `npm`，脚本会尝试通过 `apt-get install -y nodejs npm` 自动补装；其它系统仍需提前手动安装 Node.js 与 npm。
 
 仓库自带两容器编排：
 

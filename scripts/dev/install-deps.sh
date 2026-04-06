@@ -40,6 +40,49 @@ resolve_bootstrap_python() {
   exit 1
 }
 
+run_with_privilege() {
+  if [[ "$(id -u)" == "0" ]]; then
+    "$@"
+    return
+  fi
+  if command -v sudo >/dev/null 2>&1; then
+    if ! sudo -n true >/dev/null 2>&1 && [[ ! -t 0 ]]; then
+      echo "安装系统依赖需要 root/sudo 权限；当前环境无法交互输入 sudo 密码。" >&2
+      exit 1
+    fi
+    sudo "$@"
+    return
+  fi
+  echo "当前用户无 root 权限，且系统中缺少 sudo，无法安装系统依赖。" >&2
+  exit 1
+}
+
+ensure_node_npm() {
+  if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "[node] 检测到缺少 node/npm，尝试自动安装"
+  if ! command -v apt-get >/dev/null 2>&1; then
+    cat >&2 <<'EOF'
+缺少 node/npm，且当前系统不支持 apt-get 自动安装。
+请手动安装 Node.js 与 npm 后重新执行：
+  ./scripts/dev/install-deps.sh node
+EOF
+    exit 1
+  fi
+
+  run_with_privilege apt-get update
+  run_with_privilege apt-get install -y nodejs npm
+
+  if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "node/npm 安装后仍不可用，请检查系统包源或 PATH 配置。" >&2
+  exit 1
+}
+
 ensure_venv_pip() {
   local python_bin="$1"
   local bootstrap_python="$2"
@@ -95,10 +138,8 @@ install_node_deps() {
     echo "[node] 未找到 static/package.json，跳过前端依赖安装"
     return 0
   fi
-  if ! command -v npm >/dev/null 2>&1; then
-    echo "缺少 npm，无法安装 static/ 前端依赖。" >&2
-    exit 1
-  fi
+
+  ensure_node_npm
 
   echo "[node] 安装 static/ 前端依赖"
   (
