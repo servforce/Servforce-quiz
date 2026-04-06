@@ -40,15 +40,50 @@ resolve_bootstrap_python() {
   exit 1
 }
 
+ensure_venv_pip() {
+  local python_bin="$1"
+  local bootstrap_python="$2"
+
+  if "$python_bin" -m pip --version >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "[python] 检测到虚拟环境缺少 pip，尝试使用 ensurepip 修复"
+  if "$python_bin" -m ensurepip --upgrade >/dev/null 2>&1; then
+    if "$python_bin" -m pip --version >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
+  echo "[python] 虚拟环境内 ensurepip 修复失败，尝试使用系统 Python 补装 pip"
+  if "$bootstrap_python" -m ensurepip --upgrade >/dev/null 2>&1; then
+    if "$python_bin" -m pip --version >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
+
+  cat >&2 <<'EOF'
+缺少 pip，且自动修复失败。
+请先确认系统已安装 venv/ensurepip 相关组件，例如 Ubuntu/Debian 上可执行：
+  apt-get update
+  apt-get install -y python3-venv
+然后删除 .venv 后重新执行：
+  ./scripts/dev/install-deps.sh python
+EOF
+  exit 1
+}
+
 install_python_deps() {
+  local bootstrap_python=""
+  bootstrap_python="$(resolve_bootstrap_python)"
   local python_bin=""
   if ! python_bin="$(resolve_venv_python)"; then
-    local bootstrap_python=""
-    bootstrap_python="$(resolve_bootstrap_python)"
     echo "[python] 创建虚拟环境 .venv"
     "$bootstrap_python" -m venv "$ROOT_DIR/.venv"
     python_bin="$(resolve_venv_python)"
   fi
+
+  ensure_venv_pip "$python_bin" "$bootstrap_python"
 
   echo "[python] 安装 requirements.txt 和 pytest"
   "$python_bin" -m pip install --upgrade pip
