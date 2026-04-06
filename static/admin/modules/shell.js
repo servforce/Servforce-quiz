@@ -216,6 +216,7 @@ export function createAdminShellModule() {
           headers: { "Content-Type": "application/json" },
         });
         await this.refreshSession();
+        this.loginForm = { username: "", password: "" };
         await this.$nextTick();
         await this.loadBootstrap();
         await this.handleRoute("/admin/quizzes");
@@ -233,6 +234,8 @@ export function createAdminShellModule() {
       this.adminCompactTabsState = {};
       await this.api("/api/admin/session/logout", { method: "POST", quiet: true });
       this.session = { authenticated: false, username: "" };
+      this.loginForm = { username: "", password: "" };
+      this.error = "";
       this.repoBinding = {};
       this.resetRebindForm();
       history.replaceState({}, "", "/admin/login");

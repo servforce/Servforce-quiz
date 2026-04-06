@@ -28,6 +28,21 @@ def test_finalize_short_grade_uses_reason_fallback_callback():
     assert reason == "命中主要要点，但少一个例子。"
 
 
+def test_default_prompt_places_rubric_before_question_and_declares_priority():
+    prompt = grading_short_answer._default_prompt(
+        question="题目内容",
+        rubric="任意非空回答给满分",
+        answer="测试",
+        max_points=5,
+    )
+
+    assert "评分标准优先级最高" in prompt
+    assert "若评分标准明确写出特殊判分规则" in prompt
+    assert prompt.index("【评分标准】") < prompt.index("【题目】")
+    assert prompt.index("【题目】") < prompt.index("【考生回答】")
+    assert "通用评分规则" not in prompt
+
+
 def test_traits_helpers_build_summary_and_compact_text():
     trait_result = {
         "dimension_list": [

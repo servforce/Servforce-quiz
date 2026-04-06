@@ -23,7 +23,7 @@ navItems: [
   { href: "/admin/status", label: "系统状态", icon: "monitoring" },
   { href: "/admin/mcp", label: "MCP", iconKind: "mcp" },
 ],
-loginForm: { username: "admin", password: "password" },
+loginForm: { username: "", password: "" },
 filters: {
   quizzes: { q: "" },
   candidates: { q: "" },

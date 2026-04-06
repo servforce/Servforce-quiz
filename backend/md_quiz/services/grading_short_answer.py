@@ -42,30 +42,11 @@ def _parse_intish(v: Any) -> int | None:
         return None
 
 
-def _default_prompt(question: str, rubric: str, answer: str, max_points: int) -> str:
-    return (
-        "你是一名公正的阅卷老师，只能依据评分标准评分，但要允许部分得分。\n"
-        "评分规则：\n"
-        f"1) score 为 0..{max_points} 的整数（可取中间分，不要只给 0 或满分）。\n"
-        "2) 不要求与标准答案完全一致：允许同义改写、不同表述方式、举例说明；只要与评分要点沾边就可给部分分。\n"
-        "3) 若答案为空、纯数字/乱码/随意输入等无意义内容，或与题目/评分标准完全无关：score=0。\n"
-        "4) 若答案与评分标准矛盾、把关键事实说反（核心因果/结论颠倒）：score=0。\n"
-        "5) 若答案只命中部分要点，请按要点覆盖程度给分；rubric 未细分时请自行拆分为 3-5 个要点再评。\n"
-        "6) reason 用 1-3 句说明得分点/失分点，不要泄露标准答案原文。\n"
-        "输出格式：只输出 JSON，必须包含字段：score、reason、relevance、contradiction。\n"
-        f"- score: 0..{max_points} 的整数\n"
-        "- relevance: 0..3（0=完全无关/无意义；1=略相关；2=相关且部分正确；3=高度相关且基本正确）\n"
-        "- contradiction: true/false（true=关键事实与评分标准矛盾/说反，必须 score=0）\n"
-        f"示例：{{\"score\":3,\"reason\":\"...\",\"relevance\":2,\"contradiction\":false}}。\n"
-        f"【题目】{question}\n"
-        f"【评分标准】{rubric}\n"
-        f"【考生回答】{answer}\n"
-    )
-
-
 def _short_grading_prefix(max_points: int) -> str:
     return (
         "评分补充要求：\n"
+        "- 先阅读后面的评分标准；评分标准优先级最高。\n"
+        "- 若评分标准明确写出特殊判分规则，必须优先执行评分标准，不要被下面的通用规则覆盖。\n"
         f"- 必须使用 0..{max_points} 的整数分，允许部分得分（可取中间分）。\n"
         "- 若答案为空、纯数字/乱码/随意输入等无意义内容、与题目或评分标准完全无关：给 0 分。\n"
         "- 若答案与评分标准矛盾、把关键事实说反（核心因果/结论颠倒）：给 0 分。\n"
@@ -80,6 +61,8 @@ def _short_batch_grading_prefix() -> str:
     return (
         "评分补充要求：\n"
         "- 对每道题分别给出结果，不要遗漏题目。\n"
+        "- 先阅读每道题自己的评分标准；每道题的评分标准优先级都高于通用规则。\n"
+        "- 若某题评分标准明确写出特殊判分规则，必须优先执行该题评分标准，不要被下面的通用规则覆盖。\n"
         "- 每道题的 score 都必须落在该题自己的 0..max_points 范围内，允许部分得分。\n"
         "- 若答案为空、纯数字/乱码/随意输入等无意义内容、与题目或评分标准完全无关：该题给 0 分。\n"
         "- 若答案与评分标准矛盾、把关键事实说反（核心因果/结论颠倒）：该题给 0 分。\n"
@@ -88,6 +71,26 @@ def _short_batch_grading_prefix() -> str:
         "- 只依据考生回答作答，不要推测其“可能想表达什么”。\n"
         '- 只输出一个 JSON 对象，格式为 {"results":[...]}。\n'
     )
+
+
+def _short_prompt_body(question: str, rubric: str, answer: str) -> str:
+    return (
+        f"【评分标准】{rubric}\n"
+        f"【题目】{question}\n"
+        f"【考生回答】{answer}\n"
+    )
+
+
+def _compose_short_prompt(*, max_points: int, body: str) -> str:
+    return _short_grading_prefix(max_points) + "\n" + str(body or "").strip() + "\n"
+
+
+def _default_prompt(question: str, rubric: str, answer: str, max_points: int) -> str:
+    body = (
+        "请严格按照以下评分标准对本题作答评分。\n"
+        + _short_prompt_body(question, rubric, answer)
+    )
+    return _compose_short_prompt(max_points=max_points, body=body)
 
 
 def _is_blank_short_answer(answer: Any) -> bool:
@@ -241,8 +244,8 @@ def _default_batch_prompt(batch_items: list[dict[str, Any]]) -> str:
             [
                 f"### {item['qid']}",
                 f"max_points={int(item['max_points'] or 0)}",
-                f"题目：{str(q.get('stem_md') or '').strip()}",
                 f"评分标准：{str(q.get('rubric') or '').strip()}",
+                f"题目：{str(q.get('stem_md') or '').strip()}",
                 f"考生回答：{str(item.get('answer') or '').strip()}",
                 "",
             ]
@@ -372,7 +375,7 @@ def _grade_short(
     question = q.get("stem_md") or ""
     prompt_template = _short_prompt_template(q, exam_llm)
     if prompt_template:
-        prompt = (
+        body = (
             prompt_template.replace("{{max_points}}", str(max_points))
             .replace("{max_points}", str(max_points))
             .replace("{{question}}", question)
@@ -382,10 +385,9 @@ def _grade_short(
             .replace("{{answer}}", answer)
             .replace("{answer}", answer)
         )
+        prompt = _compose_short_prompt(max_points=max_points, body=body)
     else:
         prompt = _default_prompt(question, rubric, answer, max_points)
-
-    prompt = _short_grading_prefix(max_points) + "\n" + prompt
 
     call_json = llm_json or _default_call_llm_json
     raw = call_json(prompt)
