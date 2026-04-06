@@ -531,6 +531,28 @@ export function createAdminAssignmentsModule() {
       }
     },
 
+    async toggleAssignmentHandling(item) {
+      if (!this.canToggleAssignmentHandling(item)) return;
+      const token = String(item?.token || "").trim();
+      if (!token) return;
+      const handled = Boolean(item?.needs_attention);
+      const result = await this.api(`/api/admin/assignments/${encodeURIComponent(token)}/handling`, {
+        method: "POST",
+        body: JSON.stringify({ handled }),
+        headers: { "Content-Type": "application/json" },
+      });
+      const updatedItem = result?.item;
+      if (updatedItem && typeof updatedItem === "object") {
+        this.applyAssignmentItemUpdate(updatedItem);
+      } else {
+        await this.loadAssignments({ quiet: true });
+        if (String(this.attemptDetail?.quiz_paper?.token || "").trim() === token) {
+          await this.loadAttemptDetail(token, { quiet: true });
+        }
+      }
+      this.showNotice(handled ? "已标记为已处理" : "已取消已处理");
+    },
+
     async deleteAssignment(item) {
       if (!this.canDeleteAssignment(item)) return;
       const token = String(item?.token || "").trim();
