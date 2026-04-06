@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from backend.md_quiz.services import candidate_resume_admin_service
 from backend.md_quiz.services import exam_helpers, runtime_jobs, support_deps as deps
+from backend.md_quiz.services.request_url_helpers import external_base_url
 from backend.md_quiz.services import system_status_helpers, validation_helpers
 from backend.md_quiz.services.exam_repo_sync_service import ExamRepoSyncError
 
@@ -499,7 +500,7 @@ def _compute_exam_stats(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def _admin_base_url(request: Request) -> str:
-    return str(request.base_url).rstrip("/")
+    return external_base_url(request)
 
 
 def _repo_sync_http_status(exc: Exception) -> int:

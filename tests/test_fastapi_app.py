@@ -888,6 +888,28 @@ def test_public_invite_toggle_clears_link_when_disabled_and_exposes_qr(monkeypat
     assert disabled_quiz["public_invite_qr_url"] == ""
 
 
+def test_public_invite_url_uses_forwarded_https_scheme(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    _seed_exam_with_metadata("public-toggle-forwarded-demo")
+    _admin_login(client)
+    headers = {"X-Forwarded-Proto": "https"}
+
+    enable_response = client.post(
+        "/api/admin/quizzes/public-toggle-forwarded-demo/public-invite",
+        json={"enabled": True},
+        headers=headers,
+    )
+
+    assert enable_response.status_code == 200
+    enabled_payload = enable_response.json()
+    public_token = str(enabled_payload["token"])
+    assert enabled_payload["public_url"] == f"https://testserver/p/{public_token}"
+
+    detail_response = client.get("/api/admin/quizzes/public-toggle-forwarded-demo", headers=headers)
+    assert detail_response.status_code == 200
+    assert detail_response.json()["quiz"]["public_invite_url"] == f"https://testserver/p/{public_token}"
+
+
 def test_legacy_redirects_preserve_path_and_query(monkeypatch, tmp_path):
     client = _build_client(monkeypatch, tmp_path)
 
@@ -1718,6 +1740,34 @@ def test_admin_assignments_list_exposes_invite_urls_and_end_date_filters(monkeyp
     assert item["source_kind"] == "direct"
     assert item["source_label"] == "主动邀约"
     assert item["needs_attention"] is False
+
+
+def test_admin_assignment_url_uses_forwarded_https_scheme(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    _seed_exam_with_metadata("assignment-forwarded-demo")
+    candidate_id = create_candidate("代理协议候选人", "13900000031")
+    _admin_login(client)
+    headers = {"X-Forwarded-Proto": "https"}
+
+    create_response = client.post(
+        "/api/admin/assignments",
+        json={
+            "quiz_key": "assignment-forwarded-demo",
+            "candidate_id": candidate_id,
+            "invite_start_date": "2026-04-01",
+            "invite_end_date": "2026-04-02",
+        },
+        headers=headers,
+    )
+
+    assert create_response.status_code == 201
+    token = create_response.json()["token"]
+    assert create_response.json()["url"] == f"https://testserver/t/{token}"
+
+    list_response = client.get("/api/admin/assignments", headers=headers)
+    assert list_response.status_code == 200
+    item = next(it for it in list_response.json()["items"] if it["token"] == token)
+    assert item["url"] == f"https://testserver/t/{token}"
 
 
 def test_public_invite_only_enters_admin_list_after_verify_and_marks_public_source(monkeypatch, tmp_path):

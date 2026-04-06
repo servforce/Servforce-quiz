@@ -7,6 +7,7 @@ from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 
 from backend.md_quiz.services import exam_helpers, resume_ingest_service, runtime_bootstrap, runtime_jobs
+from backend.md_quiz.services.request_url_helpers import external_base_url
 from backend.md_quiz.services import support_deps as deps
 from backend.md_quiz.services import validation_helpers
 from backend.md_quiz.storage import JobStore
@@ -53,7 +54,7 @@ def ensure_public_invite(public_token: str, request: Request) -> JSONResponse:
         quiz_key=quiz_key,
         candidate_id=0,
         quiz_version_id=quiz_version_id,
-        base_url=str(request.base_url).rstrip("/"),
+        base_url=external_base_url(request),
         phone="",
         invite_start_date=None,
         invite_end_date=None,

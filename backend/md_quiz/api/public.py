@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from backend.md_quiz.config import load_runtime_defaults
 from backend.md_quiz.services import exam_helpers, runtime_bootstrap, runtime_jobs, support_deps as deps
 from backend.md_quiz.services import public_flow_service
+from backend.md_quiz.services.request_url_helpers import external_base_url
 from backend.md_quiz.services import validation_helpers
 
 router = APIRouter(prefix="/api/public", tags=["public"])
@@ -41,7 +42,7 @@ class AnswerActionPayload(BaseModel):
 
 
 def _public_base_url(request: Request) -> str:
-    return str(request.base_url).rstrip("/")
+    return external_base_url(request)
 
 
 def _compute_exam_stats(spec: dict[str, Any]) -> dict[str, Any]:
