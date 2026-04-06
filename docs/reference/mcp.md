@@ -12,12 +12,18 @@
 - 远程 MCP 使用 `Bearer Token`
 - 不复用后台浏览器登录态
 - 启用 MCP 时必须设置 `MCP_AUTH_TOKEN`
+- 管理端 `/admin/mcp` 会在管理员登录后显示当前 Bearer Token，默认以 `****` 遮罩，可手动点按眼睛按钮显示或复制
 
 ## 环境变量
 
 - `MCP_ENABLED`
 - `MCP_AUTH_TOKEN`
 - `MCP_CORS_ALLOW_ORIGINS`
+
+说明：
+
+- `MCP_CORS_ALLOW_ORIGINS` 只在浏览器型 MCP 客户端需要跨域访问时设置
+- `OpenClaw`、`VS Code`、`Codex` 这类本地桌面/CLI 客户端通常不需要额外配置 CORS
 
 ## 工具清单
 
@@ -84,9 +90,73 @@
 5. `assignment_get` / `assignment_list` 查看作答和结果
 6. `system_status_summary` / `runtime_config_update` 查看或调整系统状态
 
+## 客户端配置示例
+
+下面示例统一假设：
+
+- MCP 地址：`https://your-host.example.com/mcp`
+- Bearer Token：从后台 `/admin/mcp` 页面复制
+
+### OpenClaw
+
+OpenClaw 管理远程 MCP 定义时，核心字段是 `url`、`transport="streamable-http"` 与 `headers.Authorization`。
+
+可直接写入 OpenClaw 配置里的 `mcp.servers`，也可用命令行保存：
+
+```bash
+openclaw mcp set mdQuiz '{
+  "url": "https://your-host.example.com/mcp",
+  "transport": "streamable-http",
+  "headers": {
+    "Authorization": "Bearer <复制的 Bearer Token>"
+  }
+}'
+```
+
+### VS Code
+
+VS Code 当前把 MCP 配置保存在工作区 `.vscode/mcp.json` 或用户级 `mcp.json`。为了避免把 token 明文写进仓库，建议使用 `promptString` 输入变量：
+
+```json
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "md-quiz-mcp-token",
+      "description": "MD Quiz MCP Bearer Token",
+      "password": true
+    }
+  ],
+  "servers": {
+    "mdQuiz": {
+      "type": "http",
+      "url": "https://your-host.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${input:md-quiz-mcp-token}"
+      }
+    }
+  }
+}
+```
+
+### Codex
+
+Codex 建议把 Bearer Token 放进环境变量，再在 `~/.codex/config.toml` 里引用该变量：
+
+```bash
+export MD_QUIZ_MCP_TOKEN='<复制的 Bearer Token>'
+```
+
+```toml
+[mcp_servers.mdQuiz]
+enabled = true
+url = "https://your-host.example.com/mcp"
+bearer_token_env_var = "MD_QUIZ_MCP_TOKEN"
+```
+
 ## 后台说明页
 
 - 后台左侧导航新增 `MCP`
 - 页面路径固定为 `/admin/mcp`
-- 该页只展示接入摘要、能力范围、典型流程和安全规则
+- 该页展示接入摘要、Bearer Token、客户端配置片段、能力范围、典型流程和安全规则
 - 页面不渲染 Markdown，不承担文档编辑功能；完整说明仍以本页为准

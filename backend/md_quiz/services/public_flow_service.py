@@ -17,6 +17,108 @@ _SMS_SEND_MAX = 3
 _SMS_VERIFY_CODE_LENGTH = 4
 
 
+def _iso_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value or "").strip()
+
+
+def _candidate_resume_meta(candidate_id: int) -> dict[str, Any]:
+    candidate = deps.get_candidate(int(candidate_id)) or {}
+    try:
+        size = int(candidate.get("resume_size") or 0)
+    except Exception:
+        size = 0
+    filename = str(candidate.get("resume_filename") or "").strip()
+    parsed_at = _iso_text(candidate.get("resume_parsed_at"))
+    if not filename and size <= 0 and not parsed_at:
+        resume = deps.get_candidate_resume(int(candidate_id)) or {}
+        filename = str(resume.get("resume_filename") or "").strip()
+        try:
+            size = int(resume.get("resume_size") or 0)
+        except Exception:
+            size = 0
+        if size <= 0:
+            resume_bytes = resume.get("resume_bytes")
+            if isinstance(resume_bytes, (bytes, bytearray)):
+                size = len(resume_bytes)
+    return {
+        "filename": filename,
+        "parsed_at": parsed_at,
+        "size": max(0, int(size or 0)),
+    }
+
+
+def _candidate_has_resume(candidate_id: int) -> bool:
+    meta = _candidate_resume_meta(candidate_id)
+    return bool(meta["filename"] or int(meta["size"] or 0) > 0 or meta["parsed_at"])
+
+
+def _set_pending_existing_candidate(
+    assignment: dict[str, Any],
+    *,
+    candidate_id: int,
+    name: str,
+    phone: str,
+) -> dict[str, Any]:
+    meta = _candidate_resume_meta(candidate_id)
+    assignment["pending_existing_candidate"] = {
+        "candidate_id": int(candidate_id),
+        "name": str(name or "").strip(),
+        "phone": validation_helpers._normalize_phone(str(phone or "").strip()),
+        "resume_filename": str(meta.get("filename") or "").strip(),
+        "resume_size": int(meta.get("size") or 0),
+        "resume_parsed_at": str(meta.get("parsed_at") or "").strip(),
+    }
+    return meta
+
+
+def _finalize_assignment_candidate_binding(
+    *,
+    token: str,
+    assignment: dict[str, Any],
+    candidate_id: int,
+    phone: str,
+) -> None:
+    normalized_phone = validation_helpers._normalize_phone(str(phone or "").strip())
+    if not normalized_phone:
+        candidate = deps.get_candidate(int(candidate_id)) or {}
+        normalized_phone = validation_helpers._normalize_phone(str(candidate.get("phone") or "").strip())
+    if not normalized_phone:
+        raise HTTPException(status_code=500, detail="候选人手机号缺失，请联系管理员")
+
+    now = datetime.now(timezone.utc)
+    assignment["candidate_id"] = int(candidate_id)
+    assignment.pop("pending_profile", None)
+    assignment.pop("pending_existing_candidate", None)
+    assignment["status"] = "verified"
+    assignment["status_updated_at"] = now.isoformat()
+
+    invite_window = assignment.get("invite_window") or {}
+    if not isinstance(invite_window, dict):
+        invite_window = {}
+    invite_start_date = str(invite_window.get("start_date") or "").strip() or None
+    invite_end_date = str(invite_window.get("end_date") or "").strip() or None
+    if not deps.get_quiz_paper_by_token(token):
+        deps.create_quiz_paper(
+            candidate_id=int(candidate_id),
+            phone=normalized_phone,
+            quiz_key=str(assignment.get("quiz_key") or ""),
+            quiz_version_id=(int(assignment.get("quiz_version_id") or 0) or None),
+            token=token,
+            source_kind=("public" if assignment.get("public_invite") else "direct"),
+            invite_start_date=invite_start_date,
+            invite_end_date=invite_end_date,
+            status="verified",
+        )
+    else:
+        deps.set_quiz_paper_status(token, "verified")
+
+    deps.save_assignment(token, assignment)
+
+
 def ensure_public_invite(public_token: str, request: Request) -> JSONResponse:
     token_value = str(public_token or "").strip()
     if not token_value:
@@ -129,8 +231,6 @@ def send_sms_code(*, token: str, name: str = "", phone: str = "") -> dict[str, A
             existed = deps.get_candidate_by_phone(phone)
             if existed and int(existed.get("id") or 0) > 0:
                 ok = bool(str(existed.get("name") or "").strip() == name)
-                if ok:
-                    assignment["candidate_id"] = int(existed.get("id") or 0)
             else:
                 ok = True
 
@@ -145,6 +245,7 @@ def send_sms_code(*, token: str, name: str = "", phone: str = "") -> dict[str, A
         sms = assignment.get("sms_verify") or {}
         if mode == "public_identity":
             assignment["pending_profile"] = {"name": name, "phone": phone}
+            assignment.pop("pending_existing_candidate", None)
         if not sms.get("verified") and int(sms.get("send_count") or 0) >= _SMS_SEND_MAX:
             assignment["status"] = "expired"
             assignment["status_updated_at"] = now.isoformat()
@@ -248,9 +349,15 @@ def verify_assignment(*, token: str, name: str = "", phone: str = "", sms_code: 
             candidate_id = int(assignment.get("candidate_id") or 0)
         except Exception:
             candidate_id = 0
+        status_text = str(assignment.get("status") or "").strip()
+        if bool(assignment.get("public_invite")) and candidate_id > 0 and status_text in {"verified", "in_quiz", "grading", "graded"}:
+            if assignment.get("grading") or status_text in {"grading", "graded"}:
+                return {"ok": True, "redirect": f"/done/{token}"}
+            return {"ok": True, "redirect": f"/quiz/{token}"}
         mode = "public_identity"
         if candidate_id > 0 and not bool(assignment.get("public_invite")):
             mode = "direct_phone"
+        matched_candidate_id = 0
 
         if mode == "direct_phone":
             candidate = deps.get_candidate(candidate_id) or {}
@@ -269,8 +376,7 @@ def verify_assignment(*, token: str, name: str = "", phone: str = "", sms_code: 
                 existing_id = int(existing.get("id") or 0)
                 ok = bool(str(existing.get("name") or "").strip() == name)
                 if ok:
-                    assignment["candidate_id"] = existing_id
-                    candidate_id = existing_id
+                    matched_candidate_id = existing_id
             else:
                 ok = True
 
@@ -324,48 +430,35 @@ def verify_assignment(*, token: str, name: str = "", phone: str = "", sms_code: 
                 sms.pop("code_hash", None)
                 assignment["sms_verify"] = sms
 
-            if candidate_id <= 0:
-                existed = deps.get_candidate_by_phone(phone)
-                if existed and int(existed.get("id") or 0) > 0:
-                    candidate_id = int(existed.get("id") or 0)
-                    assignment["candidate_id"] = candidate_id
+            now = datetime.now(timezone.utc).isoformat()
+            if mode == "public_identity":
+                assignment["candidate_id"] = 0
+                assignment["pending_profile"] = {
+                    "name": name,
+                    "phone": phone,
+                    "sms_verified_at": str((assignment.get("sms_verify") or {}).get("verified_at") or ""),
+                }
+                assignment["status"] = "resume_pending"
+                assignment["status_updated_at"] = now
+                if matched_candidate_id > 0:
+                    _set_pending_existing_candidate(
+                        assignment,
+                        candidate_id=matched_candidate_id,
+                        name=name,
+                        phone=phone,
+                    )
                 else:
-                    assignment["pending_profile"] = {
-                        "name": name,
-                        "phone": phone,
-                        "sms_verified_at": str((assignment.get("sms_verify") or {}).get("verified_at") or ""),
-                    }
-                    assignment["status"] = "resume_pending"
-                    assignment["status_updated_at"] = datetime.now(timezone.utc).isoformat()
-                    redirect_to = f"/resume/{token}"
-
-            if candidate_id > 0:
-                try:
-                    invite_window = assignment.get("invite_window") or {}
-                    if not isinstance(invite_window, dict):
-                        invite_window = {}
-                    invite_start_date = str(invite_window.get("start_date") or "").strip() or None
-                    invite_end_date = str(invite_window.get("end_date") or "").strip() or None
-                    if not deps.get_quiz_paper_by_token(token):
-                        deps.create_quiz_paper(
-                            candidate_id=int(candidate_id),
-                            phone=phone,
-                            quiz_key=str(assignment.get("quiz_key") or ""),
-                            token=token,
-                            source_kind=("public" if assignment.get("public_invite") else "direct"),
-                            invite_start_date=invite_start_date,
-                            invite_end_date=invite_end_date,
-                            status="verified",
-                        )
-                except Exception:
-                    pass
-                try:
-                    deps.set_quiz_paper_status(token, "verified")
-                except Exception:
-                    pass
-                assignment["status"] = "verified"
-                assignment["status_updated_at"] = datetime.now(timezone.utc).isoformat()
-                assignment.pop("pending_profile", None)
+                    assignment.pop("pending_existing_candidate", None)
+                redirect_to = f"/resume/{token}"
+            else:
+                if candidate_id <= 0:
+                    raise HTTPException(status_code=400, detail="候选人信息不完整，请联系管理员")
+                _finalize_assignment_candidate_binding(
+                    token=token,
+                    assignment=assignment,
+                    candidate_id=int(candidate_id),
+                    phone=phone,
+                )
                 redirect_to = f"/quiz/{token}"
         else:
             verify["attempts"] = int(verify.get("attempts") or 0) + 1
@@ -378,7 +471,7 @@ def verify_assignment(*, token: str, name: str = "", phone: str = "", sms_code: 
             raise HTTPException(status_code=400, detail="信息不匹配，请重试")
 
         try:
-            log_candidate_id = int(candidate_id or 0)
+            log_candidate_id = int((matched_candidate_id or candidate_id) or 0)
         except Exception:
             log_candidate_id = 0
         log_quiz_key = str(assignment.get("quiz_key") or "").strip()
@@ -495,31 +588,15 @@ def upload_public_resume(*, token: str, file: UploadFile) -> dict[str, Any]:
     with deps.assignment_locked(token):
         assignment = deps.load_assignment(token)
         assignment["candidate_id"] = int(candidate_id)
-        assignment.pop("pending_profile", None)
-        assignment["status"] = "verified"
-        assignment["status_updated_at"] = datetime.now(timezone.utc).isoformat()
         try:
-            invite_window = assignment.get("invite_window") or {}
-            if not isinstance(invite_window, dict):
-                invite_window = {}
-            invite_start_date = str(invite_window.get("start_date") or "").strip() or None
-            invite_end_date = str(invite_window.get("end_date") or "").strip() or None
-            if not deps.get_quiz_paper_by_token(token):
-                deps.create_quiz_paper(
-                    candidate_id=int(candidate_id),
-                    phone=phone,
-                    quiz_key=str(assignment.get("quiz_key") or ""),
-                    token=token,
-                    source_kind="public",
-                    invite_start_date=invite_start_date,
-                    invite_end_date=invite_end_date,
-                    status="verified",
-                )
-            else:
-                deps.set_quiz_paper_status(token, "verified")
+            _finalize_assignment_candidate_binding(
+                token=token,
+                assignment=assignment,
+                candidate_id=int(candidate_id),
+                phone=phone,
+            )
         except Exception:
-            pass
-        deps.save_assignment(token, assignment)
+            raise
 
     try:
         if created:
@@ -531,4 +608,63 @@ def upload_public_resume(*, token: str, file: UploadFile) -> dict[str, Any]:
             )
     except Exception:
         pass
+    return {"ok": True, "redirect": f"/quiz/{token}"}
+
+
+def use_existing_public_resume(*, token: str) -> dict[str, Any]:
+    token = str(token or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="缺少 token")
+
+    with deps.assignment_locked(token):
+        assignment = deps.load_assignment(token)
+        if str(assignment.get("status") or "").strip() == "expired":
+            raise HTTPException(status_code=410, detail="当前链接已失效")
+        invite_state, _, _ = exam_helpers._invite_window_state(assignment)
+        if invite_state in {"not_started", "expired"}:
+            raise HTTPException(status_code=400, detail="当前不在可答题时间范围内")
+        sms = assignment.get("sms_verify") or {}
+        if not bool(sms.get("verified")):
+            raise HTTPException(status_code=400, detail="请先完成验证码验证")
+
+        try:
+            existing_candidate_id = int(assignment.get("candidate_id") or 0)
+        except Exception:
+            existing_candidate_id = 0
+        if existing_candidate_id > 0:
+            return {"ok": True, "redirect": f"/quiz/{token}"}
+
+        pending_profile = assignment.get("pending_profile") or {}
+        if not isinstance(pending_profile, dict):
+            pending_profile = {}
+        pending_existing = assignment.get("pending_existing_candidate") or {}
+        if not isinstance(pending_existing, dict):
+            pending_existing = {}
+
+        try:
+            candidate_id = int(pending_existing.get("candidate_id") or 0)
+        except Exception:
+            candidate_id = 0
+        if candidate_id <= 0:
+            raise HTTPException(status_code=400, detail="当前没有可复用的简历，请上传最新版简历")
+
+        name = str(pending_profile.get("name") or "").strip()
+        phone = validation_helpers._normalize_phone(
+            str(pending_profile.get("phone") or sms.get("phone") or pending_existing.get("phone") or "").strip()
+        )
+        candidate = deps.get_candidate(candidate_id) or {}
+        candidate_name = str(candidate.get("name") or "").strip()
+        candidate_phone = validation_helpers._normalize_phone(str(candidate.get("phone") or "").strip())
+        if not name or not phone or candidate_name != name or candidate_phone != phone:
+            raise HTTPException(status_code=400, detail="候选人信息已变更，请重新验证后再试")
+        if not _candidate_has_resume(candidate_id):
+            raise HTTPException(status_code=400, detail="未找到可复用的简历，请上传最新版简历")
+
+        _finalize_assignment_candidate_binding(
+            token=token,
+            assignment=assignment,
+            candidate_id=candidate_id,
+            phone=phone,
+        )
+
     return {"ok": True, "redirect": f"/quiz/{token}"}

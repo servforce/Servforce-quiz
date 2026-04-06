@@ -455,6 +455,13 @@ def _oplog_is_deleted_marker(v: str) -> bool:
     return s.startswith("deleted_")
 
 
+def _oplog_mask_phone(phone: str) -> str:
+    normalized = _normalize_phone(str(phone or "").strip())
+    if len(normalized) != 11 or not normalized.startswith("1"):
+        return ""
+    return f"{normalized[:3]}****{normalized[-4:]}"
+
+
 def _oplog_pick_name_phone2(it: dict[str, Any], meta: dict[str, Any]) -> tuple[str, str]:
     meta_name = str(meta.get("name") or "").strip()
     candidate_name = str(it.get("candidate_name") or "").strip()
@@ -478,10 +485,10 @@ def _oplog_pick_name_phone2(it: dict[str, Any], meta: dict[str, Any]) -> tuple[s
         p2 = _normalize_phone(raw_phone)
         # Guard against malformed placeholder leftovers; only keep mainland 11-digit number.
         if len(p2) == 11 and p2.startswith("1"):
-            p = p2
+            p = _oplog_mask_phone(p2)
     if not p:
         try:
-            p = _oplog_phone_from_assignment(str(it.get("token") or ""))
+            p = _oplog_mask_phone(_oplog_phone_from_assignment(str(it.get("token") or "")))
         except Exception:
             p = p or ""
     return n, p

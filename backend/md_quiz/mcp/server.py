@@ -26,6 +26,13 @@ def build_mcp_bootstrap_payload(settings: Any) -> dict[str, Any]:
     }
 
 
+def build_mcp_admin_payload(settings: Any) -> dict[str, Any]:
+    payload = build_mcp_bootstrap_payload(settings)
+    payload["auth_token"] = str(getattr(settings, "mcp_auth_token", "") or "").strip()
+    payload["auth_token_configured"] = bool(payload["auth_token"])
+    return payload
+
+
 class McpBearerAuthMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, *, token: str):
         super().__init__(app)

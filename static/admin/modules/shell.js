@@ -237,6 +237,8 @@ export function createAdminShellModule() {
       this.loginForm = { username: "", password: "" };
       this.error = "";
       this.repoBinding = {};
+      this.mcpSummary = {};
+      this.mcpTokenVisible = false;
       this.resetRebindForm();
       history.replaceState({}, "", "/admin/login");
       this.route = this.resolveRoute("/admin/login");

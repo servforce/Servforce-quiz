@@ -49,7 +49,37 @@
                     <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">鉴权</div>
                     <div class="mt-2 text-lg font-semibold text-slate-900" x-text="mcpInfo().auth_scheme || 'bearer'"></div>
                   </div>
-                  <div class="px-4 py-4 text-sm leading-6 text-slate-600">客户端需显式附带 Bearer Token，和后台浏览器会话隔离。</div>
+                  <div class="px-4 py-4">
+                    <p class="text-sm leading-6 text-slate-600">在 .env 中配置</p>
+                    <div class="mt-4">
+                      <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Bearer Token</div>
+                      <div class="mt-3 flex overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div class="min-w-0 flex-1 bg-[rgba(24,43,78,0.96)] px-3 py-2.5 font-mono text-xs leading-6 text-slate-100/92" x-text="mcpAuthTokenDisplay()"></div>
+                        <div class="flex shrink-0 border-l border-slate-200 bg-white/96">
+                          <button
+                            type="button"
+                            @click="toggleMcpTokenVisibility"
+                            :disabled="!mcpHasAuthToken()"
+                            :aria-label="mcpTokenVisibilityLabel()"
+                            :title="mcpTokenVisibilityLabel()"
+                            class="grid h-full w-12 place-items-center text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <span class="material-symbols-rounded text-[20px]" x-text="mcpTokenVisibilityIcon()"></span>
+                          </button>
+                          <button
+                            type="button"
+                            @click="copyMcpToken"
+                            :disabled="!mcpHasAuthToken()"
+                            aria-label="复制 Token"
+                            title="复制 Token"
+                            class="grid h-full w-12 place-items-center border-l border-slate-200 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <span class="material-symbols-rounded text-[20px]">content_copy</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div class="border-t border-slate-200 px-4 py-4">
                   <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">MCP 地址</div>
@@ -72,6 +102,33 @@
                       打开 MCP 文档
                     </button>
                   </div>
+                </div>
+              </div>
+
+              <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white/78">
+                <div class="border-b border-slate-200 px-4 py-4">
+                  <div class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">客户端配置</div>
+                </div>
+                <div class="divide-y divide-slate-200">
+                  <template x-for="client in mcpClientConfigs()" :key="client.key">
+                    <section class="px-4 py-4">
+                      <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="flex min-w-0 items-start gap-3">
+                          <span
+                            aria-hidden="true"
+                            class="mt-0.5 block h-9 w-9 shrink-0 bg-contain bg-center bg-no-repeat"
+                            :style="{ backgroundImage: `url('${client.icon}')` }"
+                          ></span>
+                          <div class="min-w-0">
+                            <h3 class="text-base font-semibold text-slate-900" x-text="client.label"></h3>
+                            <p class="mt-1 text-sm leading-6 text-slate-600" x-text="client.location"></p>
+                          </div>
+                        </div>
+                        <div class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500" x-text="client.format"></div>
+                      </div>
+                      <pre class="mt-4 overflow-x-auto rounded-2xl border border-slate-900/60 bg-[rgba(24,43,78,0.96)] px-4 py-3 text-xs leading-6 text-slate-100/92"><code x-text="client.snippet"></code></pre>
+                    </section>
+                  </template>
                 </div>
               </div>
 

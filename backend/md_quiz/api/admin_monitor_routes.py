@@ -5,6 +5,8 @@ from typing import Any
 
 from fastapi import APIRouter, Query, Request
 
+from backend.md_quiz.mcp import build_mcp_admin_payload
+
 from . import admin as shared
 
 router = APIRouter()
@@ -59,6 +61,12 @@ def get_log_updates(request: Request, after_id: int = 0, limit: int = 20):
 def get_system_status_summary(request: Request):
     shared._require_admin(request)
     return shared.system_status_helpers._get_cached_system_status_summary()
+
+
+@router.get("/mcp/summary")
+def get_mcp_summary(request: Request):
+    shared._require_admin(request)
+    return build_mcp_admin_payload(request.app.state.container.settings)
 
 
 @router.get("/system-status")

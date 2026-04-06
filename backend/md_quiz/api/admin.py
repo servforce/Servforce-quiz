@@ -1003,7 +1003,7 @@ def _serialize_log_row(row: dict[str, Any]) -> dict[str, Any]:
         "event_type": event_type,
         "candidate_id": row.get("candidate_id"),
         "candidate_name": str(row.get("candidate_name") or "").strip(),
-        "candidate_phone": str(row.get("candidate_phone") or "").strip(),
+        "candidate_phone": system_status_helpers._oplog_mask_phone(str(row.get("candidate_phone") or "").strip()),
         "quiz_key": str(row.get("quiz_key") or "").strip(),
         "token": str(row.get("token") or "").strip(),
         "llm_total_tokens": row.get("llm_total_tokens"),

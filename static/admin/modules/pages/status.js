@@ -88,10 +88,15 @@ export function createAdminStatusModule() {
       if (!this.systemBootstrap?.mcp) {
         await this.loadSystemBootstrap();
       }
+      this.mcpSummary = await this.api("/api/admin/mcp/summary", { quiet: true }) || {};
+      this.mcpTokenVisible = false;
     },
 
     mcpInfo() {
-      return this.systemBootstrap?.mcp || {};
+      return {
+        ...(this.systemBootstrap?.mcp || {}),
+        ...(this.mcpSummary || {}),
+      };
     },
 
     absoluteUrl(path) {
@@ -106,10 +111,120 @@ export function createAdminStatusModule() {
       return this.absoluteUrl(this.mcpInfo().docs_path || "");
     },
 
+    mcpAuthToken() {
+      return String(this.mcpInfo().auth_token || "").trim();
+    },
+
+    mcpHasAuthToken() {
+      return Boolean(this.mcpAuthToken());
+    },
+
+    mcpAuthTokenDisplay() {
+      const value = this.mcpAuthToken();
+      if (!value) {
+        return "未设置";
+      }
+      return this.mcpTokenVisible ? value : "****";
+    },
+
+    toggleMcpTokenVisibility() {
+      if (!this.mcpHasAuthToken()) return;
+      this.mcpTokenVisible = !this.mcpTokenVisible;
+    },
+
+    mcpTokenVisibilityIcon() {
+      return this.mcpTokenVisible ? "visibility_off" : "visibility";
+    },
+
+    mcpTokenVisibilityLabel() {
+      return this.mcpTokenVisible ? "隐藏 Token" : "显示 Token";
+    },
+
     async copyMcpUrl() {
       const value = this.mcpUrl();
       if (!value) return;
       await this.copyText(value, "MCP 地址已复制");
+    },
+
+    async copyMcpToken() {
+      const value = this.mcpAuthToken();
+      if (!value) return;
+      await this.copyText(value, "Bearer Token 已复制");
+    },
+
+    mcpClientConfigs() {
+      const url = this.mcpUrl() || "https://your-host.example.com/mcp";
+      const tokenPlaceholder = "<上方 Bearer Token>";
+      const iconUrl = (path) => this.absoluteUrl(`${path}?v=20260406b`);
+      return [
+        {
+          key: "openclaw",
+          label: "OpenClaw",
+          icon: iconUrl("/static/assets/img/brands/openclaw.svg"),
+          location: "OpenClaw 配置里的 `mcp.servers`，也可用 `openclaw mcp set` 写入。",
+          format: "json",
+          snippet: JSON.stringify(
+            {
+              mcp: {
+                servers: {
+                  mdQuiz: {
+                    url,
+                    transport: "streamable-http",
+                    headers: {
+                      Authorization: `Bearer ${tokenPlaceholder}`,
+                    },
+                  },
+                },
+              },
+            },
+            null,
+            2,
+          ),
+        },
+        {
+          key: "vscode",
+          label: "VS Code",
+          icon: iconUrl("/static/assets/img/brands/vscode.png"),
+          location: "写到工作区 `.vscode/mcp.json`，或通过 `MCP: Open User Configuration` 打开用户级 `mcp.json`。",
+          format: "json",
+          snippet: JSON.stringify(
+            {
+              inputs: [
+                {
+                  type: "promptString",
+                  id: "md-quiz-mcp-token",
+                  description: "MD Quiz MCP Bearer Token",
+                  password: true,
+                },
+              ],
+              servers: {
+                mdQuiz: {
+                  type: "http",
+                  url,
+                  headers: {
+                    Authorization: "Bearer ${input:md-quiz-mcp-token}",
+                  },
+                },
+              },
+            },
+            null,
+            2,
+          ),
+        },
+        {
+          key: "codex",
+          label: "Codex",
+          icon: iconUrl("/static/assets/img/brands/codex.png"),
+          location: "写到 `~/.codex/config.toml`，并先把 Bearer Token 放进环境变量 `MD_QUIZ_MCP_TOKEN`。",
+          format: "toml",
+          snippet: [
+            "[mcp_servers.mdQuiz]",
+            'enabled = true',
+            `url = "${url}"`,
+            'bearer_token_env_var = "MD_QUIZ_MCP_TOKEN"',
+          ].join("\n"),
+        },
+      ];
     },
 
     openMcpDocs() {

@@ -186,12 +186,11 @@
                       <div class="py-3 first:pt-0 last:pb-0">
                         <div class="flex items-start justify-between gap-3">
                           <div>
-                            <div class="text-sm font-semibold text-slate-800" x-text="`${pair.left || '-'} / ${pair.right || '-'}`"></div>
+                            <div class="text-sm font-semibold tabular-nums text-slate-800" x-text="`${pair.left || '-'} ${pair.left_score || 0} / ${pair.right || '-'} ${pair.right_score || 0}`"></div>
                             <div class="mt-1 text-xs leading-5 text-slate-500" x-text="pair.description || '按对立维度对照输出主倾向。'"></div>
                           </div>
                           <span :style="traitBadgeStyle(pair.winner || '')" class="rounded-full border px-2.5 py-1 text-[11px] font-semibold" x-text="pair.winner || '-'"></span>
                         </div>
-                        <div class="mt-2 text-xs text-slate-500" x-text="`分差 ${pair.diff || 0} · ${pair.left_score || 0} / ${pair.right_score || 0}`"></div>
                       </div>
                     </template>
                   </div>

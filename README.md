@@ -175,6 +175,7 @@ OPENAI_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
 - `MCP_CORS_ALLOW_ORIGINS=...`
 
 启用后可通过 `/mcp` 暴露远程 HTTP MCP 服务，后台说明页位于 `/admin/mcp`。
+`OpenClaw / VS Code / Codex` 的客户端配置示例见 [docs/reference/mcp.md](docs/reference/mcp.md)。
 
 ### 短信配置
 

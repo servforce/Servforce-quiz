@@ -1,22 +1,85 @@
 <section x-show="viewCard === 'resume'" class="mx-auto max-w-4xl space-y-8 py-4 sm:py-8">
-              <div class="max-w-2xl">
-                <div class="text-xs uppercase tracking-[0.28em] text-cyan-200/80">公开邀约建档</div>
-                <h1 class="mt-4 text-4xl font-semibold tracking-[-0.04em] text-white">上传简历后进入答题</h1>
-                <p class="mt-4 text-base leading-8 text-slate-200/88">简历上传成功后会立即开始答题准备，结构化解析会在后台异步完成，不再阻塞进入测验。</p>
-              </div>
-              <div class="grid gap-6 lg:grid-cols-[1fr_0.92fr]">
-                <div class="rounded-lg border border-white/10 bg-white/6 px-5 py-5">
-                  <div class="text-xs uppercase tracking-[0.22em] text-slate-400">候选人信息</div>
-                  <div class="mt-4 space-y-3 text-sm text-slate-200">
-                    <div>姓名：<span class="font-semibold text-white" x-text="state.resume?.name || '-'"></span></div>
-                    <div>手机号：<span class="font-mono text-white" x-text="state.resume?.phone || '-'"></span></div>
-                  </div>
-                </div>
-                <form @submit.prevent="uploadResume" class="rounded-lg border border-white/10 bg-slate-950/55 px-5 py-5">
-                  <div class="text-sm font-semibold text-white">上传简历文件</div>
-                  <p class="mt-2 text-sm leading-7 text-slate-300">支持 PDF、DOCX 和图片格式。上传完成后会直接跳入首卡，解析结果稍后回填。</p>
-                  <input x-ref="resumeFile" type="file" class="mt-5 block w-full text-sm text-slate-300 file:mr-4 file:rounded-md file:border-0 file:bg-white/10 file:px-4 file:py-3 file:text-sm file:font-medium file:text-white hover:file:bg-white/16" />
-                  <button type="submit" class="mt-5 w-full rounded-md bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300">上传并进入答题准备</button>
-                </form>
-              </div>
-            </section>
+  <div class="max-w-2xl">
+    <div class="text-xs uppercase tracking-[0.28em] text-cyan-200/80">公开邀约建档</div>
+    <h1
+      class="mt-4 text-4xl font-semibold tracking-[-0.04em] text-white"
+      x-text="canUseExistingResume() ? '检测到该手机号已有候选人档案' : '上传简历后进入答题'"
+    ></h1>
+    <p
+      x-show="canUseExistingResume()"
+      class="mt-4 text-base leading-8 text-slate-200/88"
+    >
+      该手机号下已有简历，可直接复用继续答题，也可以上传最新版简历后再进入测验。
+    </p>
+    <p
+      x-show="!canUseExistingResume()"
+      class="mt-4 text-base leading-8 text-slate-200/88"
+    >
+      简历上传成功后会立即开始答题准备，结构化解析会在后台异步完成，不再阻塞进入测验。
+    </p>
+  </div>
+  <div class="grid gap-6 lg:grid-cols-[1fr_0.92fr]">
+    <div class="space-y-6">
+      <div class="rounded-lg border border-white/10 bg-white/6 px-5 py-5">
+        <div class="text-xs uppercase tracking-[0.22em] text-slate-400">候选人信息</div>
+        <div class="mt-4 space-y-3 text-sm text-slate-200">
+          <div>姓名：<span class="font-semibold text-white" x-text="state.resume?.name || '-'"></span></div>
+          <div>手机号：<span class="font-mono text-white" x-text="state.resume?.phone || '-'"></span></div>
+        </div>
+      </div>
+
+      <div
+        x-show="canUseExistingResume()"
+        class="rounded-lg border border-emerald-300/20 bg-emerald-400/8 px-5 py-5"
+      >
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="text-sm font-semibold text-white">使用已有简历</div>
+            <p class="mt-2 text-sm leading-7 text-slate-200/88">确认后直接进入答题准备，不需要再次上传相同简历。</p>
+          </div>
+          <div class="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-100">
+            已检测到历史简历
+          </div>
+        </div>
+        <div class="mt-5 grid gap-3 text-sm text-slate-200 sm:grid-cols-3">
+          <div>
+            <div class="text-xs uppercase tracking-[0.22em] text-slate-400">文件名</div>
+            <div class="mt-2 break-all font-medium text-white" x-text="existingResumeFilename()"></div>
+          </div>
+          <div>
+            <div class="text-xs uppercase tracking-[0.22em] text-slate-400">最近解析</div>
+            <div class="mt-2 text-white" x-text="existingResumeParsedAtText()"></div>
+          </div>
+          <div>
+            <div class="text-xs uppercase tracking-[0.22em] text-slate-400">文件大小</div>
+            <div class="mt-2 text-white" x-text="existingResumeSizeText()"></div>
+          </div>
+        </div>
+        <button
+          type="button"
+          @click="useExistingResume"
+          :disabled="actionBusy"
+          class="mt-5 w-full rounded-md px-4 py-3 text-sm font-semibold transition"
+          :class="actionBusy ? 'cursor-not-allowed border border-white/10 bg-white/6 text-slate-400' : 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'"
+          x-text="actionBusy ? '处理中...' : '使用已有简历继续答题'"
+        ></button>
+      </div>
+    </div>
+
+    <form @submit.prevent="uploadResume" class="rounded-lg border border-white/10 bg-slate-950/55 px-5 py-5">
+      <div class="text-sm font-semibold text-white" x-text="canUseExistingResume() ? '上传最新版简历' : '上传简历文件'"></div>
+      <p
+        class="mt-2 text-sm leading-7 text-slate-300"
+        x-text="canUseExistingResume() ? '支持 PDF、DOCX 和图片格式。上传后会用最新版覆盖当前候选人档案中的简历，再继续答题。' : '支持 PDF、DOCX 和图片格式。上传完成后会直接跳入首卡，解析结果稍后回填。'"
+      ></p>
+      <input x-ref="resumeFile" type="file" class="mt-5 block w-full text-sm text-slate-300 file:mr-4 file:rounded-md file:border-0 file:bg-white/10 file:px-4 file:py-3 file:text-sm file:font-medium file:text-white hover:file:bg-white/16" />
+      <button
+        type="submit"
+        :disabled="actionBusy"
+        class="mt-5 w-full rounded-md px-4 py-3 text-sm font-semibold transition"
+        :class="actionBusy ? 'cursor-not-allowed border border-white/10 bg-white/6 text-slate-400' : 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'"
+        x-text="actionBusy ? '处理中...' : (canUseExistingResume() ? '上传最新版并继续答题' : '上传并进入答题准备')"
+      ></button>
+    </form>
+  </div>
+</section>

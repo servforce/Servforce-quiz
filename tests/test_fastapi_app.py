@@ -10,6 +10,7 @@ from backend.md_quiz.api import public as public_api
 from backend.md_quiz.app import create_app
 from backend.md_quiz.services import candidate_resume_admin_service, system_status_helpers
 from backend.md_quiz.services.job_service import JobService
+from backend.md_quiz.services.system_log import log_event
 from backend.md_quiz.storage import JobStore
 from backend.md_quiz.storage.db import (
     conn_scope,
@@ -32,6 +33,7 @@ from backend.md_quiz.storage.db import (
     save_quiz_definition,
     set_exam_public_invite,
     set_runtime_kv,
+    update_candidate_resume,
 )
 
 
@@ -616,6 +618,20 @@ def _stub_public_resume_parsing(monkeypatch, *, parsed_name: str, parsed_phone: 
     )
 
 
+def _seed_candidate_resume(candidate_id: int, *, filename: str = "resume.pdf", content: bytes = b"%PDF-1.4 existing") -> None:
+    update_candidate_resume(
+        candidate_id,
+        resume_bytes=content,
+        resume_filename=filename,
+        resume_mime="application/pdf",
+        resume_size=len(content),
+        resume_parsed={
+            "details": {"status": "done", "data": {"summary": "已存在简历"}},
+            "source_filename": filename,
+        },
+    )
+
+
 def test_system_health_smoke(monkeypatch, tmp_path):
     client = _build_client(monkeypatch, tmp_path)
 
@@ -710,6 +726,30 @@ def test_admin_logs_include_trend_series(monkeypatch, tmp_path):
     assert set(payload["trend"]["series"].keys()) == {"candidate", "quiz", "grading", "assignment", "system"}
     for key in payload["trend"]["series"]:
         assert len(payload["trend"]["series"][key]) == 14
+
+
+def test_admin_logs_mask_candidate_phone_in_detail_text(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    _admin_login(client)
+
+    candidate_id = create_candidate(name="张三丰", phone="13570020123")
+    log_event(
+        "assignment.create",
+        actor="admin",
+        candidate_id=candidate_id,
+        quiz_key="ai-workstyle-50",
+    )
+
+    response = client.get("/api/admin/logs")
+
+    assert response.status_code == 200
+    payload = response.json()
+    item = next(
+        row for row in payload["items"] if row["event_type"] == "assignment.create" and row["candidate_id"] == candidate_id
+    )
+    assert item["candidate_phone"] == "135****0123"
+    assert "135****0123" in item["detail_text"]
+    assert "13570020123" not in item["detail_text"]
 
 
 def test_system_status_summary_marks_llm_as_unconfigured_when_required_env_missing(monkeypatch, tmp_path):
@@ -1773,6 +1813,7 @@ def test_admin_assignment_url_uses_forwarded_https_scheme(monkeypatch, tmp_path)
 def test_public_invite_only_enters_admin_list_after_verify_and_marks_public_source(monkeypatch, tmp_path):
     client = _build_client(monkeypatch, tmp_path)
     _seed_exam_with_metadata("public-source-demo")
+    _stub_public_resume_parsing(monkeypatch, parsed_name="公开候选人", parsed_phone="13900000021")
     set_exam_public_invite("public-source-demo", enabled=True, token="public-source-token")
 
     ensure_response = client.post("/api/public/invites/public-source-token/ensure")
@@ -1791,7 +1832,7 @@ def test_public_invite_only_enters_admin_list_after_verify_and_marks_public_sour
     assert before_verify.status_code == 200
     assert before_verify.json()["items"] == []
 
-    create_candidate("公开候选人", "13900000021")
+    candidate_id = create_candidate("公开候选人", "13900000021")
     assignment = get_assignment_record(token)
     assert assignment is not None
     assignment["sms_verify"] = {
@@ -1807,9 +1848,23 @@ def test_public_invite_only_enters_admin_list_after_verify_and_marks_public_sour
     )
 
     assert verify_response.status_code == 200
-    assert verify_response.json()["redirect"] == f"/quiz/{token}"
+    assert verify_response.json()["redirect"] == f"/resume/{token}"
+    bootstrap = client.get(f"/api/public/attempt/{token}")
+    assert bootstrap.status_code == 200
+    assert bootstrap.json()["step"] == "resume"
+    assert bootstrap.json()["resume"]["mode"] == "upload_required"
+    assert get_quiz_paper_by_token(token) is None
+
+    upload_response = client.post(
+        f"/api/public/resume/upload?token={token}",
+        files={"file": ("resume.pdf", b"%PDF-1.4 public-source", "application/pdf")},
+    )
+
+    assert upload_response.status_code == 200
+    assert upload_response.json()["redirect"] == f"/quiz/{token}"
     quiz_paper = get_quiz_paper_by_token(token)
     assert quiz_paper is not None
+    assert quiz_paper["candidate_id"] == candidate_id
     assert quiz_paper["source_kind"] == "public"
     assert quiz_paper["status"] == "verified"
 
@@ -1821,6 +1876,166 @@ def test_public_invite_only_enters_admin_list_after_verify_and_marks_public_sour
     assert items[0]["source_kind"] == "public"
     assert items[0]["source_label"] == "公开邀约"
     assert items[0]["require_phone_verification"] is True
+
+
+def test_public_verify_existing_candidate_with_resume_requires_confirmation_and_can_reuse(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    _seed_exam_with_metadata("public-existing-resume-demo")
+    set_exam_public_invite("public-existing-resume-demo", enabled=True, token="public-existing-resume-token")
+    candidate_id = create_candidate("复用候选人", "13900000051")
+    _seed_candidate_resume(candidate_id, filename="existing-resume.pdf")
+
+    ensure_response = client.post("/api/public/invites/public-existing-resume-token/ensure")
+    assert ensure_response.status_code == 200
+    token = ensure_response.json()["token"]
+
+    assignment = get_assignment_record(token)
+    assert assignment is not None
+    assignment["sms_verify"] = {
+        "verified": True,
+        "phone": "13900000051",
+        "verified_at": datetime.now(timezone.utc).isoformat(),
+    }
+    save_assignment_record(token, assignment)
+
+    verify_response = client.post(
+        "/api/public/verify",
+        json={"token": token, "name": "复用候选人", "phone": "13900000051"},
+    )
+
+    assert verify_response.status_code == 200
+    assert verify_response.json()["redirect"] == f"/resume/{token}"
+    assert get_quiz_paper_by_token(token) is None
+
+    bootstrap = client.get(f"/api/public/attempt/{token}")
+    assert bootstrap.status_code == 200
+    payload = bootstrap.json()
+    assert payload["step"] == "resume"
+    assert payload["resume"]["mode"] == "reuse_or_replace"
+    assert payload["resume"]["existing_resume"]["filename"] == "existing-resume.pdf"
+
+    use_existing_response = client.post("/api/public/resume/use-existing", json={"token": token})
+
+    assert use_existing_response.status_code == 200
+    assert use_existing_response.json()["redirect"] == f"/quiz/{token}"
+    assignment = get_assignment_record(token)
+    assert assignment is not None
+    assert assignment["candidate_id"] == candidate_id
+    assert "pending_existing_candidate" not in assignment
+    quiz_paper = get_quiz_paper_by_token(token)
+    assert quiz_paper is not None
+    assert quiz_paper["candidate_id"] == candidate_id
+    assert quiz_paper["source_kind"] == "public"
+    assert quiz_paper["status"] == "verified"
+
+
+def test_public_resume_upload_replaces_existing_candidate_resume(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    version_id = _seed_exam_with_metadata("public-replace-resume-demo")
+    _stub_public_resume_parsing(monkeypatch, parsed_name="更新候选人", parsed_phone="13900000052")
+    candidate_id = create_candidate("更新候选人", "13900000052")
+    _seed_candidate_resume(candidate_id, filename="old-resume.pdf", content=b"old-resume")
+    now = datetime.now(timezone.utc).isoformat()
+    token = "publicreplace001"
+    create_assignment_record(
+        token,
+        {
+            "token": token,
+            "quiz_key": "public-replace-resume-demo",
+            "quiz_version_id": version_id,
+            "candidate_id": 0,
+            "status": "resume_pending",
+            "created_at": now,
+            "invite_window": {"start_date": "", "end_date": ""},
+            "public_invite": {
+                "token": "public-replace-token",
+                "quiz_key": "public-replace-resume-demo",
+                "quiz_version_id": version_id,
+            },
+            "sms_verify": {
+                "verified": True,
+                "phone": "13900000052",
+                "verified_at": now,
+            },
+            "pending_profile": {"name": "更新候选人", "phone": "13900000052"},
+            "pending_existing_candidate": {
+                "candidate_id": candidate_id,
+                "name": "更新候选人",
+                "phone": "13900000052",
+                "resume_filename": "old-resume.pdf",
+                "resume_size": len(b"old-resume"),
+                "resume_parsed_at": now,
+            },
+        },
+    )
+
+    response = client.post(
+        f"/api/public/resume/upload?token={token}",
+        files={"file": ("new-resume.pdf", b"%PDF-1.4 refreshed", "application/pdf")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["redirect"] == f"/quiz/{token}"
+    assignment = get_assignment_record(token)
+    assert assignment is not None
+    assert assignment["candidate_id"] == candidate_id
+    candidate = get_candidate(candidate_id)
+    assert candidate is not None
+    assert candidate["resume_filename"] == "new-resume.pdf"
+    assert int(candidate["resume_size"] or 0) == len(b"%PDF-1.4 refreshed")
+    quiz_paper = get_quiz_paper_by_token(token)
+    assert quiz_paper is not None
+    assert quiz_paper["candidate_id"] == candidate_id
+    assert quiz_paper["source_kind"] == "public"
+
+
+def test_same_candidate_can_complete_two_public_invites_with_shared_resume(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    _seed_exam_with_metadata("public-shared-resume-a")
+    _seed_exam_with_metadata("public-shared-resume-b")
+    set_exam_public_invite("public-shared-resume-a", enabled=True, token="public-shared-token-a")
+    set_exam_public_invite("public-shared-resume-b", enabled=True, token="public-shared-token-b")
+    candidate_id = create_candidate("双邀约候选人", "13900000053")
+    _seed_candidate_resume(candidate_id, filename="shared-resume.pdf")
+
+    ensure_a = client.post("/api/public/invites/public-shared-token-a/ensure")
+    ensure_b = client.post("/api/public/invites/public-shared-token-b/ensure")
+
+    assert ensure_a.status_code == 200
+    assert ensure_b.status_code == 200
+    token_a = ensure_a.json()["token"]
+    token_b = ensure_b.json()["token"]
+    assert token_a != token_b
+
+    for token in (token_a, token_b):
+        assignment = get_assignment_record(token)
+        assert assignment is not None
+        assignment["sms_verify"] = {
+            "verified": True,
+            "phone": "13900000053",
+            "verified_at": datetime.now(timezone.utc).isoformat(),
+        }
+        save_assignment_record(token, assignment)
+
+        verify_response = client.post(
+            "/api/public/verify",
+            json={"token": token, "name": "双邀约候选人", "phone": "13900000053"},
+        )
+        assert verify_response.status_code == 200
+        assert verify_response.json()["redirect"] == f"/resume/{token}"
+
+        use_existing_response = client.post("/api/public/resume/use-existing", json={"token": token})
+        assert use_existing_response.status_code == 200
+        assert use_existing_response.json()["redirect"] == f"/quiz/{token}"
+
+    quiz_paper_a = get_quiz_paper_by_token(token_a)
+    quiz_paper_b = get_quiz_paper_by_token(token_b)
+    assert quiz_paper_a is not None
+    assert quiz_paper_b is not None
+    assert quiz_paper_a["candidate_id"] == candidate_id
+    assert quiz_paper_b["candidate_id"] == candidate_id
+    assert quiz_paper_a["quiz_key"] == "public-shared-resume-a"
+    assert quiz_paper_b["quiz_key"] == "public-shared-resume-b"
 
 
 def test_phone_verification_send_and_verify_use_aliyun_pnvs(monkeypatch, tmp_path):
@@ -2774,6 +2989,36 @@ def test_system_bootstrap_exposes_mcp_metadata(monkeypatch, tmp_path):
         "transport": "streamable-http",
         "auth_scheme": "bearer",
         "docs_path": "/docs/reference/mcp.md",
+    }
+
+
+def test_admin_mcp_summary_requires_admin_login(monkeypatch, tmp_path):
+    monkeypatch.setenv("MCP_ENABLED", "1")
+    monkeypatch.setenv("MCP_AUTH_TOKEN", "test-mcp-token")
+    client = _build_client(monkeypatch, tmp_path)
+
+    response = client.get("/api/admin/mcp/summary")
+
+    assert response.status_code == 401
+
+
+def test_admin_mcp_summary_exposes_bearer_token_after_login(monkeypatch, tmp_path):
+    monkeypatch.setenv("MCP_ENABLED", "1")
+    monkeypatch.setenv("MCP_AUTH_TOKEN", "test-mcp-token")
+    client = _build_client(monkeypatch, tmp_path)
+    _admin_login(client)
+
+    response = client.get("/api/admin/mcp/summary")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "enabled": True,
+        "path": "/mcp",
+        "transport": "streamable-http",
+        "auth_scheme": "bearer",
+        "docs_path": "/docs/reference/mcp.md",
+        "auth_token": "test-mcp-token",
+        "auth_token_configured": True,
     }
 
 

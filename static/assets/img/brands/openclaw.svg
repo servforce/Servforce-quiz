@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none" aria-label="OpenClaw lobster">
+  <defs>
+    <linearGradient id="openclaw-lobster-gradient" x1="12" y1="10" x2="102" y2="106" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff5f63" />
+      <stop offset="1" stop-color="#c92f36" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M60 10C30 10 15 35 15 55C15 75 30 95 45 100V110H55V100C55 100 60 102 65 100V110H75V100C90 95 105 75 105 55C105 35 90 10 60 10Z"
+    fill="url(#openclaw-lobster-gradient)"
+  />
+  <path
+    d="M20 45C5 40 0 50 5 60C10 70 20 65 25 55C28 48 25 45 20 45Z"
+    fill="url(#openclaw-lobster-gradient)"
+  />
+  <path
+    d="M100 45C115 40 120 50 115 60C110 70 100 65 95 55C92 48 95 45 100 45Z"
+    fill="url(#openclaw-lobster-gradient)"
+  />
+  <path d="M45 15Q35 5 30 8" stroke="#ff6a6a" stroke-width="2" stroke-linecap="round" />
+  <path d="M75 15Q85 5 90 8" stroke="#ff6a6a" stroke-width="2" stroke-linecap="round" />
+  <circle cx="45" cy="35" r="6" fill="#050810" />
+  <circle cx="75" cy="35" r="6" fill="#050810" />
+  <circle cx="46" cy="34" r="2" fill="#00e5cc" />
+  <circle cx="76" cy="34" r="2" fill="#00e5cc" />
+</svg>

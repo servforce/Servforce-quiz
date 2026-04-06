@@ -32,6 +32,10 @@ class VerifyPayload(BaseModel):
     sms_code: str = ""
 
 
+class UseExistingResumePayload(BaseModel):
+    token: str
+
+
 class AnswerActionPayload(BaseModel):
     question_id: str = ""
     answer: Any = None
@@ -269,6 +273,37 @@ def _build_verify_payload(assignment: dict[str, Any], *, verify: dict[str, Any],
         "masked_phone": masked_phone,
         "name": str(pending_profile.get("name") or ""),
         "phone": str(sms.get("phone") or pending_profile.get("phone") or ""),
+    }
+
+
+def _build_resume_payload(assignment: dict[str, Any], *, pending_profile: dict[str, Any], sms: dict[str, Any]) -> dict[str, Any]:
+    pending_existing = assignment.get("pending_existing_candidate") or {}
+    if not isinstance(pending_existing, dict):
+        pending_existing = {}
+    try:
+        existing_candidate_id = int(pending_existing.get("candidate_id") or 0)
+    except Exception:
+        existing_candidate_id = 0
+    existing_resume = {
+        "filename": str(pending_existing.get("resume_filename") or "").strip(),
+        "parsed_at": str(pending_existing.get("resume_parsed_at") or "").strip(),
+        "size": max(0, int(pending_existing.get("resume_size") or 0)),
+    }
+    has_existing_resume = bool(
+        existing_candidate_id > 0
+        and (
+            existing_resume["filename"]
+            or int(existing_resume["size"] or 0) > 0
+            or existing_resume["parsed_at"]
+        )
+    )
+    return {
+        "name": str(pending_profile.get("name") or "候选人").strip() or "候选人",
+        "phone": validation_helpers._normalize_phone(
+            str(pending_profile.get("phone") or sms.get("phone") or "").strip()
+        ),
+        "mode": ("reuse_or_replace" if has_existing_resume else "upload_required"),
+        "existing_resume": existing_resume,
     }
 
 
@@ -571,19 +606,14 @@ def _bootstrap_attempt(token: str, *, session_id: str = "") -> dict[str, Any]:
             "verify": _build_verify_payload(assignment, verify=verify, sms=sms, pending_profile=pending_profile, candidate_id=candidate_id),
         }
 
-    if candidate_id <= 0:
+    if status_text == "resume_pending" or candidate_id <= 0:
         return {
             "token": token,
             "step": "resume",
             "assignment": _serialize_assignment_payload(assignment),
             "invite_window": _invite_window_payload(start_date, end_date),
             "quiz": _build_quiz_preview(assignment),
-            "resume": {
-                "name": str(pending_profile.get("name") or "候选人").strip() or "候选人",
-                "phone": validation_helpers._normalize_phone(
-                    str(pending_profile.get("phone") or sms.get("phone") or "").strip()
-                ),
-            },
+            "resume": _build_resume_payload(assignment, pending_profile=pending_profile, sms=sms),
         }
 
     public_spec, quiz_metadata = _load_public_quiz_bundle(assignment)
@@ -766,6 +796,11 @@ def public_verify(payload: VerifyPayload):
 def public_resume_upload(request: Request, token: str = "", file: UploadFile = File(...)):
     _ = request
     return public_flow_service.upload_public_resume(token=token, file=file)
+
+
+@router.post("/resume/use-existing")
+def public_resume_use_existing(payload: UseExistingResumePayload):
+    return public_flow_service.use_existing_public_resume(token=payload.token)
 
 
 @router.post("/answers/{token}")

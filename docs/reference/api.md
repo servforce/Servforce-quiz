@@ -24,6 +24,9 @@
 
 说明：
 
+- 这是公开 bootstrap，只返回非敏感 MCP 摘要
+- `MCP_AUTH_TOKEN` 不会通过此接口返回
+
 - 管理端和候选人端仍以 REST 为主协议面
 - 智能体自动化链路可通过 `/mcp` 调用同一批后台业务能力
 
@@ -191,6 +194,20 @@
 - `llm` / `sms` 除了当天用量、阈值、配置缺失信息外，还会返回当前接入摘要：
   - `integration.title`
   - `integration.summary`
+
+### `GET /api/admin/mcp/summary`
+
+返回管理员可见的 MCP 接入摘要。
+
+当前字段包括：
+
+- `enabled`
+- `path`
+- `transport`
+- `auth_scheme`
+- `docs_path`
+- `auth_token`
+- `auth_token_configured`
 
 ### `GET /api/admin/system-status`
 
