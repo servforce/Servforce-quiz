@@ -493,36 +493,6 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS source_kind TEXT NOT NULL DEFAULT 'direct';
  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS handled_at TIMESTAMPTZ NULL;
  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS handled_by TEXT NULL;
- UPDATE quiz_paper ep
-    SET source_kind='public'
-   FROM assignment_record ar
-  WHERE ar.token = ep.token
-    AND COALESCE(ar.data->'public_invite', 'null'::jsonb) <> 'null'::jsonb;
- UPDATE quiz_paper
-    SET source_kind='direct'
-  WHERE COALESCE(NULLIF(BTRIM(source_kind), ''), 'direct') NOT IN ('direct', 'public');
-
- DO $$
- BEGIN
-   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quiz_paper_token_key') THEN
-     BEGIN
-       ALTER TABLE quiz_paper ADD CONSTRAINT quiz_paper_token_key UNIQUE (token);
-     EXCEPTION WHEN OTHERS THEN NULL;
-     END;
-   END IF;
- END$$;
-
-  CREATE INDEX IF NOT EXISTS idx_quiz_paper_candidate_id ON quiz_paper(candidate_id);
- CREATE INDEX IF NOT EXISTS idx_quiz_paper_phone ON quiz_paper(phone);
-  CREATE INDEX IF NOT EXISTS idx_quiz_paper_quiz_key ON quiz_paper(quiz_key);
-  CREATE INDEX IF NOT EXISTS idx_quiz_paper_quiz_version_id ON quiz_paper(quiz_version_id);
-  CREATE INDEX IF NOT EXISTS idx_quiz_paper_source_kind ON quiz_paper(source_kind);
-  CREATE INDEX IF NOT EXISTS idx_quiz_paper_status ON quiz_paper(status);
-  CREATE INDEX IF NOT EXISTS idx_quiz_paper_handled_at ON quiz_paper(handled_at);
-  CREATE INDEX IF NOT EXISTS idx_quiz_paper_created_at ON quiz_paper(created_at);
-  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS invite_start_date DATE NULL;
-  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS invite_end_date DATE NULL;
-  CREATE INDEX IF NOT EXISTS idx_quiz_paper_invite_start_date ON quiz_paper(invite_start_date);
 
   CREATE TABLE IF NOT EXISTS assignment_record (
     token TEXT PRIMARY KEY,
@@ -561,6 +531,37 @@ ALTER TABLE candidate DROP COLUMN IF EXISTS duration_seconds;
   CREATE INDEX IF NOT EXISTS idx_assignment_record_candidate_id ON assignment_record(candidate_id);
   CREATE INDEX IF NOT EXISTS idx_assignment_record_status ON assignment_record(status);
   CREATE INDEX IF NOT EXISTS idx_assignment_record_created_at ON assignment_record(created_at);
+
+ UPDATE quiz_paper ep
+    SET source_kind='public'
+   FROM assignment_record ar
+  WHERE ar.token = ep.token
+    AND COALESCE(ar.data->'public_invite', 'null'::jsonb) <> 'null'::jsonb;
+ UPDATE quiz_paper
+    SET source_kind='direct'
+  WHERE COALESCE(NULLIF(BTRIM(source_kind), ''), 'direct') NOT IN ('direct', 'public');
+
+ DO $$
+ BEGIN
+   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'quiz_paper_token_key') THEN
+     BEGIN
+       ALTER TABLE quiz_paper ADD CONSTRAINT quiz_paper_token_key UNIQUE (token);
+     EXCEPTION WHEN OTHERS THEN NULL;
+     END;
+   END IF;
+ END$$;
+
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_candidate_id ON quiz_paper(candidate_id);
+ CREATE INDEX IF NOT EXISTS idx_quiz_paper_phone ON quiz_paper(phone);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_quiz_key ON quiz_paper(quiz_key);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_quiz_version_id ON quiz_paper(quiz_version_id);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_source_kind ON quiz_paper(source_kind);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_status ON quiz_paper(status);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_handled_at ON quiz_paper(handled_at);
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_created_at ON quiz_paper(created_at);
+  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS invite_start_date DATE NULL;
+  ALTER TABLE quiz_paper ADD COLUMN IF NOT EXISTS invite_end_date DATE NULL;
+  CREATE INDEX IF NOT EXISTS idx_quiz_paper_invite_start_date ON quiz_paper(invite_start_date);
 
   CREATE TABLE IF NOT EXISTS quiz_asset (
     id BIGSERIAL PRIMARY KEY,
