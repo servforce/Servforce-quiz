@@ -7,3 +7,4 @@ venv/
 .env
 ui/node_modules/
 tmp/
+.codex
