@@ -58,6 +58,22 @@
           </div>
         </div>
       </div>
+
+      <div
+        x-show="backGuardHintVisible"
+        x-transition.opacity.duration.180ms
+        class="pointer-events-none fixed inset-x-0 bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] z-50 flex justify-center px-4 sm:bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))]"
+      >
+        <div class="pointer-events-auto w-full max-w-sm rounded-2xl border border-amber-300/25 bg-slate-950/92 px-4 py-3 shadow-[0_18px_60px_rgba(2,6,23,0.4)] backdrop-blur-xl">
+          <div class="flex items-start gap-3">
+            <span class="material-symbols-rounded mt-0.5 text-base text-amber-200">keyboard_return</span>
+            <div class="min-w-0">
+              <div class="text-sm font-semibold text-amber-50">再返回一次，将离开当前流程</div>
+              <p class="mt-1 text-xs leading-5 text-slate-300">当前进度会保留，可稍后通过原链接继续。</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
   </body>
 </html>

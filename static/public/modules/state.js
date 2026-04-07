@@ -27,6 +27,13 @@ export function createPublicState() {
     questionTimer: null,
     questionRemainingSeconds: 0,
     questionRemainingMs: 0,
+    backGuardArmed: false,
+    backGuardDeadline: 0,
+    backGuardTimer: null,
+    backGuardHintVisible: false,
+    backGuardHistoryArmed: false,
+    backGuardBypass: false,
+    backGuardSkipToken: "",
     touchStart: null,
     fragmentCache: {},
   };

@@ -70,9 +70,9 @@
       <div class="text-sm font-semibold text-white" x-text="canUseExistingResume() ? '上传最新版简历' : '上传简历文件'"></div>
       <p
         class="mt-2 text-sm leading-7 text-slate-300"
-        x-text="canUseExistingResume() ? '支持 PDF、DOCX 和图片格式。上传后会用最新版覆盖当前候选人档案中的简历，再继续答题。' : '支持 PDF、DOCX 和图片格式。上传完成后会直接跳入首卡，解析结果稍后回填。'"
+        x-text="canUseExistingResume() ? '支持 PDF、图片格式。上传后会用最新版覆盖当前候选人档案中的简历，再继续答题。' : '支持 PDF、图片格式。上传完成后会直接跳入首卡，解析结果稍后回填。'"
       ></p>
-      <input x-ref="resumeFile" type="file" class="mt-5 block w-full text-sm text-slate-300 file:mr-4 file:rounded-md file:border-0 file:bg-white/10 file:px-4 file:py-3 file:text-sm file:font-medium file:text-white hover:file:bg-white/16" />
+      <input x-ref="resumeFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff" class="mt-5 block w-full text-sm text-slate-300 file:mr-4 file:rounded-md file:border-0 file:bg-white/10 file:px-4 file:py-3 file:text-sm file:font-medium file:text-white hover:file:bg-white/16" />
       <button
         type="submit"
         :disabled="actionBusy"

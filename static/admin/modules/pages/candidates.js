@@ -1,6 +1,13 @@
 import { RESUME_PARSE_META, RESUME_PHASE_META, createCandidateResumeUploadState, createCandidateResumeReparseState } from "../constants.js";
+
 export function createAdminCandidatesModule() {
   return {
+    isSupportedResumeFile(file) {
+      const name = String(file?.name || "").trim().toLowerCase();
+      if (!name) return false;
+      return [".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"].some((ext) => name.endsWith(ext));
+    },
+
     candidateResumeParsedData() {
       const details = this.candidateDetail?.resume_parsed?.details;
       const data = details?.data;
@@ -399,6 +406,16 @@ export function createAdminCandidatesModule() {
     async handleCandidateResumeUploadSelected(event) {
       const file = event?.target?.files?.[0];
       if (!file || this.candidateResumeUploadState.busy) return;
+      if (!this.isSupportedResumeFile(file)) {
+        this.candidateResumeUploadState = {
+          ...createCandidateResumeUploadState(),
+          phase: "error",
+          fileName: file.name,
+          message: "仅支持 PDF 或图片简历，请重新选择文件。",
+          error: "当前前端仅支持上传 PDF 或图片格式。",
+        };
+        return;
+      }
       this.stopCandidateResumeUploadPolling();
       this.candidateResumeUploadState = {
         ...createCandidateResumeUploadState(),
@@ -476,6 +493,17 @@ export function createAdminCandidatesModule() {
     handleCandidateResumeReparseSelected(event) {
       const file = event?.target?.files?.[0];
       if (!file || this.candidateResumeReparseState.busy) return;
+      if (!this.isSupportedResumeFile(file)) {
+        this.candidateResumeReparseState = {
+          ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),
+          phase: "error",
+          fileName: file.name,
+          message: "仅支持 PDF 或图片简历，请重新选择文件。",
+          error: "当前前端仅支持上传 PDF 或图片格式。",
+          pendingFile: null,
+        };
+        return;
+      }
       this.stopCandidateResumeReparsePolling();
       this.candidateResumeReparseState = {
         ...createCandidateResumeReparseState(this.candidateResumeReparseDefaultMessage()),

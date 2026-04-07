@@ -1,5 +1,11 @@
 export function createPublicResumeModule() {
   return {
+    isSupportedResumeFile(file) {
+      const name = String(file?.name || "").trim().toLowerCase();
+      if (!name) return false;
+      return [".pdf", ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"].some((ext) => name.endsWith(ext));
+    },
+
     resumeMode() {
       return String(this.state.resume?.mode || "upload_required").trim() || "upload_required";
     },
@@ -57,6 +63,10 @@ export function createPublicResumeModule() {
       const file = this.$refs.resumeFile?.files?.[0];
       if (!file) {
         this.error = "请先选择简历文件";
+        return;
+      }
+      if (!this.isSupportedResumeFile(file)) {
+        this.error = "仅支持上传 PDF 或图片格式的简历";
         return;
       }
       this.actionBusy = true;
