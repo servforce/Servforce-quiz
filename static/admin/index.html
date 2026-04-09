@@ -120,7 +120,12 @@
 
             <div x-show="isAdminCompactLayout" x-cloak class="admin-mobile-nav-shell md:hidden">
               <div class="admin-primary-nav">
-                <div class="admin-primary-nav__track" role="navigation" aria-label="后台主导航">
+                <div
+                  class="admin-primary-nav__track"
+                  role="navigation"
+                  aria-label="后台主导航"
+                  :style="{ '--admin-primary-nav-columns': navItems.length }"
+                >
                   <template x-for="item in navItems" :key="'compact-' + item.href">
                     <button
                       type="button"

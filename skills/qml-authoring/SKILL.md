@@ -15,7 +15,7 @@ description: Use this skill when authoring, reviewing, fixing, or documenting QM
 - 维护 traits 量表问卷的维度说明、分析建议与 Front Matter 解释口径
 - 维护问卷 `intro` / `outro` 图片及其展示约定
 - 排查 QML 解析错误
-- 更新 QML 规范文档或 QML 示例
+- 更新 `qml.md` 或 QML 示例
 - 评审 QML 语法与 parser 行为是否一致
 
 ## 工作流
