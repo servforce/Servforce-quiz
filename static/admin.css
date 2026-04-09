@@ -3694,7 +3694,7 @@
   }
   .admin-primary-nav__track {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--admin-primary-nav-columns, 5), minmax(0, 1fr));
     gap: 0.45rem;
     border-radius: 1rem;
     border: 1px solid rgba(37, 99, 235, 0.14);

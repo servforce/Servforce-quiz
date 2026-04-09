@@ -24,6 +24,7 @@
 
 - 必须存在 `md-quiz-repo.yaml`
 - 必须存在 `README.md`
+- 新增、删除或重命名 quiz 后，必须同步更新 `md-quiz-repo.yaml` 与 `README.md`
 - 不再支持根目录散落 `*.md`
 
 ### manifest 要求
@@ -44,6 +45,7 @@ quizzes:
 - `quizzes` 必须是非空列表
 - 每个 `path` 只能是 `quizzes/<quiz_id>/quiz.md`
 - `path` 不能重复，不能越界，必须真实存在
+- 新增或删除 quiz 时，`quizzes` 列表必须同步反映实际仓库内容
 - 当前仓库规范版本号与 QML 头部推荐的 `schema_version: 2` / `format: qml-v2` 保持同一代际
 
 ## Quiz 目录规则
