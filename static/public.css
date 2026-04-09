@@ -3312,16 +3312,6 @@
       font-size: 1.05rem;
     }
   }
-  .xl\:sticky {
-    @media (width >= 80rem) {
-      position: sticky;
-    }
-  }
-  .xl\:top-6 {
-    @media (width >= 80rem) {
-      top: calc(var(--spacing) * 6);
-    }
-  }
   .xl\:hidden {
     @media (width >= 80rem) {
       display: none;

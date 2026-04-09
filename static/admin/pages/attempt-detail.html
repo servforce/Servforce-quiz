@@ -151,102 +151,104 @@
 
             <section
               x-show="adminCompactPanelVisible('attempt-detail', 'evaluation')"
-              class="admin-surface self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6"
+              class="admin-surface admin-sticky-aside rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <div>
                 <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">智能评价</h2>
                 <p class="mt-1 text-sm text-slate-600">汇总总分、主倾向、综合分析和候选人简评。</p>
               </div>
 
-              <div class="mt-5 grid gap-3">
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <div x-show="attemptEvaluationShowScore()" class="rounded-[1.1rem] border border-blue-100 bg-blue-50/55 px-4 py-3">
-                    <div class="text-[12px] font-semibold uppercase tracking-[0.18em] text-blue-700">总分</div>
-                    <div class="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-900" x-text="attemptReviewEvaluation().score_display || '-'"></div>
+              <div class="admin-sticky-aside__body">
+                <div class="mt-5 grid gap-3">
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <div x-show="attemptEvaluationShowScore()" class="rounded-[1.1rem] border border-blue-100 bg-blue-50/55 px-4 py-3">
+                      <div class="text-[12px] font-semibold uppercase tracking-[0.18em] text-blue-700">总分</div>
+                      <div class="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-900" x-text="attemptReviewEvaluation().score_display || '-'"></div>
+                    </div>
+                    <div class="rounded-[1.1rem] border border-slate-200 bg-slate-50/80 px-4 py-3">
+                      <div class="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-500">结果模式</div>
+                      <div class="mt-2 text-lg font-bold tracking-[-0.03em] text-slate-900" x-text="attemptEvaluationResultModeLabel()"></div>
+                    </div>
                   </div>
-                  <div class="rounded-[1.1rem] border border-slate-200 bg-slate-50/80 px-4 py-3">
-                    <div class="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-500">结果模式</div>
-                    <div class="mt-2 text-lg font-bold tracking-[-0.03em] text-slate-900" x-text="attemptEvaluationResultModeLabel()"></div>
-                  </div>
-                </div>
 
-                <div x-show="attemptEvaluationPrimaryDimensions().length" class="border-t border-slate-200/80 pt-4">
-                  <div class="text-[12px] font-semibold uppercase tracking-[0.18em] text-sky-700">主倾向</div>
-                  <div class="mt-3 flex flex-wrap gap-2">
-                    <template x-for="dimension in attemptEvaluationPrimaryDimensions()" :key="dimension">
-                      <span :style="traitBadgeStyle(dimension)" class="rounded-full border px-3 py-1 text-xs font-semibold" x-text="dimension"></span>
-                    </template>
+                  <div x-show="attemptEvaluationPrimaryDimensions().length" class="border-t border-slate-200/80 pt-4">
+                    <div class="text-[12px] font-semibold uppercase tracking-[0.18em] text-sky-700">主倾向</div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <template x-for="dimension in attemptEvaluationPrimaryDimensions()" :key="dimension">
+                        <span :style="traitBadgeStyle(dimension)" class="rounded-full border px-3 py-1 text-xs font-semibold" x-text="dimension"></span>
+                      </template>
+                    </div>
                   </div>
-                </div>
 
-                <div x-show="attemptEvaluationTraitPairs().length" class="border-t border-slate-200/80 pt-4">
-                  <div class="text-sm font-semibold text-slate-900">维度对照</div>
-                  <div class="mt-3 divide-y divide-slate-200/80">
-                    <template x-for="pair in attemptEvaluationTraitPairs()" :key="`${pair.left || ''}-${pair.right || ''}`">
-                      <div class="py-3 first:pt-0 last:pb-0">
-                        <div class="flex items-start justify-between gap-3">
-                          <div>
-                            <div class="text-sm font-semibold tabular-nums text-slate-800" x-text="`${pair.left || '-'} ${pair.left_score || 0} / ${pair.right || '-'} ${pair.right_score || 0}`"></div>
-                            <div class="mt-1 text-xs leading-5 text-slate-500" x-text="pair.description || '按对立维度对照输出主倾向。'"></div>
+                  <div x-show="attemptEvaluationTraitPairs().length" class="border-t border-slate-200/80 pt-4">
+                    <div class="text-sm font-semibold text-slate-900">维度对照</div>
+                    <div class="mt-3 divide-y divide-slate-200/80">
+                      <template x-for="pair in attemptEvaluationTraitPairs()" :key="`${pair.left || ''}-${pair.right || ''}`">
+                        <div class="py-3 first:pt-0 last:pb-0">
+                          <div class="flex items-start justify-between gap-3">
+                            <div>
+                              <div class="text-sm font-semibold tabular-nums text-slate-800" x-text="`${pair.left || '-'} ${pair.left_score || 0} / ${pair.right || '-'} ${pair.right_score || 0}`"></div>
+                              <div class="mt-1 text-xs leading-5 text-slate-500" x-text="pair.description || '按对立维度对照输出主倾向。'"></div>
+                            </div>
+                            <span :style="traitBadgeStyle(pair.winner || '')" class="rounded-full border px-2.5 py-1 text-[11px] font-semibold" x-text="pair.winner || '-'"></span>
                           </div>
-                          <span :style="traitBadgeStyle(pair.winner || '')" class="rounded-full border px-2.5 py-1 text-[11px] font-semibold" x-text="pair.winner || '-'"></span>
                         </div>
-                      </div>
-                    </template>
-                  </div>
-                </div>
-
-                <div x-show="!attemptEvaluationTraitPairs().length && attemptEvaluationDimensionList().length" class="border-t border-slate-200/80 pt-4">
-                  <div class="text-sm font-semibold text-slate-900">维度累计</div>
-                  <div class="mt-3 divide-y divide-slate-200/80">
-                    <template x-for="item in attemptEvaluationDimensionList()" :key="item.dimension || ''">
-                      <div class="py-3 first:pt-0 last:pb-0">
-                        <div class="flex items-center justify-between gap-3">
-                          <span class="text-sm font-semibold text-slate-800" x-text="item.dimension || '-'"></span>
-                          <span class="text-sm font-bold text-slate-900" x-text="item.score || 0"></span>
-                        </div>
-                        <div class="mt-1 text-xs leading-5 text-slate-500" x-text="item.meaning || '当前维度暂无额外说明。'"></div>
-                      </div>
-                    </template>
-                  </div>
-                </div>
-
-                <div x-show="attemptReviewEvaluation().final_analysis" class="border-t border-slate-200/80 pt-4">
-                  <div class="text-sm font-semibold text-emerald-800">综合分析</div>
-                  <div class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700" x-text="attemptReviewEvaluation().final_analysis"></div>
-                </div>
-
-                <div x-show="attemptReviewEvaluation().candidate_remark" class="border-t border-slate-200/80 pt-4">
-                  <div class="text-sm font-semibold text-blue-800">候选人简评</div>
-                  <div class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700" x-text="attemptReviewEvaluation().candidate_remark"></div>
-                </div>
-
-                <div
-                  x-show="assignmentStatusValue(attemptDetail.quiz_paper) === 'grading' && !attemptEvaluationHasContent()"
-                  class="grading-placeholder rounded-[1.1rem] border border-dashed border-amber-200 bg-amber-50/70 px-4 py-5"
-                >
-                  <div class="grading-placeholder__hero">
-                    <div class="grading-placeholder__spinner" aria-hidden="true">
-                      <span class="material-symbols-rounded text-[20px]">grading</span>
-                    </div>
-                    <div>
-                      <div class="text-sm font-semibold text-amber-800">正在判卷</div>
-                      <p class="mt-2 text-sm leading-6 text-amber-700/90">系统正在汇总题目得分和大模型分析，完成后这里会自动显示总分、主倾向和综合评价。</p>
+                      </template>
                     </div>
                   </div>
-                  <div class="grading-placeholder__bars" aria-hidden="true">
-                    <span class="grading-placeholder__bar grading-placeholder__bar--primary"></span>
-                    <span class="grading-placeholder__bar grading-placeholder__bar--secondary"></span>
-                    <span class="grading-placeholder__bar grading-placeholder__bar--tertiary"></span>
-                  </div>
-                </div>
 
-                <div
-                  x-show="assignmentStatusValue(attemptDetail.quiz_paper) !== 'grading' && !attemptEvaluationHasContent()"
-                  class="rounded-[1.1rem] border border-dashed border-slate-200 bg-slate-50/80 px-4 py-5"
-                >
-                  <div class="text-sm font-semibold text-slate-700">当前暂无评价摘要</div>
-                  <p class="mt-2 text-sm leading-6 text-slate-500">该记录尚未生成可展示的综合分析；如果刚完成判卷，刷新后会自动补齐。</p>
+                  <div x-show="!attemptEvaluationTraitPairs().length && attemptEvaluationDimensionList().length" class="border-t border-slate-200/80 pt-4">
+                    <div class="text-sm font-semibold text-slate-900">维度累计</div>
+                    <div class="mt-3 divide-y divide-slate-200/80">
+                      <template x-for="item in attemptEvaluationDimensionList()" :key="item.dimension || ''">
+                        <div class="py-3 first:pt-0 last:pb-0">
+                          <div class="flex items-center justify-between gap-3">
+                            <span class="text-sm font-semibold text-slate-800" x-text="item.dimension || '-'"></span>
+                            <span class="text-sm font-bold text-slate-900" x-text="item.score || 0"></span>
+                          </div>
+                          <div class="mt-1 text-xs leading-5 text-slate-500" x-text="item.meaning || '当前维度暂无额外说明。'"></div>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+
+                  <div x-show="attemptReviewEvaluation().final_analysis" class="border-t border-slate-200/80 pt-4">
+                    <div class="text-sm font-semibold text-emerald-800">综合分析</div>
+                    <div class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700" x-text="attemptReviewEvaluation().final_analysis"></div>
+                  </div>
+
+                  <div x-show="attemptReviewEvaluation().candidate_remark" class="border-t border-slate-200/80 pt-4">
+                    <div class="text-sm font-semibold text-blue-800">候选人简评</div>
+                    <div class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700" x-text="attemptReviewEvaluation().candidate_remark"></div>
+                  </div>
+
+                  <div
+                    x-show="assignmentStatusValue(attemptDetail.quiz_paper) === 'grading' && !attemptEvaluationHasContent()"
+                    class="grading-placeholder rounded-[1.1rem] border border-dashed border-amber-200 bg-amber-50/70 px-4 py-5"
+                  >
+                    <div class="grading-placeholder__hero">
+                      <div class="grading-placeholder__spinner" aria-hidden="true">
+                        <span class="material-symbols-rounded text-[20px]">grading</span>
+                      </div>
+                      <div>
+                        <div class="text-sm font-semibold text-amber-800">正在判卷</div>
+                        <p class="mt-2 text-sm leading-6 text-amber-700/90">系统正在汇总题目得分和大模型分析，完成后这里会自动显示总分、主倾向和综合评价。</p>
+                      </div>
+                    </div>
+                    <div class="grading-placeholder__bars" aria-hidden="true">
+                      <span class="grading-placeholder__bar grading-placeholder__bar--primary"></span>
+                      <span class="grading-placeholder__bar grading-placeholder__bar--secondary"></span>
+                      <span class="grading-placeholder__bar grading-placeholder__bar--tertiary"></span>
+                    </div>
+                  </div>
+
+                  <div
+                    x-show="assignmentStatusValue(attemptDetail.quiz_paper) !== 'grading' && !attemptEvaluationHasContent()"
+                    class="rounded-[1.1rem] border border-dashed border-slate-200 bg-slate-50/80 px-4 py-5"
+                  >
+                    <div class="text-sm font-semibold text-slate-700">当前暂无评价摘要</div>
+                    <p class="mt-2 text-sm leading-6 text-slate-500">该记录尚未生成可展示的综合分析；如果刚完成判卷，刷新后会自动补齐。</p>
+                  </div>
                 </div>
               </div>
             </section>

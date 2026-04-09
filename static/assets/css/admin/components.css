@@ -135,6 +135,14 @@
     min-width: 0;
   }
 
+  .admin-sticky-aside {
+    min-width: 0;
+  }
+
+  .admin-sticky-aside__body {
+    min-width: 0;
+  }
+
   .admin-subsurface {
     border-color: rgba(37, 99, 235, 0.12);
     box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
@@ -268,6 +276,28 @@
   .admin-public-invite-qr {
     width: 6.5rem;
     height: 6.5rem;
+  }
+
+  @media (min-width: 1280px) {
+    .admin-sticky-aside {
+      position: sticky;
+      top: 1.5rem;
+      display: flex;
+      max-height: calc(100vh - 3rem);
+      flex-direction: column;
+      overflow: hidden;
+      align-self: flex-start;
+    }
+
+    .admin-sticky-aside__body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+      padding-right: 0.35rem;
+      margin-right: -0.35rem;
+    }
   }
 
   .assignment-surface {

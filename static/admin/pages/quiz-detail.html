@@ -240,7 +240,7 @@
 
             <section
               x-show="adminCompactPanelVisible('quiz-detail', 'history')"
-              class="admin-surface self-start rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl xl:sticky xl:top-6"
+              class="admin-surface admin-sticky-aside rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <div class="flex items-start justify-between gap-3">
                 <div>
@@ -253,42 +253,44 @@
                 </div>
               </div>
 
-              <div class="mt-4 space-y-3">
-                <template x-for="version in quizDetail.quiz_version_history || []" :key="version.id">
-                  <button
-                    type="button"
-                    @click="loadQuizVersion(version.id)"
-                    :class="version.is_selected ? 'border-blue-300 bg-blue-50/70 shadow-[0_12px_28px_rgba(37,99,235,0.10)]' : 'border-blue-100 bg-white hover:border-blue-200 hover:bg-blue-50/40'"
-                    class="w-full rounded-xl border p-4 text-left transition"
-                  >
-                    <div class="flex items-start justify-between gap-3">
-                      <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <div class="font-semibold text-slate-900">版本 <span x-text="version.version_no || version.id"></span></div>
-                          <span x-show="version.is_current" class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">当前</span>
-                          <span x-show="version.is_selected && !version.is_current" class="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700">已选</span>
+              <div class="admin-sticky-aside__body">
+                <div class="mt-4 space-y-3">
+                  <template x-for="version in quizDetail.quiz_version_history || []" :key="version.id">
+                    <button
+                      type="button"
+                      @click="loadQuizVersion(version.id)"
+                      :class="version.is_selected ? 'border-blue-300 bg-blue-50/70 shadow-[0_12px_28px_rgba(37,99,235,0.10)]' : 'border-blue-100 bg-white hover:border-blue-200 hover:bg-blue-50/40'"
+                      class="w-full rounded-xl border p-4 text-left transition"
+                    >
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <div class="font-semibold text-slate-900">版本 <span x-text="version.version_no || version.id"></span></div>
+                            <span x-show="version.is_current" class="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">当前</span>
+                            <span x-show="version.is_selected && !version.is_current" class="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700">已选</span>
+                          </div>
+                          <div class="mt-2 break-all font-mono text-[11px] leading-5 text-slate-500" x-text="version.git_commit || '-'"></div>
                         </div>
-                        <div class="mt-2 break-all font-mono text-[11px] leading-5 text-slate-500" x-text="version.git_commit || '-'"></div>
+                        <span class="material-symbols-rounded text-slate-400" x-text="version.is_selected ? 'visibility' : 'chevron_right'"></span>
                       </div>
-                      <span class="material-symbols-rounded text-slate-400" x-text="version.is_selected ? 'visibility' : 'chevron_right'"></span>
-                    </div>
 
-                    <div class="mt-3 space-y-2 text-xs leading-5 text-slate-500">
-                      <div x-show="version.source_path" class="break-all">
-                        <span class="font-semibold text-slate-600">文件：</span>
-                        <span x-text="version.source_path"></span>
+                      <div class="mt-3 space-y-2 text-xs leading-5 text-slate-500">
+                        <div x-show="version.source_path" class="break-all">
+                          <span class="font-semibold text-slate-600">文件：</span>
+                          <span x-text="version.source_path"></span>
+                        </div>
+                        <div x-show="version.created_at">
+                          <span class="font-semibold text-slate-600">创建时间：</span>
+                          <span x-text="formatDateTime(version.created_at)"></span>
+                        </div>
                       </div>
-                      <div x-show="version.created_at">
-                        <span class="font-semibold text-slate-600">创建时间：</span>
-                        <span x-text="formatDateTime(version.created_at)"></span>
-                      </div>
-                    </div>
-                  </button>
-                </template>
-              </div>
+                    </button>
+                  </template>
+                </div>
 
-              <div x-show="!(quizDetail.quiz_version_history || []).length" class="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center text-sm text-slate-500">
-                暂无版本历史
+                <div x-show="!(quizDetail.quiz_version_history || []).length" class="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center text-sm text-slate-500">
+                  暂无版本历史
+                </div>
               </div>
             </section>
           </div>
