@@ -143,6 +143,18 @@
     min-width: 0;
   }
 
+  .admin-right-pane {
+    min-width: 0;
+  }
+
+  .admin-right-pane__body {
+    min-width: 0;
+  }
+
+  .admin-right-pane--stack {
+    min-width: 0;
+  }
+
   .admin-subsurface {
     border-color: rgba(37, 99, 235, 0.12);
     box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
@@ -279,17 +291,33 @@
   }
 
   @media (min-width: 1280px) {
-    .admin-sticky-aside {
+    .admin-sticky-aside,
+    .admin-right-pane {
       position: sticky;
       top: 1.5rem;
       display: flex;
+      height: calc(100vh - 3rem);
       max-height: calc(100vh - 3rem);
       flex-direction: column;
       overflow: hidden;
       align-self: flex-start;
     }
 
-    .admin-sticky-aside__body {
+    .admin-right-pane--stack {
+      position: sticky;
+      top: 1.5rem;
+      align-self: flex-start;
+      height: calc(100vh - 3rem);
+      max-height: calc(100vh - 3rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+      padding-right: 0.35rem;
+      margin-right: -0.35rem;
+    }
+
+    .admin-sticky-aside__body,
+    .admin-right-pane__body {
       flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
@@ -297,6 +325,19 @@
       scrollbar-gutter: stable;
       padding-right: 0.35rem;
       margin-right: -0.35rem;
+    }
+
+    @supports (height: 100dvh) {
+      .admin-sticky-aside,
+      .admin-right-pane {
+        height: calc(100dvh - 3rem);
+        max-height: calc(100dvh - 3rem);
+      }
+
+      .admin-right-pane--stack {
+        height: calc(100dvh - 3rem);
+        max-height: calc(100dvh - 3rem);
+      }
     }
   }
 

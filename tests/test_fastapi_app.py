@@ -1782,6 +1782,72 @@ def test_admin_assignments_list_exposes_invite_urls_and_end_date_filters(monkeyp
     assert item["needs_attention"] is False
 
 
+def test_admin_assignments_list_supports_pagination_with_filters(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    version_id = _seed_exam_with_metadata("assignment-paging-demo")
+    candidate_id = create_candidate("分页候选人", "13900000032")
+    for index in range(25):
+        create_quiz_paper(
+            candidate_id=candidate_id,
+            phone="13900000032",
+            quiz_key="assignment-paging-demo",
+            quiz_version_id=version_id,
+            token=f"paging{index + 1:03d}",
+            invite_start_date="2026-05-02",
+            invite_end_date="2026-05-10",
+            status="invited",
+        )
+    create_quiz_paper(
+        candidate_id=candidate_id,
+        phone="13900000032",
+        quiz_key="assignment-paging-demo",
+        quiz_version_id=version_id,
+        token="paging-outside",
+        invite_start_date="2026-06-02",
+        invite_end_date="2026-06-10",
+        status="invited",
+    )
+
+    _admin_login(client)
+
+    page_1_response = client.get(
+        "/api/admin/assignments?q=assignment-paging-demo&start_from=2026-05-01&end_to=2026-05-31&page=1"
+    )
+    page_2_response = client.get(
+        "/api/admin/assignments?q=assignment-paging-demo&start_from=2026-05-01&end_to=2026-05-31&page=2"
+    )
+
+    assert page_1_response.status_code == 200
+    assert page_2_response.status_code == 200
+
+    page_1 = page_1_response.json()
+    page_2 = page_2_response.json()
+
+    assert page_1["filters"]["q"] == "assignment-paging-demo"
+    assert page_1["filters"]["start_from"] == "2026-05-01"
+    assert page_1["filters"]["end_to"] == "2026-05-31"
+    assert page_1["page"] == 1
+    assert page_1["per_page"] == 20
+    assert page_1["total"] == 25
+    assert page_1["total_pages"] == 2
+    assert len(page_1["items"]) == 20
+
+    assert page_2["filters"]["q"] == "assignment-paging-demo"
+    assert page_2["filters"]["start_from"] == "2026-05-01"
+    assert page_2["filters"]["end_to"] == "2026-05-31"
+    assert page_2["page"] == 2
+    assert page_2["per_page"] == 20
+    assert page_2["total"] == 25
+    assert page_2["total_pages"] == 2
+    assert len(page_2["items"]) == 5
+
+    page_1_tokens = {item["token"] for item in page_1["items"]}
+    page_2_tokens = {item["token"] for item in page_2["items"]}
+    assert "paging-outside" not in page_1_tokens
+    assert "paging-outside" not in page_2_tokens
+    assert page_1_tokens.isdisjoint(page_2_tokens)
+
+
 def test_admin_assignment_url_uses_forwarded_https_scheme(monkeypatch, tmp_path):
     client = _build_client(monkeypatch, tmp_path)
     _seed_exam_with_metadata("assignment-forwarded-demo")

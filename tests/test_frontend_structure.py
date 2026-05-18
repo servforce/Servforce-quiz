@@ -50,3 +50,19 @@ def test_admin_candidates_page_uses_resume_job_polling() -> None:
     assert "/api/admin/jobs/" in source
     assert "scheduleCandidateResumeUploadPolling" in source
     assert "scheduleCandidateResumeReparsePolling" in source
+
+
+def test_admin_assignments_page_exposes_pagination_controls() -> None:
+    source = (ROOT / "static" / "admin" / "pages" / "assignments.html").read_text(encoding="utf-8")
+
+    assert "首页" in source
+    assert "上一页" in source
+    assert "下一页" in source
+    assert "末页" in source
+
+
+def test_admin_assignments_module_uses_page_query_param() -> None:
+    source = (ROOT / "static" / "admin" / "modules" / "pages" / "assignments.js").read_text(encoding="utf-8")
+
+    assert 'query.set("page"' in source
+    assert "scheduleAssignmentsReloadFromFirstPage" in source
