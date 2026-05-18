@@ -37,15 +37,15 @@
                 <div class="grid gap-3 lg:grid-cols-3">
                   <label class="block">
                     <span class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">搜索姓名</span>
-                    <input x-model="filters.assignments.q" @input="scheduleAssignmentsReload" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="姓名 / 手机号 / token" />
+                    <input x-model="filters.assignments.q" @input="scheduleAssignmentsReloadFromFirstPage" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" placeholder="姓名 / 手机号 / token" />
                   </label>
                   <label class="block">
                     <span class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">开始时间</span>
-                    <input x-model="filters.assignments.start_from" @change="loadAssignments" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" />
+                    <input x-model="filters.assignments.start_from" @change="reloadAssignmentsFromFirstPage" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" />
                   </label>
                   <label class="block">
                     <span class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">结束时间</span>
-                    <input x-model="filters.assignments.end_to" @change="loadAssignments" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" />
+                    <input x-model="filters.assignments.end_to" @change="reloadAssignmentsFromFirstPage" type="date" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-300" />
                   </label>
                 </div>
               </div>
@@ -129,15 +129,48 @@
                   当前筛选条件下没有邀约记录
                 </div>
               </div>
+              <div
+                x-show="assignmentsHavePagination()"
+                class="mt-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div class="text-sm text-slate-600 tabular-nums" x-text="'共 ' + (assignments.total || 0) + ' 条 / 第 ' + (assignments.page || 1) + ' 页，共 ' + (assignments.total_pages || 1) + ' 页'"></div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    @click="changeAssignmentsPage(1)"
+                    type="button"
+                    :disabled="!canGoToPreviousAssignmentsPage()"
+                    :class="assignmentPaginationButtonClass(!canGoToPreviousAssignmentsPage())"
+                  >首页</button>
+                  <button
+                    @click="changeAssignmentsPage(currentAssignmentsPage() - 1)"
+                    type="button"
+                    :disabled="!canGoToPreviousAssignmentsPage()"
+                    :class="assignmentPaginationButtonClass(!canGoToPreviousAssignmentsPage())"
+                  >上一页</button>
+                  <button
+                    @click="changeAssignmentsPage(currentAssignmentsPage() + 1)"
+                    type="button"
+                    :disabled="!canGoToNextAssignmentsPage()"
+                    :class="assignmentPaginationButtonClass(!canGoToNextAssignmentsPage())"
+                  >下一页</button>
+                  <button
+                    @click="changeAssignmentsPage(assignmentTotalPages())"
+                    type="button"
+                    :disabled="!canGoToNextAssignmentsPage()"
+                    :class="assignmentPaginationButtonClass(!canGoToNextAssignmentsPage())"
+                  >末页</button>
+                </div>
+              </div>
             </section>
 
             <section
               x-show="adminCompactPanelVisible('assignments', 'create')"
-              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface admin-right-pane rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建邀约</h2>
-              <div class="mt-4 space-y-4">
-                <label class="block">
+              <div class="admin-right-pane__body">
+                <div class="mt-4 space-y-4">
+                  <label class="block">
                   <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">测验</span>
                   <div class="relative" @click.outside="closeAssignmentSelect('quiz')">
                     <div class="flex items-center gap-2 rounded-lg border border-blue-100 bg-white px-4 py-3 transition focus-within:border-blue-300">
@@ -260,6 +293,7 @@
                   <span class="material-symbols-rounded text-base">assignment_add</span>
                   创建邀请链接
                 </button>
+                </div>
               </div>
             </section>
           </div>

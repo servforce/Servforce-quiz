@@ -48,7 +48,7 @@
             </section>
             <section
               x-show="adminCompactPanelVisible('logs', 'trend')"
-              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface admin-right-pane rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -58,32 +58,34 @@
                 <div class="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700" x-text="logTrendRangeLabel()"></div>
               </div>
 
-              <template x-if="hasLogTrendData()">
-                <div x-ref="logsTrendChart" class="mt-4 h-80 overflow-hidden rounded-[1.125rem] border border-slate-800/70 bg-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"></div>
-              </template>
-
-              <div x-show="!hasLogTrendData()" class="mt-4 grid h-80 place-items-center rounded-[1.125rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center">
-                <div>
-                  <div class="text-sm font-semibold text-slate-700">近 30 天暂无分类波动</div>
-                  <p class="mt-2 text-sm leading-6 text-slate-500">保留分类汇总，后续产生新日志后会自动恢复折线图。</p>
-                </div>
-              </div>
-
-              <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                <template x-for="item in logCategoryCards()" :key="item.key">
-                  <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                    <div class="flex items-start justify-between gap-3">
-                      <div class="min-w-0">
-                        <div class="flex items-center gap-2">
-                          <span class="h-2.5 w-2.5 rounded-full" :style="'background-color:' + item.color"></span>
-                          <div class="text-sm font-semibold text-slate-900" x-text="item.label"></div>
-                        </div>
-                        <p class="mt-2 text-xs leading-5 text-slate-500" x-text="item.hint"></p>
-                      </div>
-                      <div class="text-2xl font-semibold tabular-nums text-slate-900" x-text="item.count"></div>
-                    </div>
-                  </div>
+              <div class="admin-right-pane__body">
+                <template x-if="hasLogTrendData()">
+                  <div x-ref="logsTrendChart" class="mt-4 h-80 overflow-hidden rounded-[1.125rem] border border-slate-800/70 bg-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"></div>
                 </template>
+
+                <div x-show="!hasLogTrendData()" class="mt-4 grid h-80 place-items-center rounded-[1.125rem] border border-dashed border-slate-200 bg-slate-50/70 px-6 text-center">
+                  <div>
+                    <div class="text-sm font-semibold text-slate-700">近 30 天暂无分类波动</div>
+                    <p class="mt-2 text-sm leading-6 text-slate-500">保留分类汇总，后续产生新日志后会自动恢复折线图。</p>
+                  </div>
+                </div>
+
+                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                  <template x-for="item in logCategoryCards()" :key="item.key">
+                    <div class="admin-subsurface rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span class="h-2.5 w-2.5 rounded-full" :style="'background-color:' + item.color"></span>
+                            <div class="text-sm font-semibold text-slate-900" x-text="item.label"></div>
+                          </div>
+                          <p class="mt-2 text-xs leading-5 text-slate-500" x-text="item.hint"></p>
+                        </div>
+                        <div class="text-2xl font-semibold tabular-nums text-slate-900" x-text="item.count"></div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
               </div>
             </section>
           </div>

@@ -566,7 +566,7 @@ export function createAdminAssignmentsModule() {
         await this.handleRoute("/admin/assignments");
         return;
       }
-      await this.loadAssignments();
+      await this.loadAssignments({ page: this.currentAssignmentsPage() });
     },
 
     updateAssignmentSummaryCount(previousItem, nextItem) {
@@ -635,6 +635,77 @@ export function createAdminAssignmentsModule() {
       if (!this.syncPollTimer) return;
       window.clearTimeout(this.syncPollTimer);
       this.syncPollTimer = null;
+    },
+
+    currentAssignmentsPage() {
+      const page = Number(this.assignments?.page || 1);
+      if (!Number.isFinite(page) || page <= 0) {
+        return 1;
+      }
+      return Math.floor(page);
+    },
+
+    assignmentTotalPages() {
+      const totalPages = Number(this.assignments?.total_pages || 1);
+      if (!Number.isFinite(totalPages) || totalPages <= 0) {
+        return 1;
+      }
+      return Math.floor(totalPages);
+    },
+
+    assignmentsHavePagination() {
+      return this.assignmentTotalPages() > 1;
+    },
+
+    canGoToPreviousAssignmentsPage() {
+      return this.currentAssignmentsPage() > 1;
+    },
+
+    canGoToNextAssignmentsPage() {
+      return this.currentAssignmentsPage() < this.assignmentTotalPages();
+    },
+
+    assignmentPaginationButtonClass(disabled) {
+      const classes = [
+        "inline-flex items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold transition",
+      ];
+      if (disabled) {
+        classes.push("cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300");
+      } else {
+        classes.push("border-blue-100 bg-white text-slate-700 hover:bg-blue-50 hover:text-blue-700");
+      }
+      return classes.join(" ");
+    },
+
+    normalizeAssignmentsPage(page, fallback = 1) {
+      const candidate = Number(page);
+      const fallbackPage = Number(fallback);
+      if (!Number.isFinite(candidate) || candidate <= 0) {
+        if (!Number.isFinite(fallbackPage) || fallbackPage <= 0) {
+          return 1;
+        }
+        return Math.max(1, Math.floor(fallbackPage));
+      }
+      return Math.max(1, Math.floor(candidate));
+    },
+
+    async changeAssignmentsPage(page) {
+      const nextPage = this.normalizeAssignmentsPage(page, this.currentAssignmentsPage());
+      if (nextPage === this.currentAssignmentsPage()) {
+        return;
+      }
+      await this.loadAssignments({ page: nextPage });
+    },
+
+    async reloadAssignmentsFromFirstPage() {
+      await this.loadAssignments({ page: 1 });
+    },
+
+    scheduleAssignmentsReloadFromFirstPage() {
+      window.clearTimeout(this.assignmentsFilterTimer);
+      this.assignmentsFilterTimer = window.setTimeout(() => {
+        this.loadAssignments({ page: 1 });
+      }, 220);
     },
 
     assignmentStatusValue(item) {
@@ -721,8 +792,10 @@ export function createAdminAssignmentsModule() {
       }, this.syncPollIntervalMs);
     },
 
-    async loadAssignments({ quiet = false, source = "manual" } = {}) {
+    async loadAssignments({ quiet = false, source = "manual", page = null } = {}) {
       const query = new URLSearchParams();
+      const nextPage = this.normalizeAssignmentsPage(page, this.assignments?.page || 1);
+      query.set("page", String(nextPage));
       if (this.filters.assignments.q) query.set("q", this.filters.assignments.q);
       if (this.filters.assignments.start_from) query.set("start_from", this.filters.assignments.start_from);
       if (this.filters.assignments.end_to) query.set("end_to", this.filters.assignments.end_to);
@@ -731,6 +804,7 @@ export function createAdminAssignmentsModule() {
       if (!data) return;
       const nextItems = Array.isArray(data?.items) ? data.items : [];
       this.assignments = {
+        ...(this.assignments || {}),
         items: nextItems,
         summary: data?.summary || { unhandled_finished_count: 0 },
         ...data,
@@ -756,10 +830,24 @@ export function createAdminAssignmentsModule() {
         body: JSON.stringify(payload),
         headers: { "Content-Type": "application/json" },
       });
+      const inviteStartDate = String(payload.invite_start_date || "").trim();
+      const inviteEndDate = String(payload.invite_end_date || "").trim();
+      if (inviteStartDate) {
+        const currentStart = String(this.filters.assignments.start_from || "").trim();
+        if (!currentStart || currentStart > inviteStartDate) {
+          this.filters.assignments.start_from = inviteStartDate;
+        }
+      }
+      if (inviteEndDate) {
+        const currentEnd = String(this.filters.assignments.end_to || "").trim();
+        if (!currentEnd || currentEnd < inviteEndDate) {
+          this.filters.assignments.end_to = inviteEndDate;
+        }
+      }
       this.assignmentForm.ignore_timing = false;
       this.resetAssignmentCandidateSelection();
       this.showNotice(`邀约已创建：${result.url}`);
-      await this.loadAssignments();
+      await this.loadAssignments({ page: 1 });
     },
 
     async loadAttemptDetail(token, { quiet = false, source = "manual" } = {}) {

@@ -6,7 +6,26 @@ import {
   createCandidateResumeReparseState,
 } from "./constants.js";
 
+function formatLocalDateYmd(date) {
+  const value = date instanceof Date ? new Date(date.getTime()) : new Date(date || Date.now());
+  if (Number.isNaN(value.getTime())) return "";
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function localDateOffsetYmd(offsetDays = 0) {
+  const value = new Date();
+  value.setHours(0, 0, 0, 0);
+  value.setDate(value.getDate() + Number(offsetDays || 0));
+  return formatLocalDateYmd(value);
+}
+
 export function createAdminState() {
+  const todayYmd = localDateOffsetYmd(0);
+  const sixDaysAgoYmd = localDateOffsetYmd(-6);
+  const tomorrowYmd = localDateOffsetYmd(1);
   return {
 booting: true,
 error: "",
@@ -27,7 +46,7 @@ loginForm: { username: "", password: "" },
 filters: {
   quizzes: { q: "" },
   candidates: { q: "" },
-  assignments: { q: "", start_from: "", end_to: "" },
+  assignments: { q: "", start_from: sixDaysAgoYmd, end_to: todayYmd },
 },
 syncForm: { repoUrl: "" },
 repoBinding: {},
@@ -43,8 +62,8 @@ candidateEvaluation: "",
 assignmentForm: {
   quiz_key: "",
   candidate_id: "",
-  invite_start_date: new Date().toISOString().slice(0, 10),
-  invite_end_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+  invite_start_date: todayYmd,
+  invite_end_date: tomorrowYmd,
   require_phone_verification: false,
   ignore_timing: false,
 },
@@ -56,7 +75,7 @@ quizzes: { items: [] },
 quizDetail: { quiz: {}, selected_quiz_version: {}, quiz_version_history: [], stats: {} },
 candidates: { items: [] },
 candidateDetail: { candidate: {}, profile: {}, resume_parsed: {} },
-assignments: { items: [], summary: { unhandled_finished_count: 0 } },
+assignments: { items: [], summary: { unhandled_finished_count: 0 }, page: 1, per_page: 20, total: 0, total_pages: 1 },
 attemptDetail: { assignment: {}, quiz_paper: {}, archive: {}, review: { answers: [], evaluation: {} } },
 logs: { items: [], counts: {}, trend: { days: [], series: {} } },
 logsChart: null,

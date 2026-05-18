@@ -61,11 +61,12 @@
 
             <section
               x-show="adminCompactPanelVisible('candidates', 'create')"
-              class="admin-surface rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
+              class="admin-surface admin-right-pane rounded-3xl border border-white/70 bg-white/82 p-5 shadow-[var(--admin-shadow)] backdrop-blur-xl"
             >
               <h2 class="text-xl font-semibold tracking-[-0.03em] text-slate-900">创建候选人</h2>
-              <div class="mt-4 space-y-4">
-                <label class="block">
+              <div class="admin-right-pane__body">
+                <div class="mt-4 space-y-4">
+                  <label class="block">
                   <span class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">姓名</span>
                   <input x-model="candidateForm.name" class="w-full rounded-lg border border-blue-100 bg-white px-4 py-3 text-sm outline-none focus:border-blue-300" placeholder="张三" />
                 </label>
@@ -79,8 +80,8 @@
                 </button>
               </div>
 
-              <div class="mt-8 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="mt-8 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                  <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div class="text-sm font-semibold text-slate-900">从简历直接入库</div>
                     <p class="mt-1 text-sm leading-6 text-slate-600">选择简历后，系统会自动解析手机号并创建或更新候选人。</p>
@@ -133,6 +134,7 @@
                       支持 PDF / 图片
                     </div>
                   </div>
+                </div>
                 </div>
               </div>
             </section>
