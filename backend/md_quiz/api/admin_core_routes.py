@@ -40,6 +40,7 @@ def bootstrap(request: Request, container=Depends(get_container)):
         "brand": {"name": "MD Quiz", "theme": runtime_config.get("ui_theme_name") or "blue-green"},
         "navigation": [
             {"key": "quizzes", "label": "测验", "href": "/admin/quizzes"},
+            {"key": "quiz-analytics", "label": "测验分析", "href": "/admin/quiz-analytics"},
             {"key": "candidates", "label": "候选人", "href": "/admin/candidates"},
             {"key": "assignments", "label": "邀约与答题", "href": "/admin/assignments"},
             {"key": "logs", "label": "系统日志", "href": "/admin/logs"},

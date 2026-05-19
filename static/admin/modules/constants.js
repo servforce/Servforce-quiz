@@ -78,6 +78,13 @@ export const ADMIN_COMPACT_TAB_CONFIG = {
       { id: "repo", label: "仓库绑定" },
     ],
   },
+  "quiz-analytics": {
+    defaultTab: "list",
+    tabs: [
+      { id: "list", label: "测验列表" },
+      { id: "detail", label: "分析详情" },
+    ],
+  },
   "quiz-detail": {
     defaultTab: "content",
     tabs: [

@@ -66,3 +66,14 @@ def test_admin_assignments_module_uses_page_query_param() -> None:
 
     assert 'query.set("page"' in source
     assert "scheduleAssignmentsReloadFromFirstPage" in source
+
+
+def test_admin_quiz_analytics_route_and_nav_exist() -> None:
+    router_source = (ROOT / "static" / "admin" / "modules" / "router.js").read_text(encoding="utf-8")
+    state_source = (ROOT / "static" / "admin" / "modules" / "state.js").read_text(encoding="utf-8")
+
+    assert '"/static/admin/pages/quiz-analytics.html"' in router_source
+    assert 'path === "/admin/quiz-analytics"' in router_source
+    assert 'name: "quiz-analytics"' in router_source
+    assert 'href: "/admin/quiz-analytics"' in state_source
+    assert 'label: "测验分析"' in state_source

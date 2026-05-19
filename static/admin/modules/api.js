@@ -17,7 +17,7 @@ export function createAdminApiModule() {
             this.showNotice("登录状态已失效");
           }
           history.replaceState({}, "", "/admin/login");
-          this.route = this.resolveRoute("/admin/login");
+          this.route = this.resolveRoute("/admin/login", "");
           if (typeof this.renderCurrentRoute === "function") {
             await this.renderCurrentRoute();
           }

@@ -35,10 +35,10 @@
 - `static/admin/modules/shell.js`
   - 启动流程、登录退出、主导航、通知、移动端紧凑布局与局部滚动状态
 - `static/admin/modules/pages/*.js`
-  - 页面级状态与动作，按领域拆分为 `quizzes / candidates / assignments / logs / status`
+  - 页面级状态与动作，按领域拆分为 `quizzes / quiz-analytics / candidates / assignments / logs / status`
 - `static/admin/pages/*.html`
   - 后台页面片段
-  - 当前页面包括：`login`、`quizzes`、`quiz-detail`、`candidates`、`candidate-detail`、`assignments`、`attempt-detail`、`logs`、`status`、`mcp`
+  - 当前页面包括：`login`、`quizzes`、`quiz-analytics`、`quiz-detail`、`candidates`、`candidate-detail`、`assignments`、`attempt-detail`、`logs`、`status`、`mcp`
 
 ### 路由装载流程
 

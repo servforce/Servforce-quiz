@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -32,7 +32,9 @@ from backend.md_quiz.storage.db import (
     save_assignment_record,
     save_quiz_definition,
     set_exam_public_invite,
+    set_quiz_paper_entered_at,
     set_runtime_kv,
+    update_quiz_paper_result,
     update_candidate_resume,
 )
 
@@ -154,6 +156,93 @@ def _seed_exam_with_metadata(quiz_key: str) -> int:
         last_sync_at=datetime.now(timezone.utc),
     )
     return version_id
+
+
+def _seed_quiz_analytics_demo(quiz_key: str) -> tuple[int, int]:
+    version1_spec = {
+        "id": quiz_key,
+        "title": "测验分析演示",
+        "description": "用于验证测验分析页。",
+        "tags": ["analytics", "demo"],
+        "schema_version": 2,
+        "format": "qml-v2",
+        "question_count": 1,
+        "question_counts": {"single": 1, "multiple": 0, "short": 0},
+        "estimated_duration_minutes": 3,
+        "trait": {},
+        "questions": [
+            {
+                "qid": "Q1",
+                "type": "single",
+                "max_points": 5,
+                "stem_md": "版本一题目",
+                "answer_time_seconds": 60,
+                "options": [{"key": "A", "text": "选项A", "correct": True}],
+            }
+        ],
+    }
+    version2_spec = {
+        "id": quiz_key,
+        "title": "测验分析演示",
+        "description": "用于验证测验分析页。",
+        "tags": ["analytics", "demo"],
+        "schema_version": 2,
+        "format": "qml-v2",
+        "question_count": 1,
+        "question_counts": {"single": 1, "multiple": 0, "short": 0},
+        "estimated_duration_minutes": 3,
+        "trait": {},
+        "questions": [
+            {
+                "qid": "Q1",
+                "type": "single",
+                "max_points": 10,
+                "stem_md": "版本二题目",
+                "answer_time_seconds": 60,
+                "options": [{"key": "A", "text": "选项A", "correct": True}],
+            }
+        ],
+    }
+    version1_id = create_quiz_version(
+        quiz_key=quiz_key,
+        version_no=1,
+        title="测验分析演示",
+        source_path=f"quizzes/{quiz_key}/quiz.md",
+        git_repo_url="https://example.com/repo.git",
+        git_commit="commit-v1",
+        content_hash=f"hash-{quiz_key}-v1",
+        source_md="---\nid: analytics-demo-v1\n---\n",
+        spec=version1_spec,
+        public_spec=version1_spec,
+    )
+    version2_id = create_quiz_version(
+        quiz_key=quiz_key,
+        version_no=2,
+        title="测验分析演示",
+        source_path=f"quizzes/{quiz_key}/quiz.md",
+        git_repo_url="https://example.com/repo.git",
+        git_commit="commit-v2",
+        content_hash=f"hash-{quiz_key}-v2",
+        source_md="---\nid: analytics-demo-v2\n---\n",
+        spec=version2_spec,
+        public_spec=version2_spec,
+    )
+    save_quiz_definition(
+        quiz_key=quiz_key,
+        title="测验分析演示",
+        source_md="---\nid: analytics-demo-current\n---\n",
+        spec=version2_spec,
+        public_spec=version2_spec,
+        status="active",
+        source_path=f"quizzes/{quiz_key}/quiz.md",
+        git_repo_url="https://example.com/repo.git",
+        current_version_id=version2_id,
+        current_version_no=2,
+        last_synced_commit="commit-v2",
+        last_sync_error="",
+        last_sync_at=datetime.now(timezone.utc),
+    )
+    return version1_id, version2_id
 
 
 def test_delete_exam_domain_data_by_quiz_key_removes_exam_related_rows(monkeypatch, tmp_path):
@@ -1733,6 +1822,275 @@ def test_admin_attempt_detail_exposes_review_answers_and_evaluation(monkeypatch,
     assert evaluation["final_analysis"] == "综合分析：客观题基础扎实，开放题有一定思路。"
     assert evaluation["candidate_remark"] == "表达清晰，建议补充结构化细节。"
     assert evaluation["primary_dimensions"] == ["I"]
+
+
+def test_admin_quiz_analytics_detail_supports_window_scope_distribution_and_traits(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    version1_id, version2_id = _seed_quiz_analytics_demo("quiz-analytics-demo")
+    now = datetime.now(timezone.utc)
+
+    candidate_v1 = create_candidate("版本一候选人", "13900000101")
+    token_v1 = "analytics-v1-finished"
+    create_quiz_paper(
+        candidate_id=candidate_v1,
+        phone="13900000101",
+        quiz_key="quiz-analytics-demo",
+        quiz_version_id=version1_id,
+        token=token_v1,
+        status="finished",
+    )
+    update_quiz_paper_result(
+        token_v1,
+        status="finished",
+        score=4,
+        entered_at=now - timedelta(days=12),
+        finished_at=now - timedelta(days=11),
+    )
+    save_quiz_archive(
+        archive_name="archive-analytics-v1-finished",
+        token=token_v1,
+        candidate_id=candidate_v1,
+        quiz_key="quiz-analytics-demo",
+        quiz_version_id=version1_id,
+        phone="13900000101",
+        archive={
+            "token": token_v1,
+            "exam": {"quiz_key": "quiz-analytics-demo", "quiz_version_id": version1_id, "title": "测验分析演示"},
+            "timing": {
+                "start_at": (now - timedelta(days=12)).isoformat(),
+                "end_at": (now - timedelta(days=11)).isoformat(),
+            },
+            "total_score": 4,
+            "score_max": 5,
+            "result_mode": "scored",
+        },
+    )
+
+    candidate_v2_scored = create_candidate("版本二计分候选人", "13900000102")
+    token_v2_scored = "analytics-v2-scored"
+    create_quiz_paper(
+        candidate_id=candidate_v2_scored,
+        phone="13900000102",
+        quiz_key="quiz-analytics-demo",
+        quiz_version_id=version2_id,
+        token=token_v2_scored,
+        status="finished",
+    )
+    update_quiz_paper_result(
+        token_v2_scored,
+        status="finished",
+        score=8,
+        entered_at=now - timedelta(days=9),
+        finished_at=now - timedelta(days=8),
+    )
+    save_quiz_archive(
+        archive_name="archive-analytics-v2-scored",
+        token=token_v2_scored,
+        candidate_id=candidate_v2_scored,
+        quiz_key="quiz-analytics-demo",
+        quiz_version_id=version2_id,
+        phone="13900000102",
+        archive={
+            "token": token_v2_scored,
+            "exam": {"quiz_key": "quiz-analytics-demo", "quiz_version_id": version2_id, "title": "测验分析演示"},
+            "timing": {
+                "start_at": (now - timedelta(days=9)).isoformat(),
+                "end_at": (now - timedelta(days=8)).isoformat(),
+            },
+            "total_score": 8,
+            "score_max": 10,
+            "result_mode": "scored",
+        },
+    )
+
+    candidate_v2_traits = create_candidate("版本二量表候选人", "13900000103")
+    token_v2_traits = "analytics-v2-traits"
+    create_quiz_paper(
+        candidate_id=candidate_v2_traits,
+        phone="13900000103",
+        quiz_key="quiz-analytics-demo",
+        quiz_version_id=version2_id,
+        token=token_v2_traits,
+        status="finished",
+    )
+    update_quiz_paper_result(
+        token_v2_traits,
+        status="finished",
+        score=None,
+        entered_at=now - timedelta(days=7),
+        finished_at=now - timedelta(days=6),
+    )
+    save_quiz_archive(
+        archive_name="archive-analytics-v2-traits",
+        token=token_v2_traits,
+        candidate_id=candidate_v2_traits,
+        quiz_key="quiz-analytics-demo",
+        quiz_version_id=version2_id,
+        phone="13900000103",
+        archive={
+            "token": token_v2_traits,
+            "exam": {"quiz_key": "quiz-analytics-demo", "quiz_version_id": version2_id, "title": "测验分析演示"},
+            "timing": {
+                "start_at": (now - timedelta(days=7)).isoformat(),
+                "end_at": (now - timedelta(days=6)).isoformat(),
+            },
+            "result_mode": "traits",
+            "traits": {"primary_dimensions": ["I"]},
+        },
+    )
+
+    candidate_in_quiz = create_candidate("进行中候选人", "13900000104")
+    token_in_quiz = "analytics-v2-inquiz"
+    create_quiz_paper(
+        candidate_id=candidate_in_quiz,
+        phone="13900000104",
+        quiz_key="quiz-analytics-demo",
+        quiz_version_id=version2_id,
+        token=token_in_quiz,
+        status="in_quiz",
+    )
+    set_quiz_paper_entered_at(token_in_quiz, now - timedelta(days=3))
+
+    candidate_grading = create_candidate("判卷中候选人", "13900000105")
+    token_grading = "analytics-v2-grading"
+    create_quiz_paper(
+        candidate_id=candidate_grading,
+        phone="13900000105",
+        quiz_key="quiz-analytics-demo",
+        quiz_version_id=version2_id,
+        token=token_grading,
+        status="grading",
+    )
+    set_quiz_paper_entered_at(token_grading, now - timedelta(days=2))
+
+    candidate_old = create_candidate("过窗候选人", "13900000106")
+    token_old = "analytics-v2-old"
+    create_quiz_paper(
+        candidate_id=candidate_old,
+        phone="13900000106",
+        quiz_key="quiz-analytics-demo",
+        quiz_version_id=version2_id,
+        token=token_old,
+        status="finished",
+    )
+    update_quiz_paper_result(
+        token_old,
+        status="finished",
+        score=6,
+        entered_at=now - timedelta(days=50),
+        finished_at=now - timedelta(days=45),
+    )
+    save_quiz_archive(
+        archive_name="archive-analytics-v2-old",
+        token=token_old,
+        candidate_id=candidate_old,
+        quiz_key="quiz-analytics-demo",
+        quiz_version_id=version2_id,
+        phone="13900000106",
+        archive={
+            "token": token_old,
+            "exam": {"quiz_key": "quiz-analytics-demo", "quiz_version_id": version2_id, "title": "测验分析演示"},
+            "timing": {
+                "start_at": (now - timedelta(days=50)).isoformat(),
+                "end_at": (now - timedelta(days=45)).isoformat(),
+            },
+            "total_score": 6,
+            "score_max": 10,
+            "result_mode": "scored",
+        },
+    )
+
+    _admin_login(client)
+
+    all_response = client.get("/api/admin/quiz-analytics/quiz-analytics-demo?window=month&version_scope=all")
+    current_response = client.get("/api/admin/quiz-analytics/quiz-analytics-demo?window=month&version_scope=current")
+    selected_v1_response = client.get(
+        f"/api/admin/quiz-analytics/quiz-analytics-demo?window=month&version_scope=current&version_id={version1_id}"
+    )
+    custom_response = client.get(
+        "/api/admin/quiz-analytics/quiz-analytics-demo"
+        f"?window=custom&version_scope=all&start_date={(now - timedelta(days=9)).date().isoformat()}"
+        f"&end_date={(now - timedelta(days=6)).date().isoformat()}"
+    )
+
+    assert all_response.status_code == 200
+    assert current_response.status_code == 200
+    assert selected_v1_response.status_code == 200
+    assert custom_response.status_code == 200
+
+    all_payload = all_response.json()
+    current_payload = current_response.json()
+    selected_v1_payload = selected_v1_response.json()
+    custom_payload = custom_response.json()
+
+    assert all_payload["filters"]["window"] == "month"
+    assert all_payload["filters"]["version_scope"] == "all"
+    assert all_payload["summary"]["total_attempt_count"] == 5
+    assert all_payload["summary"]["finished_count"] == 3
+    assert all_payload["summary"]["in_progress_count"] == 2
+    assert all_payload["summary"]["scored_finished_count"] == 2
+    assert all_payload["summary"]["traits_only_finished_count"] == 1
+    assert len(all_payload["distribution_groups"]) == 2
+    max_scores = {group["score_max"] for group in all_payload["distribution_groups"]}
+    assert max_scores == {5, 10}
+    group_5 = next(group for group in all_payload["distribution_groups"] if group["score_max"] == 5)
+    assert next(bucket for bucket in group_5["buckets"] if bucket["score"] == 4)["count"] == 1
+    group_10 = next(group for group in all_payload["distribution_groups"] if group["score_max"] == 10)
+    assert next(bucket for bucket in group_10["buckets"] if bucket["score"] == 8)["count"] == 1
+    assert {item["status"] for item in all_payload["items"]} == {"finished", "grading", "in_quiz"}
+
+    assert current_payload["filters"]["version_scope"] == "current"
+    assert current_payload["filters"]["version_id"] == version2_id
+    assert current_payload["summary"]["total_attempt_count"] == 4
+    assert current_payload["summary"]["finished_count"] == 2
+    assert current_payload["summary"]["in_progress_count"] == 2
+    assert current_payload["summary"]["scored_finished_count"] == 1
+    assert current_payload["summary"]["traits_only_finished_count"] == 1
+    assert len(current_payload["distribution_groups"]) == 1
+    assert current_payload["distribution_groups"][0]["score_max"] == 10
+    assert all(item["version_no"] == 2 for item in current_payload["items"])
+    assert {item["version_no"] for item in current_payload["quiz"]["available_versions"]} == {1, 2}
+
+    assert selected_v1_payload["filters"]["version_scope"] == "current"
+    assert selected_v1_payload["filters"]["version_id"] == version1_id
+    assert selected_v1_payload["summary"]["total_attempt_count"] == 1
+    assert selected_v1_payload["summary"]["finished_count"] == 1
+    assert selected_v1_payload["summary"]["in_progress_count"] == 0
+    assert selected_v1_payload["summary"]["scored_finished_count"] == 1
+    assert selected_v1_payload["summary"]["traits_only_finished_count"] == 0
+    assert len(selected_v1_payload["distribution_groups"]) == 1
+    assert selected_v1_payload["distribution_groups"][0]["score_max"] == 5
+    assert all(item["version_no"] == 1 for item in selected_v1_payload["items"])
+
+    assert custom_payload["filters"]["window"] == "custom"
+    assert custom_payload["filters"]["is_custom_window"] is True
+    assert custom_payload["filters"]["start_date"] == (now - timedelta(days=9)).date().isoformat()
+    assert custom_payload["filters"]["end_date"] == (now - timedelta(days=6)).date().isoformat()
+    assert custom_payload["summary"]["total_attempt_count"] == 2
+    assert custom_payload["summary"]["finished_count"] == 2
+    assert custom_payload["summary"]["in_progress_count"] == 0
+    assert custom_payload["summary"]["scored_finished_count"] == 1
+    assert custom_payload["summary"]["traits_only_finished_count"] == 1
+    assert len(custom_payload["distribution_groups"]) == 1
+    assert custom_payload["distribution_groups"][0]["score_max"] == 10
+
+
+def test_admin_quiz_analytics_detail_handles_empty_window(monkeypatch, tmp_path):
+    client = _build_client(monkeypatch, tmp_path)
+    _seed_quiz_analytics_demo("quiz-analytics-empty")
+    _admin_login(client)
+
+    response = client.get("/api/admin/quiz-analytics/quiz-analytics-empty?window=week&version_scope=all")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["total_attempt_count"] == 0
+    assert payload["summary"]["finished_count"] == 0
+    assert payload["summary"]["in_progress_count"] == 0
+    assert payload["summary"]["scored_finished_count"] == 0
+    assert payload["summary"]["traits_only_finished_count"] == 0
+    assert payload["distribution_groups"] == []
+    assert payload["items"] == []
 
 
 def test_admin_assignments_list_exposes_invite_urls_and_end_date_filters(monkeypatch, tmp_path):

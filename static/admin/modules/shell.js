@@ -5,13 +5,15 @@ export function createAdminShellModule() {
   return {
     async boot() {
       this.initAdminCompactLayout();
-      window.addEventListener("popstate", () => this.handleRoute(location.pathname, { replace: true }));
+      window.addEventListener("popstate", () =>
+        this.handleRoute(location.pathname, { replace: true, search: location.search }),
+      );
       await this.refreshSession();
       if (this.session.authenticated) {
         await this.loadBootstrap();
-        await this.handleRoute(location.pathname, { replace: true });
+        await this.handleRoute(location.pathname, { replace: true, search: location.search });
       } else {
-        this.route = this.resolveRoute("/admin/login");
+        this.route = this.resolveRoute("/admin/login", "");
         await this.renderCurrentRoute();
       }
       this.booting = false;
@@ -241,7 +243,7 @@ export function createAdminShellModule() {
       this.mcpTokenVisible = false;
       this.resetRebindForm();
       history.replaceState({}, "", "/admin/login");
-      this.route = this.resolveRoute("/admin/login");
+      this.route = this.resolveRoute("/admin/login", "");
       await this.renderCurrentRoute();
     },
   };

@@ -3941,3 +3941,134 @@ def count_unhandled_finished_quiz_papers(
         with conn.cursor() as cur:
             cur.execute(sql, tuple(params))
             return int(cur.fetchone()[0])
+
+
+def _quiz_analytics_where_clause(
+    *,
+    quiz_key: str,
+    current_version_id: int | None = None,
+    selected_version_id: int | None = None,
+    version_scope: str = "all",
+    start_at=None,
+    end_at=None,
+) -> tuple[str, list[Any]]:
+    where: list[str] = ["ep.quiz_key = %s"]
+    params: list[Any] = [str(quiz_key or "").strip()]
+
+    scope = str(version_scope or "all").strip().lower()
+    if scope == "current":
+        resolved_version_id = int(selected_version_id or 0) or int(current_version_id or 0)
+        if resolved_version_id > 0:
+            where.append("ep.quiz_version_id = %s")
+            params.append(resolved_version_id)
+        else:
+            where.append("1 = 0")
+
+    if start_at is not None and end_at is not None:
+        where.append(
+            "("
+            "(ep.status = 'finished'::quiz_paper_status AND ep.finished_at IS NOT NULL AND ep.finished_at >= %s AND ep.finished_at <= %s)"
+            " OR "
+            "(ep.status IN ('in_quiz'::quiz_paper_status, 'grading'::quiz_paper_status) AND ep.entered_at IS NOT NULL AND ep.entered_at >= %s AND ep.entered_at <= %s)"
+            ")"
+        )
+        params.extend([start_at, end_at, start_at, end_at])
+
+    return " WHERE " + " AND ".join(where), params
+
+
+def count_quiz_paper_analytics_rows(
+    *,
+    quiz_key: str,
+    current_version_id: int | None = None,
+    selected_version_id: int | None = None,
+    version_scope: str = "all",
+    start_at=None,
+    end_at=None,
+) -> int:
+    sql = """
+ SELECT COUNT(*)
+ FROM quiz_paper ep
+ """
+    where_sql, params = _quiz_analytics_where_clause(
+        quiz_key=quiz_key,
+        current_version_id=current_version_id,
+        selected_version_id=selected_version_id,
+        version_scope=version_scope,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    sql += where_sql
+    with conn_scope() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, tuple(params))
+            return int(cur.fetchone()[0])
+
+
+def list_quiz_paper_analytics_rows(
+    *,
+    quiz_key: str,
+    current_version_id: int | None = None,
+    selected_version_id: int | None = None,
+    version_scope: str = "all",
+    start_at=None,
+    end_at=None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    sql = """
+ SELECT
+    ep.id AS attempt_id,
+    ep.candidate_id,
+    c.name,
+    c.deleted_at AS candidate_deleted_at,
+    ep.quiz_key,
+    ep.quiz_version_id,
+    ep.token,
+    ep.source_kind,
+    ep.status,
+    ep.entered_at,
+    ep.finished_at,
+    ep.score,
+    ep.created_at,
+    qa.archive::text AS archive
+ FROM quiz_paper ep
+ JOIN candidate c ON c.id = ep.candidate_id
+ LEFT JOIN quiz_archive qa ON qa.token = ep.token
+ """
+    where_sql, params = _quiz_analytics_where_clause(
+        quiz_key=quiz_key,
+        current_version_id=current_version_id,
+        selected_version_id=selected_version_id,
+        version_scope=version_scope,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    sql += where_sql
+    sql += """
+ ORDER BY
+   COALESCE(
+     CASE
+       WHEN ep.status = 'finished'::quiz_paper_status THEN ep.finished_at
+       ELSE ep.entered_at
+     END,
+     ep.created_at
+   ) DESC,
+   ep.id DESC
+ """
+    if limit is not None:
+        sql += " LIMIT %s"
+        params.append(int(limit))
+    if offset:
+        sql += " OFFSET %s"
+        params.append(int(offset))
+    with conn_scope() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, tuple(params))
+            rows = cur.fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows or []:
+        item = dict(row)
+        item["archive"] = _json_load(item.get("archive")) or {}
+        out.append(item)
+    return out

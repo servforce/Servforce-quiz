@@ -111,6 +111,38 @@
 
 当关闭公开邀约时，`public_url` 和 `qr_url` 会返回空字符串。
 
+### `GET /api/admin/quiz-analytics`
+
+返回“测验分析”页左侧测验列表。
+
+支持筛选参数：
+
+- `q`
+- `page`
+
+### `GET /api/admin/quiz-analytics/{quiz_key}`
+
+返回单个测验在指定时间窗口下的答题分析详情。
+
+支持筛选参数：
+
+- `window=week|month|half_year|year`
+- `version_scope=all|current`
+
+返回字段包括：
+
+- `quiz`
+- `filters`
+- `summary`
+- `distribution_groups`
+- `items`
+
+其中：
+
+- `summary` 会区分总答题数、已完成数、进行中数、可计分完成数、traits-only 完成数
+- `distribution_groups` 按 `score_max` 分组展示原始分数分布
+- `items` 展示候选人、版本、状态、来源、进入/完成时间、得分与答题详情入口
+
 ### `GET /api/admin/candidates`
 
 返回候选人列表与筛选条件。

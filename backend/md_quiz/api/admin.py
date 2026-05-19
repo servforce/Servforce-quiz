@@ -18,6 +18,17 @@ from backend.md_quiz.services.exam_repo_sync_service import ExamRepoSyncError
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 _LOG_CATEGORY_KEYS = ("candidate", "quiz", "grading", "assignment", "system")
+_QUIZ_ANALYTICS_WINDOWS = {
+    "week": {"days": 7, "label": "近 7 天"},
+    "month": {"days": 30, "label": "近 30 天"},
+    "half_year": {"days": 180, "label": "近 180 天"},
+    "year": {"days": 365, "label": "近 365 天"},
+    "custom": {"days": 0, "label": "自定义时间"},
+}
+_QUIZ_ANALYTICS_VERSION_SCOPES = {
+    "all": "全部版本",
+    "current": "当前版本",
+}
 
 
 class AdminLoginPayload(BaseModel):
@@ -1089,14 +1100,286 @@ def _parse_assignment_duration(raw: int | str) -> int:
         raise HTTPException(status_code=400, detail="time_limit_seconds 无效")
     return seconds
 
+
+def _normalize_quiz_analytics_window(value: str) -> str:
+    key = str(value or "").strip().lower()
+    return key if key in _QUIZ_ANALYTICS_WINDOWS else "month"
+
+
+def _normalize_quiz_analytics_version_scope(value: str) -> str:
+    key = str(value or "").strip().lower()
+    return key if key in _QUIZ_ANALYTICS_VERSION_SCOPES else "all"
+
+
+def _parse_quiz_analytics_date(value: str, *, field_name: str) -> date:
+    text = str(value or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail=f"{field_name} 不能为空")
+    try:
+        return date.fromisoformat(text)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"{field_name} 格式无效，应为 YYYY-MM-DD") from exc
+
+
+def _resolve_quiz_analytics_window(
+    window: str,
+    *,
+    start_date: str = "",
+    end_date: str = "",
+) -> tuple[str, dict[str, Any], datetime, datetime]:
+    start_date_text = str(start_date or "").strip()
+    end_date_text = str(end_date or "").strip()
+    if start_date_text or end_date_text:
+        if not start_date_text or not end_date_text:
+            raise HTTPException(status_code=400, detail="自定义时间范围需要同时提供开始日期和结束日期")
+        start_day = _parse_quiz_analytics_date(start_date_text, field_name="start_date")
+        end_day = _parse_quiz_analytics_date(end_date_text, field_name="end_date")
+        if start_day > end_day:
+            raise HTTPException(status_code=400, detail="开始日期不能晚于结束日期")
+        start_at = datetime(start_day.year, start_day.month, start_day.day, tzinfo=timezone.utc)
+        end_at = datetime(end_day.year, end_day.month, end_day.day, 23, 59, 59, 999999, tzinfo=timezone.utc)
+        days = max(1, (end_day - start_day).days + 1)
+        return (
+            "custom",
+            {
+                "days": days,
+                "label": f"{start_day.isoformat()} 至 {end_day.isoformat()}",
+                "start_date": start_day.isoformat(),
+                "end_date": end_day.isoformat(),
+                "is_custom": True,
+            },
+            start_at,
+            end_at,
+        )
+    key = _normalize_quiz_analytics_window(window)
+    meta = dict(_QUIZ_ANALYTICS_WINDOWS.get(key) or _QUIZ_ANALYTICS_WINDOWS["month"])
+    end_at = datetime.now(timezone.utc)
+    start_at = end_at - timedelta(days=int(meta.get("days") or 30))
+    return key, meta, start_at, end_at
+
+
+def _quiz_analytics_result_mode(archive: dict[str, Any]) -> str:
+    current = dict(archive or {})
+    grading = current.get("grading") if isinstance(current.get("grading"), dict) else {}
+    raw_total = current.get("raw_total")
+    if raw_total is None and isinstance(grading, dict):
+        raw_total = grading.get("raw_total")
+    fallback = ""
+    try:
+        fallback = "traits" if int(raw_total or 0) <= 0 and current else "scored"
+    except Exception:
+        fallback = ""
+    return str(current.get("result_mode") or grading.get("result_mode") or fallback).strip().lower()
+
+
+def _quiz_analytics_score_meta(row: dict[str, Any], archive: dict[str, Any]) -> tuple[int | None, int | None, str]:
+    current_archive = dict(archive or {})
+    grading = current_archive.get("grading") if isinstance(current_archive.get("grading"), dict) else {}
+    result_mode = _quiz_analytics_result_mode(current_archive)
+    total_score = _coerce_int_or_none(current_archive.get("total_score"))
+    if total_score is None and isinstance(grading, dict):
+        total_score = _coerce_int_or_none(grading.get("total"))
+    if total_score is None:
+        total_score = _coerce_int_or_none(row.get("score"))
+    score_max = _coerce_int_or_none(current_archive.get("score_max"))
+    if score_max is None and isinstance(grading, dict):
+        score_max = _coerce_int_or_none(grading.get("total_max"))
+    return total_score, score_max, result_mode
+
+
+def _quiz_analytics_attempt_time(row: dict[str, Any]) -> str:
+    status_key = validation_helpers._normalize_exam_status(str(row.get("status") or "").strip())
+    if status_key == "finished":
+        return _iso_or_empty(row.get("finished_at"))
+    return _iso_or_empty(row.get("entered_at"))
+
+
+def _serialize_quiz_analytics_item(
+    row: dict[str, Any],
+    *,
+    version_no_by_id: dict[int, int],
+) -> dict[str, Any]:
+    archive = row.get("archive") if isinstance(row.get("archive"), dict) else {}
+    status_key = validation_helpers._normalize_exam_status(str(row.get("status") or "").strip())
+    candidate_id = int(row.get("candidate_id") or 0)
+    candidate_name = str(row.get("name") or "").strip()
+    if _looks_deleted_marker(candidate_name) or not candidate_name:
+        candidate_name = f"候选人#{candidate_id}" if candidate_id > 0 else "候选人"
+    total_score, score_max, result_mode = _quiz_analytics_score_meta(row, archive)
+    quiz_version_id = int(row.get("quiz_version_id") or 0)
+    return {
+        "attempt_id": int(row.get("attempt_id") or 0),
+        "candidate_id": candidate_id,
+        "candidate_name": candidate_name,
+        "token": str(row.get("token") or "").strip(),
+        "status": status_key,
+        "status_label": _status_label(status_key),
+        "source_kind": str(row.get("source_kind") or "").strip() or "direct",
+        "source_label": _source_label(str(row.get("source_kind") or "").strip()),
+        "quiz_version_id": quiz_version_id,
+        "version_no": int(version_no_by_id.get(quiz_version_id) or 0),
+        "entered_at": _iso_or_empty(row.get("entered_at")),
+        "entered_at_display": _iso_to_local_display(_iso_or_empty(row.get("entered_at"))),
+        "finished_at": _iso_or_empty(row.get("finished_at")),
+        "finished_at_display": _iso_to_local_display(_iso_or_empty(row.get("finished_at"))),
+        "attempt_at": _quiz_analytics_attempt_time(row),
+        "attempt_at_display": _iso_to_local_display(_quiz_analytics_attempt_time(row)),
+        "score": total_score,
+        "score_max": score_max,
+        "score_display": _score_display(total_score, score_max, result_mode=result_mode),
+        "result_mode": result_mode,
+        "detail_url": f"/admin/attempt/{str(row.get('token') or '').strip()}",
+    }
+
+
+def _build_quiz_analytics_distribution_groups(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[int, dict[str, Any]] = {}
+    for item in items:
+        if str(item.get("status") or "").strip() != "finished":
+            continue
+        if str(item.get("result_mode") or "").strip() == "traits":
+            continue
+        score = _coerce_int_or_none(item.get("score"))
+        score_max = _coerce_int_or_none(item.get("score_max"))
+        if score is None or score_max is None or score_max <= 0:
+            continue
+        bucket_group = grouped.setdefault(
+            score_max,
+            {
+                "score_max": score_max,
+                "score_max_label": f"满分 {score_max}",
+                "total_count": 0,
+                "buckets": {value: 0 for value in range(max(0, score_max) + 1)},
+            },
+        )
+        clamped_score = max(0, min(score_max, score))
+        bucket_group["buckets"][clamped_score] = int(bucket_group["buckets"].get(clamped_score) or 0) + 1
+        bucket_group["total_count"] = int(bucket_group.get("total_count") or 0) + 1
+
+    out: list[dict[str, Any]] = []
+    for score_max in sorted(grouped):
+        current = grouped[score_max]
+        buckets = current.pop("buckets")
+        current["buckets"] = [
+            {
+                "score": int(score),
+                "label": str(score),
+                "count": int(count or 0),
+            }
+            for score, count in sorted(buckets.items(), key=lambda item: int(item[0]))
+        ]
+        out.append(current)
+    return out
+
+
+def _serialize_quiz_analytics_detail(
+    exam: dict[str, Any],
+    *,
+    request: Request,
+    window: str,
+    version_scope: str,
+    version_id: int | None = None,
+    start_date: str = "",
+    end_date: str = "",
+) -> dict[str, Any]:
+    quiz_key = str(exam.get("quiz_key") or "").strip()
+    current_version_id = int(exam.get("current_version_id") or 0)
+    window_key, window_meta, start_at, end_at = _resolve_quiz_analytics_window(
+        window,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    scope_key = _normalize_quiz_analytics_version_scope(version_scope)
+    versions = deps.list_quiz_versions(quiz_key)
+    version_no_by_id = {int(item.get("id") or 0): int(item.get("version_no") or 0) for item in versions}
+    available_versions = [
+        {
+            "id": int(item.get("id") or 0),
+            "version_no": int(item.get("version_no") or 0),
+            "is_current": int(item.get("id") or 0) == current_version_id,
+        }
+        for item in versions
+        if int(item.get("id") or 0) > 0
+    ]
+    selected_version_id = 0
+    if scope_key == "current":
+        requested_version_id = int(version_id or 0)
+        valid_version_ids = {int(item.get("id") or 0) for item in available_versions}
+        if requested_version_id > 0 and requested_version_id in valid_version_ids:
+            selected_version_id = requested_version_id
+        else:
+            selected_version_id = current_version_id if current_version_id in valid_version_ids else 0
+    rows = deps.list_quiz_paper_analytics_rows(
+        quiz_key=quiz_key,
+        current_version_id=current_version_id,
+        selected_version_id=selected_version_id,
+        version_scope=scope_key,
+        start_at=start_at,
+        end_at=end_at,
+    )
+    items = [
+        _serialize_quiz_analytics_item(
+            row,
+            version_no_by_id=version_no_by_id,
+        )
+        for row in rows
+    ]
+    summary = {
+        "total_attempt_count": len(items),
+        "finished_count": sum(1 for item in items if str(item.get("status") or "") == "finished"),
+        "in_progress_count": sum(1 for item in items if str(item.get("status") or "") in {"in_quiz", "grading"}),
+        "scored_finished_count": sum(
+            1
+            for item in items
+            if str(item.get("status") or "") == "finished"
+            and str(item.get("result_mode") or "") != "traits"
+            and _coerce_int_or_none(item.get("score")) is not None
+        ),
+        "traits_only_finished_count": sum(
+            1
+            for item in items
+            if str(item.get("status") or "") == "finished" and str(item.get("result_mode") or "") == "traits"
+        ),
+    }
+    return {
+        "quiz": {
+            "quiz_key": quiz_key,
+            "title": str(exam.get("title") or "").strip(),
+            "tags": list(exam.get("tags") if isinstance(exam.get("tags"), list) else []),
+            "current_version_id": current_version_id,
+            "current_version_no": int(exam.get("current_version_no") or 0),
+            "supports_version_scope_switch": current_version_id > 0,
+            "available_versions": available_versions,
+            "url": f"{_admin_base_url(request)}/admin/quiz-analytics?quiz_key={quiz_key}",
+        },
+        "filters": {
+            "window": window_key,
+            "window_label": str(window_meta.get("label") or ""),
+            "window_days": int(window_meta.get("days") or 30),
+            "is_custom_window": bool(window_meta.get("is_custom")),
+            "version_scope": scope_key,
+            "version_scope_label": _QUIZ_ANALYTICS_VERSION_SCOPES.get(scope_key) or _QUIZ_ANALYTICS_VERSION_SCOPES["all"],
+            "version_id": selected_version_id,
+            "start_date": str(window_meta.get("start_date") or start_at.date().isoformat()),
+            "end_date": str(window_meta.get("end_date") or end_at.date().isoformat()),
+            "start_at": start_at.isoformat(),
+            "end_at": end_at.isoformat(),
+        },
+        "summary": summary,
+        "distribution_groups": _build_quiz_analytics_distribution_groups(items),
+        "items": items,
+    }
+
 from .admin_assignment_routes import router as admin_assignment_router
 from .admin_candidate_routes import router as admin_candidate_router
 from .admin_core_routes import router as admin_core_router
 from .admin_monitor_routes import router as admin_monitor_router
+from .admin_quiz_analytics_routes import router as admin_quiz_analytics_router
 from .admin_quiz_routes import router as admin_quiz_router
 
 router.include_router(admin_core_router)
 router.include_router(admin_quiz_router)
+router.include_router(admin_quiz_analytics_router)
 router.include_router(admin_candidate_router)
 router.include_router(admin_assignment_router)
 router.include_router(admin_monitor_router)
